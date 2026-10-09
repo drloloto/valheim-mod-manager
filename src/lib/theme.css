@@ -1,0 +1,92 @@
+/*
+ * "Werkbank" design tokens (docs/design/2026-10-02-mod-manager-designs.html, 1a/2a/2b).
+ * Dark only. Warm neutral (hue 60–80), amber as the single accent color.
+ * Hard-coded color values belong here only (and in style-desktop.css).
+ */
+:root {
+	color-scheme: dark;
+
+	--font-sans: "Archivo Variable", "Archivo", system-ui, sans-serif;
+	--font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
+	--radius: 6px;
+
+	/* Surfaces, from the outside in */
+	--chrome: oklch(0.14 0.005 60); /* title and status bar */
+	--background: oklch(0.17 0.005 60); /* workspace */
+	--panel: oklch(0.19 0.005 60); /* toolbar, detail panel */
+	--hover: oklch(0.2 0.005 60);
+	--field: oklch(0.21 0.005 60); /* input fields, segmented background */
+	--raised: oklch(0.22 0.006 60); /* popovers, menus, profile switcher */
+	--selected: oklch(0.23 0.025 70); /* selected row */
+	--focused: oklch(0.24 0.012 70); /* focused row (detail open) */
+	--muted: oklch(0.27 0.006 60); /* active tab, segment on */
+
+	/* Lines */
+	--line-subtle: oklch(0.24 0.005 60); /* row separators */
+	--border: oklch(0.29 0.006 60); /* region borders */
+	--input: oklch(0.32 0.006 60); /* field borders */
+	--line-strong: oklch(0.36 0.006 60); /* outline buttons, menu borders */
+	--checkbox-line: oklch(0.42 0.006 60);
+
+	/* Text */
+	--foreground: oklch(0.94 0.006 80);
+	--foreground-soft: oklch(0.8 0.008 75);
+	--muted-foreground: oklch(0.62 0.01 70);
+	--subtle-foreground: oklch(0.56 0.01 70);
+
+	/* Amber: play, selection, updates, focus */
+	--primary: oklch(0.78 0.14 70);
+	--primary-hover: oklch(0.72 0.14 70);
+	--primary-foreground: oklch(0.2 0.02 60);
+	--primary-soft: oklch(0.3 0.03 70); /* menu hover, profile avatar */
+	--primary-tint: oklch(0.26 0.02 70); /* active chip */
+	--primary-text: oklch(0.9 0.06 70); /* text on tint */
+	--primary-line: oklch(0.42 0.07 70);
+	--primary-edge: oklch(0.6 0.12 70); /* divider in the split button */
+	--selection-bar: oklch(0.24 0.012 70);
+
+	/* Status */
+	--success: oklch(0.78 0.14 150);
+	--destructive: oklch(0.64 0.18 25);
+	--destructive-text: oklch(0.72 0.1 25);
+	--info: oklch(0.72 0.12 235);
+	--info-soft: oklch(0.21 0.02 235);
+	--info-line: oklch(0.36 0.05 235);
+
+	/* Shadows */
+	--shadow-menu: 0 12px 32px rgb(0 0 0 / 0.55);
+	--shadow-float: 0 10px 28px rgb(0 0 0 / 0.5);
+
+	/* Mapping onto the shadcn variables */
+	--card: var(--panel);
+	--card-foreground: var(--foreground);
+	--popover: var(--raised);
+	--popover-foreground: var(--foreground);
+	--secondary: var(--muted);
+	--secondary-foreground: var(--foreground);
+	--accent: var(--primary-soft);
+	--accent-foreground: var(--foreground);
+	--destructive-foreground: var(--destructive-text);
+	--ring: oklch(0.6 0.1 70);
+	--surface: var(--panel);
+	--surface-foreground: var(--foreground-soft);
+	--selection: var(--primary-line);
+	--selection-foreground: var(--foreground);
+	--code: var(--field);
+	--code-foreground: var(--foreground-soft);
+	--code-highlight: var(--muted);
+	--code-number: var(--subtle-foreground);
+	--sidebar: var(--panel);
+	--sidebar-foreground: var(--foreground);
+	--sidebar-primary: var(--primary);
+	--sidebar-primary-foreground: var(--primary-foreground);
+	--sidebar-accent: var(--muted);
+	--sidebar-accent-foreground: var(--foreground);
+	--sidebar-border: var(--border);
+	--sidebar-ring: var(--ring);
+	--chart-1: var(--primary);
+	--chart-2: var(--success);
+	--chart-3: var(--info);
+	--chart-4: var(--destructive);
+	--chart-5: var(--muted-foreground);
+}

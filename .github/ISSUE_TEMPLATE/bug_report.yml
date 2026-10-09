@@ -1,0 +1,44 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Settings → About, or the installer file name
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Browse
+        2. Filter by …
+        3. Click …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Error toasts, wrong state, crash. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and environment
+      description: |
+        For sync/launch problems attach `BepInEx/LogOutput.log` from the profile folder
+        (`%APPDATA%\io.github.drloloto.valheim-mod-manager\profiles\<name>\`) and say whether Valheim is
+        installed through Steam in the default library.
+      render: text

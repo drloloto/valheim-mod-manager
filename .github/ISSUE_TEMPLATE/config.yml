@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/drloloto/valheim-mod-manager/discussions
+    about: Ask, discuss and share before it becomes an issue.
+  - name: Security issue
+    url: https://github.com/drloloto/valheim-mod-manager/security/advisories/new
+    about: Report vulnerabilities privately, not as a public issue.

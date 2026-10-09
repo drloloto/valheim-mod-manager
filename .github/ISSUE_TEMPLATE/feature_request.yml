@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest something the mod manager should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the workflow, not the button. "When I manage a server pack with 80 mods, I …"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How could it work?
+      description: A sketch is enough. If you have a design or a spec draft, link or paste it.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do today instead?

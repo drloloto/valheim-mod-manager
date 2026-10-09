@@ -1,0 +1,11 @@
+# Generated or vendored
+node_modules
+build
+dist
+.svelte-kit
+src-tauri/target
+src-tauri/gen
+src/lib/components/ui
+src/lib/style-vega.css
+package-lock.json
+docs/design

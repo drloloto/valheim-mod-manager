@@ -1,0 +1,639 @@
+// Central reactive app state (Svelte 5 runes), fed by the Rust core.
+import { goto } from "$app/navigation";
+import { resolve } from "$app/paths";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { toast as toast_ } from "svelte-sonner";
+import {
+	cycleTri,
+	defaultCriteria,
+	parseCriteria,
+	setTri,
+	withDate,
+	withList,
+	withNum,
+	type Criteria,
+	type DateKey,
+	type DateRange,
+	type ListKey,
+	type NumKey,
+	type NumRange,
+	type Tri,
+} from "#lib/browse/criteria.js";
+import { evaluate, searchKey, select } from "#lib/browse/engine.js";
+import { sortPackages, type ProfileFacts, type Skip } from "#lib/browse/filter.js";
+import { addView, parseViews, removeView, type View } from "#lib/browse/views.js";
+import type { SortState } from "#lib/components/kit/types.js";
+import { DEFAULT_PREFS, parsePrefs, type TablePrefs } from "#lib/desktop/columns.js";
+import { Persisted } from "#lib/desktop/persisted.svelte.js";
+import { emptySelection, type Selection } from "#lib/desktop/selection.js";
+import { isRecord } from "#lib/desktop/storage.js";
+import { t } from "#lib/i18n/t.js";
+import { check as checkForUpdate, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { api, ApiError } from "./client";
+import type { ForeignProfile, HealthIssue } from "./types";
+import { modStatus, type ModStatus } from "./status";
+import type { AppState, ExportResult, FolderKind, ImportResult, Pkg, ProfileMod, Settings, SlimPkg, SyncDone, SyncProgress } from "./types";
+
+export type ToastKind = "ok" | "err" | "info";
+
+export function modId(m: { namespace: string; name: string }): string {
+	return `${m.namespace}-${m.name}`;
+}
+
+function errorMessage(e: unknown, fallback: string): string {
+	return e instanceof Error && e.message ? e.message : fallback;
+}
+
+const EMPTY_STATE: AppState = {
+	profiles: [],
+	active: null,
+	mods: [],
+	installed: {},
+	plan: null,
+	updates: {},
+	indexAge: null,
+	sync: { running: false, queued: false },
+	game: { valheimDir: null, found: true, lastUpdated: null, buildId: null },
+	profileMods: {},
+	health: [],
+	app: { version: "", portable: false, dataDir: "" },
+};
+
+const DEFAULT_SECTIONS: Record<string, boolean> = { status: true, cats: true, owners: true, upd: true };
+
+const parseSections = (v: unknown): Record<string, boolean> | null =>
+	isRecord(v) ? (Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === "boolean")) as Record<string, boolean>) : null;
+
+/** Filters, sort, selection, views and sections of the Browse page; filters and views survive restarts. */
+class BrowseFilters {
+	#criteria = new Persisted<Criteria>("werkbank.browse.criteria", defaultCriteria(), (v) => parseCriteria(v));
+	#views = new Persisted<View[]>("werkbank.browse.views", [], parseViews);
+	#sections = new Persisted<Record<string, boolean>>("werkbank.browse.sections", DEFAULT_SECTIONS, parseSections);
+	sort = $state<SortState | null>(null);
+	selection = $state.raw<Selection>(emptySelection);
+	/** "now" for relative date filters; the page refreshes it periodically. */
+	now = $state(Date.now());
+	/** Last known setting so that reset() respects it. */
+	showNsfw = false;
+
+	constructor() {
+		// The search text is not restored: an old search term only surprises after a restart.
+		this.#criteria.value = { ...this.#criteria.value, query: "" };
+	}
+
+	get criteria(): Criteria {
+		return this.#criteria.value;
+	}
+	set criteria(c: Criteria) {
+		this.#criteria.set(c);
+	}
+	get query(): string {
+		return this.criteria.query;
+	}
+	set query(q: string) {
+		this.criteria = { ...this.criteria, query: q };
+	}
+	get views(): View[] {
+		return this.#views.value;
+	}
+	get sections(): Record<string, boolean> {
+		return this.#sections.value;
+	}
+
+	update(fn: (c: Criteria) => Criteria) {
+		this.criteria = fn(this.criteria);
+	}
+	cycle(key: ListKey, value: string) {
+		this.update((c) => withList(c, key, cycleTri(c.lists[key], value)));
+	}
+	setTri(key: ListKey, value: string, tri: Tri | 0) {
+		this.update((c) => withList(c, key, setTri(c.lists[key], value, tri)));
+	}
+	/** Right-click in lists: exclude, or lift the exclusion. */
+	toggleExclude(key: ListKey, value: string) {
+		this.setTri(key, value, this.criteria.lists[key][value] === -1 ? 0 : -1);
+	}
+	/** Include only this value (replaces the list). */
+	only(key: ListKey, value: string) {
+		this.update((c) => withList(c, key, { [value]: 1 }));
+	}
+	setDate(key: DateKey, r: DateRange | null) {
+		this.update((c) => withDate(c, key, r));
+	}
+	setNum(key: NumKey, r: NumRange | null) {
+		this.update((c) => withNum(c, key, r));
+	}
+	setCatMode(mode: "any" | "all") {
+		this.update((c) => ({ ...c, catMode: mode }));
+	}
+	/** "Show NSFW" setting: lifts or applies the default exclusion. */
+	setNsfw(show: boolean) {
+		this.showNsfw = show;
+		this.setTri("flags", "nsfw", show ? 0 : -1);
+	}
+	reset() {
+		this.criteria = defaultCriteria({ showNsfw: this.showNsfw });
+	}
+
+	applyView(v: View) {
+		this.criteria = { ...v.criteria, query: this.query };
+	}
+	saveView(name: string) {
+		this.#views.update((vs) => addView(vs, `u${Date.now().toString(36)}`, name, this.criteria));
+	}
+	deleteView(id: string) {
+		this.#views.update((vs) => removeView(vs, id));
+	}
+
+	toggleSection(key: string) {
+		this.#sections.update((s) => ({ ...s, [key]: !(s[key] ?? false) }));
+	}
+	openSection(key: string) {
+		if (!this.sections[key]) this.#sections.update((s) => ({ ...s, [key]: true }));
+	}
+}
+
+class ModManagerStore {
+	state = $state<AppState>(EMPTY_STATE);
+	loaded = $state(false);
+	packages = $state.raw<SlimPkg[]>([]);
+	byId = $state.raw<Map<string, SlimPkg>>(new Map());
+	indexFetchedAt = $state<number | null>(null);
+	indexLoading = $state(false);
+	indexError = $state<string | null>(null);
+	indexRefreshing = $state(false);
+	syncProgress = $state<SyncProgress | null>(null);
+	launching = $state(false);
+	settings = $state<Settings | null>(null);
+	settingsError = $state<string | null>(null);
+	browse = new BrowseFilters();
+	/** Column configuration per table. */
+	tables = {
+		browse: new Persisted<TablePrefs>("werkbank.table.browse", DEFAULT_PREFS, parsePrefs),
+		installed: new Persisted<TablePrefs>("werkbank.table.installed", DEFAULT_PREFS, parsePrefs),
+	};
+
+	modsMap = $derived(new Map(this.state.mods.map((m) => [modId(m), m])));
+	syncing = $derived(this.state.sync.running || this.syncProgress !== null);
+	updateCount = $derived(Object.keys(this.state.updates).length);
+	otherProfiles = $derived(this.state.profiles.filter((p) => p !== this.state.active));
+	/** Mod ID → other profiles that contain it. */
+	profilesByMod = $derived.by(() => {
+		const m = new Map<string, string[]>();
+		for (const [name, ids] of Object.entries(this.state.profileMods)) {
+			if (name === this.state.active) continue;
+			for (const id of ids) {
+				const l = m.get(id);
+				if (l) l.push(name);
+				else m.set(id, [name]);
+			}
+		}
+		return m;
+	});
+	/** Profile facts for the filter logic. */
+	readonly facts: ProfileFacts = {
+		status: (id) => this.modStatus(id),
+		present: (id) => this.modsMap.has(id) || !!this.state.plan?.resolved[id],
+		profilesOf: (id) => this.profilesByMod.get(id) ?? [],
+	};
+	/** Search key per package, recomputed only when the index changes. */
+	searchKeys = $derived(this.packages.map(searchKey));
+	/** One evaluation of all criteria per package (bitmask); the result list and the facets read from it. */
+	masks = $derived(evaluate(this.packages, this.browse.criteria, this.facts, this.browse.now, this.searchKeys));
+	/** Results of the Browse page, sorted. */
+	filtered = $derived(sortPackages(select(this.packages, this.masks), this.browse.sort, this.browse.criteria.query));
+
+	private packageCache = new Map<string, Promise<Pkg>>();
+
+	/** Updater: one silent check at startup when enabled, manual checks from Settings. */
+	autoUpdate = new Persisted<boolean>("werkbank.autoUpdate", true, (v) => (typeof v === "boolean" ? v : null));
+	update = $state.raw<Update | null>(null);
+	updateStatus = $state<"idle" | "checking" | "none" | "available" | "installing" | "error">("idle");
+	updateError = $state<string | null>(null);
+	/** Health issues grouped by mod id. */
+	healthByMod = $derived.by(() => {
+		const m = new Map<string, HealthIssue[]>();
+		for (const h of this.state.health) for (const id of h.ids) m.set(id, [...(m.get(id) ?? []), h]);
+		return m;
+	});
+
+	/** Results without the given section, for facet counts and histograms. */
+	context(skip: Skip): SlimPkg[] {
+		return select(this.packages, this.masks, skip);
+	}
+
+	toast(message: string, kind: ToastKind = "info") {
+		if (kind === "ok") toast_.success(message);
+		else if (kind === "err") toast_.error(message);
+		else toast_.message(message);
+	}
+
+	/** Loads everything and subscribes to the backend events. Returns the cleanup function. */
+	async init(): Promise<() => void> {
+		const unlisten: UnlistenFn[] = await Promise.all([
+			listen<SyncProgress>("sync://progress", (e) => (this.syncProgress = e.payload)),
+			listen<SyncDone>("sync://done", (e) => this.onSyncDone(e.payload)),
+			listen("index://updated", () => {
+				this.packageCache.clear();
+				this.loadIndex();
+				this.loadState();
+			}),
+		]);
+		await Promise.all([this.loadState(), this.loadIndex(), this.loadSettings()]);
+		if (this.autoUpdate.value && !this.state.app.portable) this.checkUpdate();
+		return () => unlisten.forEach((u) => u());
+	}
+
+	private onSyncDone(r: SyncDone) {
+		this.syncProgress = null;
+		const parts: string[] = [];
+		if (r.installed.length) parts.push(t("toast.installedN", { n: r.installed.length }));
+		if (r.removed.length) parts.push(t("toast.removedN", { n: r.removed.length }));
+		if (parts.length) this.toast(`${r.profile}: ${parts.join(", ")}`, "ok");
+		for (const err of r.errors) this.toast(err, "err");
+		this.loadState();
+	}
+
+	private async applyState(fn: () => Promise<AppState>, fallback: string): Promise<boolean> {
+		try {
+			this.state = await fn();
+			this.loaded = true;
+			return true;
+		} catch (e) {
+			this.toast(errorMessage(e, fallback), "err");
+			return false;
+		}
+	}
+
+	loadState() {
+		return this.applyState(() => api.state(), t("toast.stateFailed"));
+	}
+
+	async loadIndex() {
+		this.indexLoading = true;
+		this.indexError = null;
+		try {
+			const data = await api.index(this.indexFetchedAt);
+			if (data) {
+				this.packages = data.packages;
+				this.byId = new Map(data.packages.map((p) => [p.id, p]));
+				this.indexFetchedAt = data.fetchedAt;
+			}
+		} catch (e) {
+			this.indexError = errorMessage(e, t("toast.indexFailed"));
+		} finally {
+			this.indexLoading = false;
+		}
+	}
+
+	async refreshIndex() {
+		if (this.indexRefreshing) return;
+		this.indexRefreshing = true;
+		try {
+			await api.refreshIndex();
+			this.toast(t("toast.indexRefreshed"), "ok");
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.refreshFailed")), "err");
+		} finally {
+			this.indexRefreshing = false;
+		}
+	}
+
+	async loadSettings() {
+		try {
+			this.settings = await api.getSettings();
+			this.browse.setNsfw(this.settings.showNsfw);
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.settingsLoadFailed")), "err");
+		}
+	}
+
+	/** quiet: autosave; no success toast, errors go to settingsError instead of a toast. */
+	async saveSettings(s: Settings, quiet = false): Promise<boolean> {
+		const prevNsfw = this.settings?.showNsfw;
+		try {
+			this.settings = await api.saveSettings(s);
+			this.settingsError = null;
+			// Apply only when this save actually changed the NSFW value; otherwise an unrelated
+			// autosave would overwrite the user's Browse filter.
+			if (this.settings.showNsfw !== prevNsfw) this.browse.setNsfw(this.settings.showNsfw);
+			await this.loadState();
+			if (!quiet) this.toast(t("toast.settingsSaved"), "ok");
+			return true;
+		} catch (e) {
+			const msg = errorMessage(e, t("toast.saveFailed"));
+			if (quiet) this.settingsError = msg;
+			else this.toast(msg, "err");
+			return false;
+		}
+	}
+
+	status(id: string) {
+		const p = this.byId.get(id);
+		const m = this.modsMap.get(id);
+		const inst = this.state.installed[id];
+		const asDep = !m ? this.state.plan?.resolved[id] : undefined;
+		const update: string | undefined = this.state.updates[id];
+		return { p, m, inst, asDep, update };
+	}
+
+	/** One status per package for lists and the detail panel (see status.ts). */
+	modStatus(id: string): ModStatus {
+		return modStatus(id, { mods: this.modsMap, updates: this.state.updates, resolved: this.state.plan?.resolved });
+	}
+
+	async ensureActiveProfile(): Promise<string | null> {
+		if (this.state.active) return this.state.active;
+		if (await this.applyState(() => api.createProfile("default"), t("toast.profileCreateFailed"))) {
+			this.toast(t("toast.profileCreated", { name: "default" }), "ok");
+		}
+		return this.state.active;
+	}
+
+	async setMods(mods: ProfileMod[]): Promise<boolean> {
+		const name = await this.ensureActiveProfile();
+		if (!name) return false;
+		return this.applyState(() => api.setMods(name, mods), t("toast.saveFailed"));
+	}
+
+	/** Plus button / detail panel: add, remove or set a version. */
+	async toggleMod(id: string, version?: string) {
+		const { p, m, update } = this.status(id);
+		if (m && !update && !version) return this.removeMod(id);
+		if (m) {
+			const to = version ?? update ?? m.version;
+			return this.setMods(this.state.mods.map((x) => (modId(x) === id ? { ...x, version: to } : x)));
+		}
+		if (!p) return;
+		await this.setMods([...this.state.mods, { namespace: p.ns, name: p.name, version: version || p.ver, enabled: true, source: "thunderstore" }]);
+	}
+
+	removeMod(id: string) {
+		return this.setMods(this.state.mods.filter((x) => modId(x) !== id));
+	}
+
+	updateAll() {
+		return this.setMods(this.state.mods.map((m) => ({ ...m, version: this.state.updates[modId(m)] ?? m.version })));
+	}
+
+	/** Multi-select: add missing packages in their latest version. */
+	async addMods(ids: string[]) {
+		const add = ids
+			.filter((id) => !this.modsMap.has(id))
+			.map((id) => this.byId.get(id))
+			.filter((p): p is SlimPkg => !!p)
+			.map((p) => ({ namespace: p.ns, name: p.name, version: p.ver, enabled: true, source: "thunderstore" as const }));
+		if (!add.length) return;
+		const ok = await this.setMods([...this.state.mods, ...add]);
+		if (ok) this.toast(add.length === 1 ? t("toast.added", { name: add[0].name }) : t("toast.addedN", { n: add.length }), "ok");
+	}
+
+	async removeMods(ids: string[]) {
+		const drop = new Set(ids);
+		const next = this.state.mods.filter((m) => !drop.has(modId(m)));
+		if (next.length === this.state.mods.length) return;
+		await this.setMods(next);
+	}
+
+	async updateMods(ids: string[]) {
+		const pick = new Set(ids);
+
+		const next = this.state.mods.map((m) => (pick.has(modId(m)) ? { ...m, version: this.state.updates[modId(m)] ?? m.version } : m));
+
+		if (!next.some((m, i) => m.version !== this.state.mods[i].version)) return;
+		await this.setMods(next);
+	}
+
+	async setEnabled(id: string, enabled: boolean) {
+		const active = this.state.active;
+		if (!active) return;
+		await this.applyState(() => api.setModEnabled(active, id, enabled), t("toast.toggleFailed"));
+	}
+
+	/** Multi-select: enable or disable mods in one step. */
+	async setEnabledMany(ids: string[], enabled: boolean) {
+		const pick = new Set(ids);
+		const next = this.state.mods.map((m) => (pick.has(modId(m)) ? { ...m, enabled } : m));
+		if (!next.some((m, i) => m.enabled !== this.state.mods[i].enabled)) return;
+		await this.setMods(next);
+	}
+
+	async newProfile(name: string): Promise<boolean> {
+		const ok = await this.applyState(() => api.createProfile(name), t("toast.profileCreateFailed"));
+		if (ok) this.toast(t("toast.profileCreated", { name }), "ok");
+		return ok;
+	}
+
+	activateProfile(name: string) {
+		return this.applyState(() => api.activateProfile(name), t("toast.switchFailed"));
+	}
+
+	async deleteActiveProfile() {
+		const active = this.state.active;
+		if (!active) return;
+		if (await this.applyState(() => api.deleteProfile(active), t("toast.deleteFailed"))) {
+			this.toast(t("toast.profileDeleted", { name: active }), "ok");
+		}
+	}
+
+	async renameActive(to: string): Promise<boolean> {
+		const active = this.state.active;
+		return !!active && this.applyState(() => api.renameProfile(active, to), t("toast.renameFailed"));
+	}
+
+	async cloneActive(to: string): Promise<boolean> {
+		const active = this.state.active;
+		const ok = !!active && (await this.applyState(() => api.cloneProfile(active, to), t("toast.cloneFailed")));
+		if (ok) this.toast(t("toast.profileCreated", { name: to }), "ok");
+		return ok;
+	}
+
+	async repair() {
+		const active = this.state.active;
+		if (!active) return;
+		if (await this.applyState(() => api.repairProfile(active), t("toast.repairFailed"))) {
+			this.toast(t("toast.repairing"), "info");
+		}
+	}
+
+	private onImported(r: ImportResult) {
+		const { imported, ...state } = r;
+		this.state = state;
+		const skipped = imported.skipped.length ? t("toast.skipped", { names: imported.skipped.join(", ") }) : "";
+		this.toast(t("toast.imported", { name: imported.name, mods: imported.mods, configs: imported.configs, skipped }), "ok");
+	}
+
+	async importCode(code: string, name: string, withConfigs: boolean): Promise<boolean> {
+		try {
+			this.onImported(await api.importProfileCode(code, name, withConfigs));
+			return true;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.importFailed")), "err");
+			return false;
+		}
+	}
+
+	listForeignProfiles(): Promise<ForeignProfile[]> {
+		return api.listForeignProfiles();
+	}
+
+	/** Import a profile folder of r2modman or the Thunderstore Mod Manager. */
+	async importForeign(path: string, name: string, withConfigs: boolean): Promise<boolean> {
+		try {
+			this.onImported(await api.importForeignProfile(path, name, withConfigs));
+			return true;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.importFailed")), "err");
+			return false;
+		}
+	}
+
+	async checkUpdate(): Promise<void> {
+		if (this.updateStatus === "checking" || this.updateStatus === "installing") return;
+		this.updateStatus = "checking";
+		this.updateError = null;
+		try {
+			const u = await checkForUpdate();
+			this.update = u;
+			this.updateStatus = u ? "available" : "none";
+		} catch (e) {
+			this.updateError = errorMessage(e, String(e));
+			this.updateStatus = "error";
+		}
+	}
+
+	/** Downloads the pending update, installs it and restarts the app. */
+	async installUpdate(): Promise<void> {
+		const u = this.update;
+		if (!u || this.updateStatus === "installing") return;
+		this.updateStatus = "installing";
+		try {
+			await u.downloadAndInstall();
+			await relaunch();
+		} catch (e) {
+			this.updateError = errorMessage(e, String(e));
+			this.updateStatus = "error";
+		}
+	}
+
+	async importFile(path: string, name: string, withConfigs: boolean): Promise<boolean> {
+		try {
+			this.onImported(await api.importProfileFile(path, name, withConfigs));
+			return true;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.importFailed")), "err");
+			return false;
+		}
+	}
+
+	private warnSkipped(r: ExportResult) {
+		if (r.skippedLocal.length) {
+			this.toast(t("toast.localSkipped", { names: r.skippedLocal.join(", ") }), "info");
+		}
+	}
+
+	async exportCode(): Promise<string | null> {
+		const active = this.state.active;
+		if (!active) return null;
+		try {
+			const r = await api.exportProfileCode(active);
+			this.warnSkipped(r);
+			return r.code;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.shareFailed")), "err");
+			return null;
+		}
+	}
+
+	async exportFile(path: string) {
+		const active = this.state.active;
+		if (!active) return;
+		try {
+			this.warnSkipped(await api.exportProfileFile(active, path));
+			this.toast(t("toast.exported"), "ok");
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.exportFailed")), "err");
+		}
+	}
+
+	async addLocalMods(paths: string[]) {
+		const name = await this.ensureActiveProfile();
+		if (!name || !paths.length) return;
+		if (await this.applyState(() => api.addLocalMods(name, paths), t("toast.localFailed"))) {
+			this.toast(t("toast.localAdded", { n: paths.length }), "ok");
+		}
+	}
+
+	async launch(modded: boolean) {
+		this.launching = true;
+		try {
+			await api.launchGame(modded);
+			this.toast(modded ? t("toast.launchModded") : t("toast.launchVanilla"), "ok");
+		} catch (e) {
+			const message = errorMessage(e, t("toast.launchFailed"));
+			if (e instanceof ApiError && e.kind === "gameNotFound") {
+				toast_.error(message, {
+					action: {
+						label: t("common.settings"),
+						onClick: () => goto(resolve("settings")),
+					},
+				});
+			} else {
+				this.toast(message, "err");
+			}
+		} finally {
+			this.launching = false;
+		}
+	}
+
+	async openFolder(kind: FolderKind) {
+		try {
+			await api.openFolder(kind);
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.openFolderFailed")), "err");
+		}
+	}
+
+	/** Open an external link without letting an error escape as an unhandled rejection. */
+	async openExternal(url: string) {
+		try {
+			await openUrl(url);
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.openLinkFailed")), "err");
+		}
+	}
+
+	/** Copy to the clipboard; okMsg is toasted only on success. */
+	async copyText(text: string, okMsg?: string) {
+		try {
+			await writeText(text);
+			if (okMsg) this.toast(okMsg, "ok");
+		} catch (e) {
+			this.toast(errorMessage(e, t("common.copyFailed")), "err");
+		}
+	}
+
+	getPackage(id: string): Promise<Pkg> {
+		let p = this.packageCache.get(id);
+		if (!p) {
+			p = api.getPackage(id);
+			p.catch(() => this.packageCache.delete(id));
+			this.packageCache.set(id, p);
+		}
+		return p;
+	}
+
+	/** From the detail panel: include a category or author (again: off). */
+	filterCategory(cat: string) {
+		this.browse.setTri("cats", cat, this.browse.criteria.lists.cats[cat] === 1 ? 0 : 1);
+	}
+
+	filterOwner(owner: string) {
+		this.browse.setTri("owners", owner, this.browse.criteria.lists.owners[owner] === 1 ? 0 : 1);
+	}
+}
+
+export const store = new ModManagerStore();

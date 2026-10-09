@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#ecebe7;font-family:system-ui,sans-serif}a{color:inherit}a:hover{opacity:.8}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08)}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:12px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 12px/1.4 system-ui,sans-serif;color:rgba(0,0,0,.6);max-width:1440px}.dv-card{background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden}.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}.dv-next{margin:22px 0 0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.5)}</style></helmet>
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Filter-System, Mehrfachauswahl, Autoren – Weiterentwicklung von <a href="#1a">1a</a></span></div>
+<div style="margin:0 0 28px;max-width:1200px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;font:13px/1.55 system-ui,sans-serif;color:rgba(0,0,0,.62);text-wrap:pretty">
+<div><b style="color:#1a1a1a">Nur zwei Filter-Bausteine.</b> Jeder Filter ist entweder eine <b>Liste</b> oder ein <b>Bereich</b>. Listen haben eine Checkbox mit drei Zuständen: 1× Klick = einschließen ✓, 2× = ausschließen −, 3× = aus. Bereiche haben immer einen Operator (vor / nach / zwischen / außerhalb), ein Histogramm (Balken anklicken setzt die Grenzen), Von–Bis-Felder und Presets. Alle Abschnitte haben dieselbe Kopfzeile und dieselbe Zusammenfassung.</div>
+<div><b style="color:#1a1a1a">Jeder Filter wird zu einem Token.</b> Aktive Filter stehen als „Feld · Operator · Wert“ über der Tabelle. Ein Klick auf den Operator kehrt ihn um (ist ↔ ist nicht) bzw. wechselt ihn durch. Das Suchfeld zeigt dieselbe Abfrage als Text und lässt sich direkt bearbeiten: <code>-kat:modpacks erstellt:&lt;2025-10</code>.</div>
+<div><b style="color:#1a1a1a">Neue Filter:</b> Erstellt, Downloads, Größe und Bewertung als Bereich. Dazu kommen Kompatibilität (seit dem letzten Spiel-Patch aktualisiert, kein Konflikt mit dem Profil, Server-Pflicht), Abhängigkeiten (keine / alle schon im Profil / benötigt X) und Mods aus anderen Profilen. Spiel-Patches sind als blaue Linien im Datums-Histogramm markiert. Häufig genutzte Filter lassen sich als Ansicht speichern.</div>
+</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a><span><b style="color:#1a1a1a">Durchsuchen</b> – Filter-Checkboxen anklicken (mehrmals), Histogramm-Balken anklicken, Operatoren wechseln. Zeile klicken = auswählen · <b style="color:#1a1a1a">Rechtsklick = Kontextmenü</b> (wirkt auf die ganze Auswahl; „Alle von Autor auswählen“, „Nur … anzeigen“ und „… ausschließen“ funktionieren).</span></div>
+<div class="dv-card" style="width:1440px;height:900px;display:flex;flex-direction:column;background:oklch(0.17 0.005 60);font-family:'Archivo',sans-serif;color:oklch(0.94 0.006 80);border-color:oklch(0.3 0.006 60)">
+  <div style="height:32px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 0 0 14px;background:oklch(0.14 0.005 60);font-size:12px;color:oklch(0.7 0.01 70)">
+    <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:3px;background:oklch(0.78 0.14 70)"></div>Valheim Mod Manager</div>
+    <div style="display:flex"><div style="width:46px;text-align:center">─</div><div style="width:46px;text-align:center">▢</div><div style="width:46px;text-align:center">✕</div></div>
+  </div>
+  <div style="height:52px;flex:none;display:flex;align-items:center;gap:20px;padding:0 14px;border-bottom:1px solid oklch(0.29 0.006 60);background:oklch(0.19 0.005 60)">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 6px 8px;border:1px solid oklch(0.32 0.006 60);border-radius:6px;background:oklch(0.22 0.006 60);min-width:250px">
+      <div style="width:26px;height:26px;border-radius:4px;background:oklch(0.3 0.03 70);display:flex;align-items:center;justify-content:center;font:600 11px 'JetBrains Mono',monospace;color:oklch(0.85 0.1 70)">HS</div>
+      <div style="display:flex;flex-direction:column;gap:1px;flex:1"><div style="font-size:13px;font-weight:600">Hardcore-Server</div><div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.62 0.01 70)">42 Mods · <span style="color:oklch(0.78 0.14 70)">3 Updates</span></div></div>
+      <div style="color:oklch(0.6 0.01 70);font-size:11px">▾</div>
+    </div>
+    <div style="display:flex;gap:2px;font-size:13.5px;font-weight:500;color:oklch(0.72 0.01 70)">
+      <div style="padding:7px 12px;border-radius:5px;background:oklch(0.27 0.006 60);color:oklch(0.96 0.006 80)">Durchsuchen</div><div style="padding:7px 12px">Installiert</div><div style="padding:7px 12px">Autoren</div><div style="padding:7px 12px">Config</div><div style="padding:7px 12px">Log</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="padding:7px 10px;font-size:13px;color:oklch(0.72 0.01 70)">Einstellungen</div>
+    <div style="display:flex;border-radius:6px;overflow:hidden"><div style="display:flex;align-items:center;padding:0 18px;height:36px;background:oklch(0.78 0.14 70);color:oklch(0.2 0.02 60);font-weight:700;font-size:14px">▶ Spielen</div><div style="display:flex;align-items:center;padding:0 10px;height:36px;background:oklch(0.72 0.14 70);color:oklch(0.2 0.02 60);font-size:11px;border-left:1px solid oklch(0.6 0.12 70)">▾</div></div>
+  </div>
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:292px;flex:none;border-right:1px solid oklch(0.29 0.006 60);display:flex;flex-direction:column;min-height:0">
+      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div style="display:flex;align-items:center;gap:8px"><div style="font-size:14px;font-weight:700;flex:1">Filter</div><div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.78 0.14 70)">{{ activeCount }} aktiv</div><div onClick="{{ resetFilters }}" style="font-size:12px;color:oklch(0.72 0.01 70);cursor:pointer;padding:2px 4px" style-hover="color:oklch(0.94 0.006 80)">Leeren</div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          <div style="height:24px;padding:0 9px;border-radius:4px;display:flex;align-items:center;font-size:12px;background:oklch(0.26 0.02 70);color:oklch(0.9 0.06 70);border:1px solid oklch(0.4 0.06 70)">Bewährt &amp; aktuell</div>
+          <div style="height:24px;padding:0 9px;border-radius:4px;display:flex;align-items:center;font-size:12px;border:1px solid oklch(0.32 0.006 60);color:oklch(0.76 0.01 70)">Neu diesen Monat</div>
+          <div style="height:24px;padding:0 9px;border-radius:4px;display:flex;align-items:center;font-size:12px;border:1px solid oklch(0.32 0.006 60);color:oklch(0.76 0.01 70)">Ohne Abhängigkeiten</div>
+          <div style="height:24px;padding:0 9px;border-radius:4px;display:flex;align-items:center;font-size:12px;color:oklch(0.62 0.01 70)">+ Ansicht speichern</div>
+        </div>
+      </div>
+      <div style="flex:1;overflow-y:auto;min-height:0">
+        <sc-for list="{{ sections }}" as="s" hint-placeholder-count="6">
+          <div style="border-bottom:1px solid oklch(0.24 0.005 60)">
+            <div onClick="{{ s.toggle }}" style="display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;cursor:pointer" style-hover="background:oklch(0.2 0.005 60)">
+              <div style="width:10px;font-size:9px;color:oklch(0.56 0.01 70)">{{ s.chev }}</div>
+              <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.7 0.01 70);flex:1">{{ s.name }}</div>
+              <div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.78 0.14 70);max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.summary }}</div>
+            </div>
+            <sc-if value="{{ s.showList }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 14px 12px;display:flex;flex-direction:column;gap:1px">
+                <sc-if value="{{ s.search }}" hint-placeholder-val="{{ false }}"><div style="height:28px;display:flex;align-items:center;gap:8px;padding:0 9px;margin-bottom:6px;border-radius:5px;background:oklch(0.21 0.005 60);border:1px solid oklch(0.32 0.006 60);font-size:12.5px;color:oklch(0.55 0.01 70)"><div style="width:9px;height:9px;border:1.5px solid oklch(0.6 0.01 70);border-radius:5px"></div>{{ s.name }} suchen…</div></sc-if>
+                <sc-for list="{{ s.items }}" as="it" hint-placeholder-count="4">
+                  <div onClick="{{ it.click }}" style="display:flex;align-items:center;gap:9px;height:26px;padding:0 6px;margin:0 -6px;border-radius:4px;cursor:pointer;font-size:13px;color:{{ it.color }}" style-hover="background:oklch(0.22 0.006 60)">
+                    <div style="width:14px;height:14px;flex:none;border-radius:3px;border:1px solid {{ it.cbBorder }};background:{{ it.cbBg }};color:{{ it.cbColor }};display:flex;align-items:center;justify-content:center;font:700 10px/1 'JetBrains Mono',monospace">{{ it.cbMark }}</div>
+                    <div style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:{{ it.deco }}">{{ it.label }}</div>
+                    <div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.54 0.01 70)">{{ it.n }}</div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ s.hasMore }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:oklch(0.78 0.14 70);padding:6px 0 0">{{ s.more }}</div></sc-if>
+              </div>
+            </sc-if>
+            <sc-if value="{{ s.showRange }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;padding:2px;background:oklch(0.21 0.005 60);border-radius:5px">
+                  <sc-for list="{{ s.ops }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.click }}" style="height:24px;display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:12px;cursor:pointer;background:{{ o.bg }};color:{{ o.color }}">{{ o.label }}</div></sc-for>
+                </div>
+                <div style="position:relative;height:38px;display:flex;align-items:flex-end;gap:2px">
+                  <sc-for list="{{ s.bars }}" as="b" hint-placeholder-count="24"><div onClick="{{ b.click }}" style="flex:1;height:{{ b.h }};background:{{ b.bg }};border-radius:1px;cursor:pointer" style-hover="opacity:.75"></div></sc-for>
+                  <sc-for list="{{ s.marks }}" as="mk" hint-placeholder-count="0"><div style="position:absolute;left:{{ mk.left }};top:-3px;bottom:-3px;width:2px;background:oklch(0.72 0.12 235)"></div></sc-for>
+                </div>
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center">
+                  <div style="height:28px;display:flex;flex-direction:column;justify-content:center;padding:0 8px;border-radius:5px;background:oklch(0.21 0.005 60);border:1px solid oklch(0.32 0.006 60);opacity:{{ s.fOp }}"><div style="font:12px 'JetBrains Mono',monospace">{{ s.fLabel }}</div></div>
+                  <div style="font-size:12px;color:oklch(0.56 0.01 70)">–</div>
+                  <div style="height:28px;display:flex;flex-direction:column;justify-content:center;padding:0 8px;border-radius:5px;background:oklch(0.21 0.005 60);border:1px solid oklch(0.32 0.006 60);opacity:{{ s.tOp }}"><div style="font:12px 'JetBrains Mono',monospace">{{ s.tLabel }}</div></div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+                  <sc-for list="{{ s.presets }}" as="p" hint-placeholder-count="3"><div style="height:22px;padding:0 8px;border-radius:4px;display:flex;align-items:center;font-size:11.5px;border:1px solid oklch(0.32 0.006 60);color:oklch(0.76 0.01 70);cursor:pointer" style-hover="background:oklch(0.24 0.006 60)">{{ p.label }}</div></sc-for>
+                  <sc-if value="{{ s.isDate }}" hint-placeholder-val="{{ false }}"><div style="flex:1;text-align:right;font-size:11px;color:oklch(0.72 0.12 235)">┃ Spiel-Patch</div></sc-if>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <div style="padding:12px 16px 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div style="display:flex;gap:10px;align-items:center">
+          <div style="flex:1;min-width:0;height:34px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:6px;background:oklch(0.21 0.005 60);border:1px solid oklch(0.4 0.03 70)">
+            <div style="width:11px;height:11px;flex:none;border:1.5px solid oklch(0.6 0.01 70);border-radius:6px"></div>
+            <div style="flex:1;min-width:0;font:12.5px 'JetBrains Mono',monospace;color:oklch(0.86 0.006 80);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ queryStr }}<span style="color:oklch(0.78 0.14 70)">▏</span></div>
+            <div style="font:10.5px 'JetBrains Mono',monospace;color:oklch(0.6 0.01 70);padding:2px 5px;border:1px solid oklch(0.34 0.006 60);border-radius:3px">?</div>
+          </div>
+          <div style="height:34px;padding:0 12px;border-radius:6px;border:1px solid oklch(0.32 0.006 60);display:flex;align-items:center;gap:8px;font-size:12.5px;color:oklch(0.8 0.008 75);white-space:nowrap">Sortieren: Downloads ↓</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="4">
+            <div style="height:26px;display:flex;align-items:center;border-radius:5px;border:1px solid {{ t.border }};background:oklch(0.21 0.005 60);font-size:12px;overflow:hidden">
+              <div style="padding:0 8px;color:oklch(0.66 0.01 70)">{{ t.field }}</div>
+              <div onClick="{{ t.flip }}" style="padding:0 7px;height:100%;display:flex;align-items:center;font:500 11px 'JetBrains Mono',monospace;cursor:pointer;background:{{ t.opBg }};color:{{ t.opColor }}" style-hover="filter:brightness(1.25)">{{ t.op }}</div>
+              <div style="padding:0 8px;font-weight:600;color:oklch(0.92 0.006 80);text-decoration:{{ t.deco }}">{{ t.val }}</div>
+              <div onClick="{{ t.remove }}" style="padding:0 8px;height:100%;display:flex;align-items:center;color:oklch(0.56 0.01 70);cursor:pointer;border-left:1px solid oklch(0.28 0.006 60)" style-hover="color:oklch(0.94 0.006 80)">✕</div>
+            </div>
+          </sc-for>
+          <div style="height:26px;padding:0 9px;display:flex;align-items:center;font-size:12px;color:oklch(0.78 0.14 70)">+ Filter</div>
+          <div style="flex:1"></div>
+          <div style="font:11.5px 'JetBrains Mono',monospace;color:oklch(0.6 0.01 70);white-space:nowrap">{{ resCount }} von 6.844</div>
+        </div>
+      </div>
+      <div onClick="{{ closeCtx }}" style="flex:1;min-height:0;position:relative;overflow:hidden">
+        <div style="display:grid;grid-template-columns:20px minmax(0,1fr) 116px 76px 80px 92px 80px 118px;gap:12px;padding:0 16px;height:32px;align-items:center;font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:oklch(0.56 0.01 70);border-bottom:1px solid oklch(0.29 0.006 60)">
+          <div onClick="{{ hdr.click }}" style="width:14px;height:14px;border-radius:3px;border:1px solid {{ hdr.cbBorder }};background:{{ hdr.cbBg }};color:{{ hdr.cbColor }};display:flex;align-items:center;justify-content:center;font:700 10px/1 'JetBrains Mono',monospace;cursor:pointer">{{ hdr.cbMark }}</div>
+          <div>Mod</div><div>Autor</div><div>Version</div><div style="text-align:right;color:oklch(0.85 0.006 80)">Downl. ↓</div><div style="text-align:right">Aktualisiert</div><div style="text-align:right">Erstellt</div><div style="text-align:right">Profil</div>
+        </div>
+        <sc-for list="{{ rows2 }}" as="m" hint-placeholder-count="8">
+          <div onClick="{{ m.click }}" onContextMenu="{{ m.ctx }}" style="display:grid;grid-template-columns:20px minmax(0,1fr) 116px 76px 80px 92px 80px 118px;gap:12px;padding:0 16px;height:50px;align-items:center;border-bottom:1px solid oklch(0.24 0.005 60);background:{{ m.bg }};box-shadow:{{ m.shadow }};cursor:default;user-select:none" style-hover="filter:brightness(1.12)">
+            <div style="width:14px;height:14px;border-radius:3px;border:1px solid {{ m.cbBorder }};background:{{ m.cbBg }};color:{{ m.cbColor }};display:flex;align-items:center;justify-content:center;font:700 10px/1 'JetBrains Mono',monospace">{{ m.cbMark }}</div>
+            <div style="display:flex;align-items:center;gap:11px;min-width:0">
+              <div style="width:30px;height:30px;flex:none;border-radius:5px;background:repeating-linear-gradient(135deg,oklch(0.27 0.006 60) 0 4px,oklch(0.24 0.006 60) 4px 8px);display:flex;align-items:center;justify-content:center;font:500 10px 'JetBrains Mono',monospace;color:oklch(0.66 0.01 70)">{{ m.ini }}</div>
+              <div style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.name }}</div><div style="font-size:12px;color:oklch(0.62 0.01 70);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.desc }}</div></div>
+            </div>
+            <div style="font-size:12.5px;color:oklch(0.72 0.01 70);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.author }}</div>
+            <div style="font:12px 'JetBrains Mono',monospace;color:oklch(0.76 0.01 70)">{{ m.ver }}</div>
+            <div style="font:12px 'JetBrains Mono',monospace;color:oklch(0.76 0.01 70);text-align:right">{{ m.dl }}</div>
+            <div style="font-size:12px;color:oklch(0.66 0.01 70);text-align:right">{{ m.upd }}</div>
+            <div style="font:12px 'JetBrains Mono',monospace;color:oklch(0.62 0.01 70);text-align:right">{{ m.created }}</div>
+            <div style="display:flex;justify-content:flex-end">
+              <sc-if value="{{ m.stProfile }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:oklch(0.78 0.14 150);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:3px;background:oklch(0.78 0.14 150)"></span>Im Profil</div></sc-if>
+              <sc-if value="{{ m.stUpdate }}" hint-placeholder-val="{{ false }}"><div style="font:500 11.5px 'JetBrains Mono',monospace;color:oklch(0.2 0.02 60);background:oklch(0.78 0.14 70);padding:4px 8px;border-radius:4px">↑ {{ m.newVer }}</div></sc-if>
+              <sc-if value="{{ m.stNone }}" hint-placeholder-val="{{ true }}"><div style="font-size:12px;color:oklch(0.6 0.01 70)">—</div></sc-if>
+            </div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ showCtx }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ stop }}" style="position:absolute;left:330px;top:{{ ctxTop }};width:290px;padding:5px;border-radius:8px;background:oklch(0.22 0.006 60);border:1px solid oklch(0.36 0.006 60);box-shadow:0 12px 32px rgba(0,0,0,.55);z-index:5">
+            <div style="padding:6px 10px 8px;font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:oklch(0.62 0.01 70)">{{ ctxTitle }}</div>
+            <sc-for list="{{ ctxItems }}" as="c" hint-placeholder-count="8">
+              <sc-if value="{{ c.sep }}" hint-placeholder-val="{{ false }}"><div style="height:1px;margin:4px 6px;background:oklch(0.3 0.006 60)"></div></sc-if>
+              <sc-if value="{{ c.item }}" hint-placeholder-val="{{ true }}">
+                <div onClick="{{ c.click }}" style="display:flex;align-items:center;gap:10px;height:30px;padding:0 10px;border-radius:5px;font-size:13px;cursor:pointer;color:{{ c.color }}" style-hover="background:oklch(0.3 0.03 70)">
+                  <div style="flex:1;white-space:nowrap">{{ c.label }}</div>
+                  <div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.56 0.01 70)">{{ c.key }}</div>
+                </div>
+              </sc-if>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+          <div style="position:absolute;left:16px;right:16px;bottom:14px;height:46px;display:flex;align-items:center;gap:4px;padding:0 6px 0 14px;border-radius:8px;background:oklch(0.24 0.012 70);border:1px solid oklch(0.42 0.07 70);box-shadow:0 10px 28px rgba(0,0,0,.5)">
+            <div style="font-size:13px;font-weight:700;color:oklch(0.9 0.08 70);padding-right:10px">{{ selCount }} ausgewählt</div>
+            <div style="height:32px;padding:0 12px;border-radius:5px;background:oklch(0.78 0.14 70);color:oklch(0.2 0.02 60);display:flex;align-items:center;font-size:13px;font-weight:700">Zum Profil hinzufügen</div>
+            <div style="height:32px;padding:0 10px;display:flex;align-items:center;font-size:13px">Aktualisieren</div>
+            <div style="height:32px;padding:0 10px;display:flex;align-items:center;font-size:13px">In Profil kopieren ▾</div>
+            <div style="height:32px;padding:0 10px;display:flex;align-items:center;font-size:13px">Abhängigkeiten mit auswählen</div>
+            <div style="flex:1"></div>
+            <div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.62 0.01 70);padding-right:10px">Shift+Klick Bereich · Strg+A alle · Rechtsklick Menü</div>
+            <div onClick="{{ clearSel }}" style="height:32px;width:32px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:oklch(0.7 0.01 70);cursor:pointer" style-hover="background:oklch(0.3 0.02 70)">✕</div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+  <div style="height:28px;flex:none;display:flex;align-items:center;gap:20px;padding:0 14px;border-top:1px solid oklch(0.29 0.006 60);background:oklch(0.14 0.005 60);font:11px 'JetBrains Mono',monospace;color:oklch(0.6 0.01 70)">
+    <div style="display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:3px;background:oklch(0.78 0.14 150)"></span>Valheim 0.219.16 · BepInEx 5.4.2351</div>
+    <div>Index vor 4 Min</div><div style="flex:1"></div><div>Profil-Code kopieren</div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a><span><b style="color:#1a1a1a">Autoren</b> – eigener Tab. Links alle Autoren (sortieren, folgen ★), rechts deren Mods mit derselben Auswahl-Logik. Autor anklicken, „Alle auswählen“, dann alle zum Profil hinzufügen oder den Autor als Filter in Durchsuchen übernehmen.</span></div>
+<div class="dv-card" style="width:1440px;height:900px;display:flex;flex-direction:column;background:oklch(0.17 0.005 60);font-family:'Archivo',sans-serif;color:oklch(0.94 0.006 80);border-color:oklch(0.3 0.006 60)">
+  <div style="height:32px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 0 0 14px;background:oklch(0.14 0.005 60);font-size:12px;color:oklch(0.7 0.01 70)">
+    <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:3px;background:oklch(0.78 0.14 70)"></div>Valheim Mod Manager</div>
+    <div style="display:flex"><div style="width:46px;text-align:center">─</div><div style="width:46px;text-align:center">▢</div><div style="width:46px;text-align:center">✕</div></div>
+  </div>
+  <div style="height:52px;flex:none;display:flex;align-items:center;gap:20px;padding:0 14px;border-bottom:1px solid oklch(0.29 0.006 60);background:oklch(0.19 0.005 60)">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 6px 8px;border:1px solid oklch(0.32 0.006 60);border-radius:6px;background:oklch(0.22 0.006 60);min-width:250px">
+      <div style="width:26px;height:26px;border-radius:4px;background:oklch(0.3 0.03 70);display:flex;align-items:center;justify-content:center;font:600 11px 'JetBrains Mono',monospace;color:oklch(0.85 0.1 70)">HS</div>
+      <div style="display:flex;flex-direction:column;gap:1px;flex:1"><div style="font-size:13px;font-weight:600">Hardcore-Server</div><div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.62 0.01 70)">42 Mods · <span style="color:oklch(0.78 0.14 70)">3 Updates</span></div></div>
+      <div style="color:oklch(0.6 0.01 70);font-size:11px">▾</div>
+    </div>
+    <div style="display:flex;gap:2px;font-size:13.5px;font-weight:500;color:oklch(0.72 0.01 70)">
+      <div style="padding:7px 12px">Durchsuchen</div><div style="padding:7px 12px">Installiert</div><div style="padding:7px 12px;border-radius:5px;background:oklch(0.27 0.006 60);color:oklch(0.96 0.006 80)">Autoren</div><div style="padding:7px 12px">Config</div><div style="padding:7px 12px">Log</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="padding:7px 10px;font-size:13px;color:oklch(0.72 0.01 70)">Einstellungen</div>
+    <div style="display:flex;border-radius:6px;overflow:hidden"><div style="display:flex;align-items:center;padding:0 18px;height:36px;background:oklch(0.78 0.14 70);color:oklch(0.2 0.02 60);font-weight:700;font-size:14px">▶ Spielen</div><div style="display:flex;align-items:center;padding:0 10px;height:36px;background:oklch(0.72 0.14 70);color:oklch(0.2 0.02 60);font-size:11px;border-left:1px solid oklch(0.6 0.12 70)">▾</div></div>
+  </div>
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <div style="padding:12px 16px;display:flex;gap:10px;align-items:center;border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div style="flex:1;height:34px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:6px;background:oklch(0.21 0.005 60);border:1px solid oklch(0.32 0.006 60)"><div style="width:11px;height:11px;border:1.5px solid oklch(0.6 0.01 70);border-radius:6px"></div><div style="font-size:13px;color:oklch(0.55 0.01 70)">1.204 Autoren durchsuchen</div></div>
+        <div style="display:flex;gap:2px;padding:2px;background:oklch(0.21 0.005 60);border-radius:5px">
+          <sc-for list="{{ auSorts }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.click }}" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:4px;font-size:12px;cursor:pointer;background:{{ o.bg }};color:{{ o.color }}">{{ o.label }}</div></sc-for>
+        </div>
+        <sc-for list="{{ auToggles }}" as="it" hint-placeholder-count="2">
+          <div onClick="{{ it.click }}" style="display:flex;align-items:center;gap:8px;height:34px;padding:0 8px;font-size:12.5px;cursor:pointer;color:oklch(0.8 0.008 75)">
+            <div style="width:14px;height:14px;flex:none;border-radius:3px;border:1px solid {{ it.cbBorder }};background:{{ it.cbBg }};color:{{ it.cbColor }};display:flex;align-items:center;justify-content:center;font:700 10px/1 'JetBrains Mono',monospace">{{ it.cbMark }}</div>{{ it.label }}
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin:12px 16px 4px;padding:10px 14px;border-radius:6px;border:1px solid oklch(0.36 0.05 235);background:oklch(0.21 0.02 235);display:flex;align-items:center;gap:12px;font-size:13px">
+        <div style="color:oklch(0.8 0.1 235)">★</div><div style="flex:1"><b>3 neue Mods</b> von gefolgten Autoren diese Woche <span style="color:oklch(0.66 0.01 70)">· Azumatt, shudnal</span></div><div style="font-weight:600;color:oklch(0.8 0.1 235)">In Durchsuchen zeigen →</div>
+      </div>
+      <div style="display:grid;grid-template-columns:24px minmax(0,1fr) 70px 100px 110px 90px;gap:12px;padding:0 16px;height:32px;align-items:center;font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:oklch(0.56 0.01 70);border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div>★</div><div>Autor</div><div style="text-align:right">Mods</div><div style="text-align:right">Downloads</div><div style="text-align:right">Zuletzt aktiv</div><div style="text-align:right">Im Profil</div>
+      </div>
+      <div style="flex:1;overflow:hidden">
+        <sc-for list="{{ auRows }}" as="a" hint-placeholder-count="12">
+          <div onClick="{{ a.click }}" style="display:grid;grid-template-columns:24px minmax(0,1fr) 70px 100px 110px 90px;gap:12px;padding:0 16px;height:46px;align-items:center;border-bottom:1px solid oklch(0.24 0.005 60);background:{{ a.bg }};box-shadow:{{ a.shadow }};cursor:default" style-hover="filter:brightness(1.12)">
+            <div onClick="{{ a.star }}" style="font-size:14px;color:{{ a.starColor }};cursor:pointer">★</div>
+            <div style="display:flex;align-items:center;gap:10px;min-width:0"><div style="width:26px;height:26px;flex:none;border-radius:13px;background:oklch(0.27 0.006 60);display:flex;align-items:center;justify-content:center;font:500 10px 'JetBrains Mono',monospace;color:oklch(0.7 0.01 70)">{{ a.ini }}</div><div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.name }}</div></div>
+            <div style="font:12px 'JetBrains Mono',monospace;color:oklch(0.76 0.01 70);text-align:right">{{ a.mods }}</div>
+            <div style="font:12px 'JetBrains Mono',monospace;color:oklch(0.76 0.01 70);text-align:right">{{ a.dl }}</div>
+            <div style="font-size:12px;color:oklch(0.66 0.01 70);text-align:right">{{ a.last }}</div>
+            <div style="font:12px 'JetBrains Mono',monospace;text-align:right;color:{{ a.profColor }}">{{ a.prof }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="width:480px;flex:none;border-left:1px solid oklch(0.29 0.006 60);background:oklch(0.19 0.005 60);display:flex;flex-direction:column;min-height:0">
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px;border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div style="display:flex;gap:14px;align-items:center">
+          <div style="width:48px;height:48px;border-radius:24px;background:oklch(0.28 0.006 60);display:flex;align-items:center;justify-content:center;font:500 14px 'JetBrains Mono',monospace;color:oklch(0.75 0.01 70)">{{ au.ini }}</div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:3px"><div style="font-size:18px;font-weight:700">{{ au.name }}</div><div style="font:11.5px 'JetBrains Mono',monospace;color:oklch(0.62 0.01 70)">{{ au.mods }} Mods · {{ au.dl }} Downloads · aktiv {{ au.last }}</div></div>
+          <div onClick="{{ au.star }}" style="height:32px;padding:0 12px;border-radius:5px;border:1px solid oklch(0.36 0.006 60);display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;color:{{ au.followColor }}">★ {{ au.followLabel }}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="height:32px;padding:0 12px;border-radius:5px;border:1px solid oklch(0.36 0.006 60);display:flex;align-items:center;font-size:12.5px">Als Filter in Durchsuchen</div>
+          <div style="height:32px;padding:0 12px;border-radius:5px;border:1px solid oklch(0.36 0.006 60);display:flex;align-items:center;font-size:12.5px">Autor ausblenden</div>
+          <div style="height:32px;padding:0 12px;display:flex;align-items:center;font-size:12.5px;color:oklch(0.72 0.01 70)">Thunderstore ↗</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;height:40px;padding:0 20px;border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div onClick="{{ auHdr.click }}" style="display:flex;align-items:center;gap:9px;cursor:pointer;font-size:12.5px;flex:1">
+          <div style="width:14px;height:14px;border-radius:3px;border:1px solid {{ auHdr.cbBorder }};background:{{ auHdr.cbBg }};color:{{ auHdr.cbColor }};display:flex;align-items:center;justify-content:center;font:700 10px/1 'JetBrains Mono',monospace">{{ auHdr.cbMark }}</div>{{ auHdr.label }}
+        </div>
+        <div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.6 0.01 70)">Downloads ↓</div>
+      </div>
+      <div style="flex:1;overflow-y:auto;min-height:0">
+        <sc-for list="{{ auMods }}" as="m" hint-placeholder-count="8">
+          <div onClick="{{ m.click }}" style="display:flex;align-items:center;gap:12px;height:48px;padding:0 20px;border-bottom:1px solid oklch(0.24 0.005 60);background:{{ m.bg }};cursor:default;user-select:none" style-hover="filter:brightness(1.12)">
+            <div style="width:14px;height:14px;flex:none;border-radius:3px;border:1px solid {{ m.cbBorder }};background:{{ m.cbBg }};color:{{ m.cbColor }};display:flex;align-items:center;justify-content:center;font:700 10px/1 'JetBrains Mono',monospace">{{ m.cbMark }}</div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.name }}</div><div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.58 0.01 70)">{{ m.ver }} · {{ m.upd }}</div></div>
+            <div style="font:12px 'JetBrains Mono',monospace;color:oklch(0.72 0.01 70);width:64px;text-align:right">{{ m.dl }}</div>
+            <div style="width:88px;display:flex;justify-content:flex-end;font-size:12px;color:{{ m.stColor }}">{{ m.stLabel }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid oklch(0.29 0.006 60);display:flex;align-items:center;gap:10px">
+        <div style="flex:1;font:12px 'JetBrains Mono',monospace;color:oklch(0.7 0.01 70)">{{ auSelCount }} ausgewählt</div>
+        <div style="height:34px;padding:0 14px;border-radius:6px;background:oklch(0.78 0.14 70);color:oklch(0.2 0.02 60);display:flex;align-items:center;font-size:13px;font-weight:700">Zum Profil hinzufügen</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+</section>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Zwei Richtungen für Durchsuchen + Einstellungen</span></div>
+<p style="margin:0 0 28px;max-width:900px;font:13px/1.55 system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty">Annahmen: Das Profil ist der zentrale Kontext (alles, was man tut, verändert ein Profil) – deshalb ist es in beiden Entwürfen immer sichtbar und „Spielen“ startet explizit dieses Profil. Mod-Status (im Profil / Update / neu) steht direkt in der Liste, damit man nicht in Details klicken muss. Einstellungen speichern automatisch und zeigen, ob Pfade gültig sind. Icons sind Platzhalter.</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a><span><b style="color:#1a1a1a">Werkbank</b> – dunkel, dicht, tabellarisch. Filter links, Ergebnis-Tabelle mit sortierbaren Spalten, Detailpanel rechts (Zeile anklicken). Statusleiste mit Download-Queue. Für Power-User mit vielen Mods.</span></div>
+
+<div class="dv-card" style="width:1440px;height:900px;display:flex;flex-direction:column;background:oklch(0.17 0.005 60);font-family:'Archivo',sans-serif;color:oklch(0.94 0.006 80);border-color:oklch(0.3 0.006 60)">
+  <div style="height:32px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 0 0 14px;background:oklch(0.14 0.005 60);font-size:12px;color:oklch(0.7 0.01 70)">
+    <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:3px;background:oklch(0.78 0.14 70)"></div>Valheim Mod Manager</div>
+    <div style="display:flex;font-size:12px"><div style="width:46px;text-align:center">─</div><div style="width:46px;text-align:center">▢</div><div style="width:46px;text-align:center">✕</div></div>
+  </div>
+  <div style="height:52px;flex:none;display:flex;align-items:center;gap:20px;padding:0 14px;border-bottom:1px solid oklch(0.29 0.006 60);background:oklch(0.19 0.005 60)">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 6px 8px;border:1px solid oklch(0.32 0.006 60);border-radius:6px;background:oklch(0.22 0.006 60);min-width:250px">
+      <div style="width:26px;height:26px;border-radius:4px;background:oklch(0.3 0.03 70);display:flex;align-items:center;justify-content:center;font:600 11px 'JetBrains Mono',monospace;color:oklch(0.85 0.1 70)">HS</div>
+      <div style="display:flex;flex-direction:column;gap:1px;flex:1">
+        <div style="font-size:13px;font-weight:600">Hardcore-Server</div>
+        <div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.62 0.01 70)">42 Mods · <span style="color:oklch(0.78 0.14 70)">3 Updates</span></div>
+      </div>
+      <div style="color:oklch(0.6 0.01 70);font-size:11px">▾</div>
+    </div>
+    <div style="display:flex;gap:2px;font-size:13.5px;font-weight:500">
+      <div style="padding:7px 12px;border-radius:5px;background:oklch(0.27 0.006 60);color:oklch(0.96 0.006 80)">Durchsuchen</div>
+      <div style="padding:7px 12px;color:oklch(0.72 0.01 70);display:flex;gap:6px">Installiert <span style="font:11px 'JetBrains Mono',monospace;color:oklch(0.56 0.01 70);padding-top:2px">42</span></div>
+      <div style="padding:7px 12px;color:oklch(0.72 0.01 70)">Config</div>
+      <div style="padding:7px 12px;color:oklch(0.72 0.01 70);display:flex;gap:6px">Log <span style="width:6px;height:6px;border-radius:3px;background:oklch(0.7 0.16 25);margin-top:6px"></span></div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="padding:7px 10px;font-size:13px;color:oklch(0.72 0.01 70)">Einstellungen</div>
+    <div style="display:flex;border-radius:6px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 18px;height:36px;background:oklch(0.78 0.14 70);color:oklch(0.2 0.02 60);font-weight:700;font-size:14px">▶ Spielen</div>
+      <div style="display:flex;align-items:center;padding:0 10px;height:36px;background:oklch(0.72 0.14 70);color:oklch(0.2 0.02 60);font-size:11px;border-left:1px solid oklch(0.6 0.12 70)">▾</div>
+    </div>
+  </div>
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:212px;flex:none;border-right:1px solid oklch(0.29 0.006 60);padding:16px 12px;display:flex;flex-direction:column;gap:20px;overflow:hidden">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.56 0.01 70)">Status</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:2px;background:oklch(0.21 0.005 60);border-radius:5px;font-size:12px">
+          <div style="padding:5px 0;text-align:center;border-radius:4px;background:oklch(0.29 0.006 60)">Alle</div>
+          <div style="padding:5px 0;text-align:center;color:oklch(0.7 0.01 70)">Im Profil</div>
+          <div style="padding:5px 0;text-align:center;color:oklch(0.7 0.01 70)">Installiert</div>
+          <div style="padding:5px 0;text-align:center;color:oklch(0.78 0.14 70)">Updates 3</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.56 0.01 70);margin-bottom:6px">Kategorie</div>
+        <sc-for list="{{ cats }}" as="c" hint-placeholder-count="9">
+          <div style="display:flex;align-items:center;gap:8px;height:27px;padding:0 6px;border-radius:4px;font-size:13px;background:{{ c.bg }};color:{{ c.color }}">
+            <div style="width:12px;height:12px;border-radius:3px;border:1px solid {{ c.box }};background:{{ c.fill }}"></div>
+            <div style="flex:1">{{ c.name }}</div>
+            <div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.54 0.01 70)">{{ c.n }}</div>
+          </div>
+        </sc-for>
+        <div style="font-size:12px;color:oklch(0.62 0.01 70);padding:4px 6px">+ 14 weitere</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.56 0.01 70)">Autor</div>
+        <div style="height:30px;border:1px solid oklch(0.3 0.006 60);border-radius:5px;display:flex;align-items:center;padding:0 9px;font-size:12.5px;color:oklch(0.55 0.01 70)">Autor filtern…</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.56 0.01 70)">Aktualisiert</div>
+        <div style="display:flex;gap:4px;font-size:12px">
+          <div style="padding:4px 8px;border-radius:4px;border:1px solid oklch(0.3 0.006 60);color:oklch(0.7 0.01 70)">7 T</div>
+          <div style="padding:4px 8px;border-radius:4px;border:1px solid oklch(0.3 0.006 60);color:oklch(0.7 0.01 70)">30 T</div>
+          <div style="padding:4px 8px;border-radius:4px;border:1px solid oklch(0.3 0.006 60);color:oklch(0.7 0.01 70)">1 J</div>
+          <div style="padding:4px 8px;border-radius:4px;background:oklch(0.29 0.006 60)">Alle</div>
+        </div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:oklch(0.72 0.01 70)">
+        <div style="display:flex;align-items:center;justify-content:space-between">Veraltete zeigen<div style="width:26px;height:14px;border-radius:7px;background:oklch(0.3 0.006 60);position:relative"><div style="position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:5px;background:oklch(0.6 0.01 70)"></div></div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between">NSFW zeigen<div style="width:26px;height:14px;border-radius:7px;background:oklch(0.3 0.006 60);position:relative"><div style="position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:5px;background:oklch(0.6 0.01 70)"></div></div></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <div style="padding:12px 16px;display:flex;gap:10px;align-items:center;border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div style="flex:1;height:34px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:6px;background:oklch(0.21 0.005 60);border:1px solid oklch(0.32 0.006 60)">
+          <div style="width:11px;height:11px;border:1.5px solid oklch(0.6 0.01 70);border-radius:6px"></div>
+          <div style="flex:1;font-size:13px;color:oklch(0.55 0.01 70)">Mods durchsuchen – Name, Autor, Beschreibung</div>
+          <div style="font:10.5px 'JetBrains Mono',monospace;color:oklch(0.6 0.01 70);padding:2px 5px;border:1px solid oklch(0.34 0.006 60);border-radius:3px">Ctrl K</div>
+        </div>
+        <div style="font:11.5px 'JetBrains Mono',monospace;color:oklch(0.6 0.01 70);white-space:nowrap">6.844 Treffer · Index vor 4 Min ↻</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 116px 92px 84px 84px 132px;gap:12px;padding:0 16px;height:32px;align-items:center;font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:oklch(0.56 0.01 70);border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div>Mod</div><div>Autor</div><div>Version</div><div style="text-align:right;color:oklch(0.85 0.006 80)">Downloads ↓</div><div style="text-align:right">Update</div><div style="text-align:right">Profil</div>
+      </div>
+      <div style="flex:1;overflow:hidden">
+        <sc-for list="{{ rowsA }}" as="m" hint-placeholder-count="10">
+          <div onClick="{{ m.select }}" style="display:grid;grid-template-columns:minmax(0,1fr) 116px 92px 84px 84px 132px;gap:12px;padding:0 16px;height:54px;align-items:center;border-bottom:1px solid oklch(0.24 0.005 60);background:{{ m.bg }};box-shadow:{{ m.shadow }};cursor:default">
+            <div style="display:flex;align-items:center;gap:11px;min-width:0">
+              <div style="width:32px;height:32px;flex:none;border-radius:5px;background:repeating-linear-gradient(135deg,oklch(0.27 0.006 60) 0 4px,oklch(0.24 0.006 60) 4px 8px);display:flex;align-items:center;justify-content:center;font:500 10px 'JetBrains Mono',monospace;color:oklch(0.66 0.01 70)">{{ m.ini }}</div>
+              <div style="min-width:0;display:flex;flex-direction:column;gap:2px">
+                <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.name }}</div>
+                <div style="font-size:12px;color:oklch(0.62 0.01 70);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.desc }}</div>
+              </div>
+            </div>
+            <div style="font-size:12.5px;color:oklch(0.72 0.01 70);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.author }}</div>
+            <div style="font:12px 'JetBrains Mono',monospace;color:oklch(0.76 0.01 70)">{{ m.ver }}</div>
+            <div style="font:12px 'JetBrains Mono',monospace;color:oklch(0.76 0.01 70);text-align:right">{{ m.dl }}</div>
+            <div style="font-size:12px;color:oklch(0.62 0.01 70);text-align:right">{{ m.upd }}</div>
+            <div style="display:flex;justify-content:flex-end">
+              <sc-if value="{{ m.stProfile }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:oklch(0.78 0.14 150);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:3px;background:oklch(0.78 0.14 150)"></span>Im Profil</div></sc-if>
+              <sc-if value="{{ m.stUpdate }}" hint-placeholder-val="{{ false }}"><div style="font:500 11.5px 'JetBrains Mono',monospace;color:oklch(0.2 0.02 60);background:oklch(0.78 0.14 70);padding:5px 9px;border-radius:4px">↑ {{ m.newVer }}</div></sc-if>
+              <sc-if value="{{ m.stNone }}" hint-placeholder-val="{{ true }}"><div style="font-size:12px;font-weight:500;color:oklch(0.88 0.006 80);border:1px solid oklch(0.36 0.006 60);padding:5px 10px;border-radius:4px" style-hover="background:oklch(0.27 0.006 60)">+ Hinzufügen</div></sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <sc-if value="{{ showDetail }}" hint-placeholder-val="{{ true }}">
+    <div style="width:360px;flex:none;border-left:1px solid oklch(0.29 0.006 60);background:oklch(0.19 0.005 60);display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px;border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div style="display:flex;gap:14px;align-items:center">
+          <div style="width:56px;height:56px;border-radius:8px;background:repeating-linear-gradient(135deg,oklch(0.28 0.006 60) 0 5px,oklch(0.24 0.006 60) 5px 10px);display:flex;align-items:center;justify-content:center;font:500 13px 'JetBrains Mono',monospace;color:oklch(0.66 0.01 70)">{{ sel.ini }}</div>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div style="font-size:18px;font-weight:700">{{ sel.name }}</div>
+            <div style="font-size:12.5px;color:oklch(0.66 0.01 70)">von <span style="color:oklch(0.86 0.006 80)">{{ sel.author }}</span></div>
+          </div>
+        </div>
+        <div style="font-size:13px;line-height:1.5;color:oklch(0.78 0.008 75);text-wrap:pretty">{{ sel.desc }}</div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;height:34px;border-radius:6px;background:oklch(0.78 0.14 70);color:oklch(0.2 0.02 60);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center">{{ sel.cta }}</div>
+          <div style="height:34px;padding:0 12px;border-radius:6px;border:1px solid oklch(0.36 0.006 60);font-size:13px;display:flex;align-items:center">Website ↗</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div style="padding:12px 20px;display:flex;flex-direction:column;gap:3px"><div style="font:10px 'JetBrains Mono',monospace;color:oklch(0.56 0.01 70);text-transform:uppercase;letter-spacing:.06em">Downloads</div><div style="font:500 14px 'JetBrains Mono',monospace">{{ sel.dl }}</div></div>
+        <div style="padding:12px 0;display:flex;flex-direction:column;gap:3px"><div style="font:10px 'JetBrains Mono',monospace;color:oklch(0.56 0.01 70);text-transform:uppercase;letter-spacing:.06em">Bewertung</div><div style="font:500 14px 'JetBrains Mono',monospace">★ {{ sel.stars }}</div></div>
+        <div style="padding:12px 0;display:flex;flex-direction:column;gap:3px"><div style="font:10px 'JetBrains Mono',monospace;color:oklch(0.56 0.01 70);text-transform:uppercase;letter-spacing:.06em">Größe</div><div style="font:500 14px 'JetBrains Mono',monospace">{{ sel.size }}</div></div>
+      </div>
+      <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid oklch(0.29 0.006 60)">
+        <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.56 0.01 70)">Abhängigkeiten · {{ sel.depCount }}</div>
+        <sc-for list="{{ sel.deps }}" as="d" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px">
+            <div style="display:flex;gap:8px;align-items:baseline">{{ d.name }}<span style="font:11px 'JetBrains Mono',monospace;color:oklch(0.56 0.01 70)">{{ d.ver }}</span></div>
+            <div style="font-size:12px;color:{{ d.color }}">{{ d.state }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="padding:16px 20px;display:flex;flex-direction:column;gap:6px">
+        <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.56 0.01 70);margin-bottom:2px">Versionen</div>
+        <sc-for list="{{ sel.versions }}" as="v" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:10px;font-size:12.5px;padding:4px 0">
+            <div style="font:12px 'JetBrains Mono',monospace;width:70px;color:oklch(0.86 0.006 80)">{{ v.v }}</div>
+            <div style="flex:1;color:oklch(0.6 0.01 70)">{{ v.d }}</div>
+            <div style="font-size:11px;color:{{ v.c }}">{{ v.t }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+  </div>
+  <div style="height:28px;flex:none;display:flex;align-items:center;gap:20px;padding:0 14px;border-top:1px solid oklch(0.29 0.006 60);background:oklch(0.14 0.005 60);font:11px 'JetBrains Mono',monospace;color:oklch(0.6 0.01 70)">
+    <div style="display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:3px;background:oklch(0.78 0.14 150)"></span>Valheim 0.219.16 · BepInEx 5.4.2351</div>
+    <div style="display:flex;align-items:center;gap:8px">↓ Warfare 1.9.4<div style="width:120px;height:4px;border-radius:2px;background:oklch(0.28 0.006 60);overflow:hidden"><div style="width:64%;height:100%;background:oklch(0.78 0.14 70)"></div></div>64 % · 1 in Warteschlange</div>
+    <div style="flex:1"></div>
+    <div>Profil-Code kopieren</div>
+  </div>
+</div>
+
+<div class="dv-card" style="width:1440px;height:900px;display:flex;flex-direction:column;background:oklch(0.17 0.005 60);font-family:'Archivo',sans-serif;color:oklch(0.94 0.006 80);border-color:oklch(0.3 0.006 60)">
+  <div style="height:32px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 0 0 14px;background:oklch(0.14 0.005 60);font-size:12px;color:oklch(0.7 0.01 70)">
+    <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:3px;background:oklch(0.78 0.14 70)"></div>Valheim Mod Manager</div>
+    <div style="display:flex;font-size:12px"><div style="width:46px;text-align:center">─</div><div style="width:46px;text-align:center">▢</div><div style="width:46px;text-align:center">✕</div></div>
+  </div>
+  <div style="height:52px;flex:none;display:flex;align-items:center;gap:20px;padding:0 14px;border-bottom:1px solid oklch(0.29 0.006 60);background:oklch(0.19 0.005 60)">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 6px 8px;border:1px solid oklch(0.32 0.006 60);border-radius:6px;background:oklch(0.22 0.006 60);min-width:250px">
+      <div style="width:26px;height:26px;border-radius:4px;background:oklch(0.3 0.03 70);display:flex;align-items:center;justify-content:center;font:600 11px 'JetBrains Mono',monospace;color:oklch(0.85 0.1 70)">HS</div>
+      <div style="display:flex;flex-direction:column;gap:1px;flex:1"><div style="font-size:13px;font-weight:600">Hardcore-Server</div><div style="font:11px 'JetBrains Mono',monospace;color:oklch(0.62 0.01 70)">42 Mods · <span style="color:oklch(0.78 0.14 70)">3 Updates</span></div></div>
+      <div style="color:oklch(0.6 0.01 70);font-size:11px">▾</div>
+    </div>
+    <div style="display:flex;gap:2px;font-size:13.5px;font-weight:500;color:oklch(0.72 0.01 70)">
+      <div style="padding:7px 12px">Durchsuchen</div><div style="padding:7px 12px">Installiert</div><div style="padding:7px 12px">Config</div><div style="padding:7px 12px">Log</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="padding:7px 10px;font-size:13px;border-radius:5px;background:oklch(0.27 0.006 60)">Einstellungen</div>
+    <div style="display:flex;border-radius:6px;overflow:hidden"><div style="display:flex;align-items:center;padding:0 18px;height:36px;background:oklch(0.78 0.14 70);color:oklch(0.2 0.02 60);font-weight:700;font-size:14px">▶ Spielen</div><div style="display:flex;align-items:center;padding:0 10px;height:36px;background:oklch(0.72 0.14 70);color:oklch(0.2 0.02 60);font-size:11px;border-left:1px solid oklch(0.6 0.12 70)">▾</div></div>
+  </div>
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:212px;flex:none;border-right:1px solid oklch(0.29 0.006 60);padding:16px 12px;display:flex;flex-direction:column;gap:2px;font-size:13px">
+      <div style="padding:7px 10px;border-radius:5px;background:oklch(0.27 0.006 60);font-weight:500">Spiel</div>
+      <div style="padding:7px 10px;color:oklch(0.72 0.01 70)">Downloads &amp; Index</div>
+      <div style="padding:7px 10px;color:oklch(0.72 0.01 70)">Speicher</div>
+      <div style="padding:7px 10px;color:oklch(0.72 0.01 70)">Darstellung</div>
+      <div style="padding:7px 10px;color:oklch(0.72 0.01 70)">Über</div>
+    </div>
+    <div style="flex:1;overflow:hidden;padding:28px 40px;display:flex;flex-direction:column;gap:32px;max-width:860px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between">
+        <div style="font-size:22px;font-weight:700">Einstellungen</div>
+        <div style="font:11.5px 'JetBrains Mono',monospace;color:oklch(0.78 0.14 150)">✓ automatisch gespeichert</div>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.56 0.01 70);padding-bottom:10px;border-bottom:1px solid oklch(0.29 0.006 60)">Spiel</div>
+        <div style="display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px;padding:16px 0;border-bottom:1px solid oklch(0.24 0.005 60)">
+          <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:13.5px;font-weight:600">Valheim-Ordner</div><div style="font-size:12px;color:oklch(0.62 0.01 70);line-height:1.4">Leer lassen = automatisch über Steam erkennen</div></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;gap:6px">
+              <div style="flex:1;height:34px;display:flex;align-items:center;padding:0 10px;border-radius:5px;background:oklch(0.21 0.005 60);border:1px solid oklch(0.32 0.006 60);font:12.5px 'JetBrains Mono',monospace;color:oklch(0.86 0.006 80)">C:\Program Files (x86)\Steam\steamapps\common\Valheim</div>
+              <div style="height:34px;padding:0 12px;border-radius:5px;border:1px solid oklch(0.36 0.006 60);display:flex;align-items:center;font-size:12.5px">Wählen…</div>
+              <div style="height:34px;padding:0 10px;display:flex;align-items:center;font-size:12.5px;color:oklch(0.72 0.01 70)">Öffnen ↗</div>
+            </div>
+            <div style="font:11.5px 'JetBrains Mono',monospace;color:oklch(0.78 0.14 150)">✓ valheim.exe gefunden · v0.219.16 · BepInEx installiert</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px;padding:16px 0">
+          <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:13.5px;font-weight:600">steam.exe</div><div style="font-size:12px;color:oklch(0.62 0.01 70);line-height:1.4">Wird für den Start über Steam benötigt</div></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;gap:6px">
+              <div style="flex:1;height:34px;display:flex;align-items:center;padding:0 10px;border-radius:5px;background:oklch(0.21 0.005 60);border:1px solid oklch(0.32 0.006 60);font:12.5px 'JetBrains Mono',monospace;color:oklch(0.86 0.006 80)">C:\Program Files (x86)\Steam\steam.exe</div>
+              <div style="height:34px;padding:0 12px;border-radius:5px;border:1px solid oklch(0.36 0.006 60);display:flex;align-items:center;font-size:12.5px">Wählen…</div>
+            </div>
+            <div style="font:11.5px 'JetBrains Mono',monospace;color:oklch(0.78 0.14 150)">✓ gefunden</div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.56 0.01 70);padding-bottom:10px;border-bottom:1px solid oklch(0.29 0.006 60)">Downloads &amp; Index</div>
+        <div style="display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px;padding:16px 0;border-bottom:1px solid oklch(0.24 0.005 60);align-items:center">
+          <div style="font-size:13.5px;font-weight:600">Parallele Downloads</div>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="display:flex;border:1px solid oklch(0.36 0.006 60);border-radius:5px;overflow:hidden;font:13px 'JetBrains Mono',monospace"><div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:oklch(0.72 0.01 70)">−</div><div style="width:44px;height:32px;display:flex;align-items:center;justify-content:center;border-left:1px solid oklch(0.32 0.006 60);border-right:1px solid oklch(0.32 0.006 60);background:oklch(0.21 0.005 60)">4</div><div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:oklch(0.72 0.01 70)">+</div></div>
+            <div style="font-size:12px;color:oklch(0.6 0.01 70)">1–16 · empfohlen 4</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px;padding:16px 0;border-bottom:1px solid oklch(0.24 0.005 60);align-items:center">
+          <div style="font-size:13.5px;font-weight:600">Index aktualisieren</div>
+          <div style="display:flex;gap:2px;padding:2px;background:oklch(0.21 0.005 60);border-radius:5px;width:max-content;font-size:12.5px">
+            <div style="padding:6px 12px;color:oklch(0.7 0.01 70)">15 Min</div><div style="padding:6px 12px;border-radius:4px;background:oklch(0.3 0.006 60)">30 Min</div><div style="padding:6px 12px;color:oklch(0.7 0.01 70)">1 Std</div><div style="padding:6px 12px;color:oklch(0.7 0.01 70)">Manuell</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px;padding:16px 0;align-items:center">
+          <div style="font-size:13.5px;font-weight:600">NSFW-Mods anzeigen</div>
+          <div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:18px;border-radius:9px;background:oklch(0.3 0.006 60);position:relative"><div style="position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:7px;background:oklch(0.62 0.01 70)"></div></div><div style="font-size:12px;color:oklch(0.6 0.01 70)">Standard für den Filter in Durchsuchen</div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        <div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:oklch(0.56 0.01 70);padding-bottom:10px;border-bottom:1px solid oklch(0.29 0.006 60)">Speicher</div>
+        <div style="display:grid;grid-template-columns:220px minmax(0,1fr) auto;gap:24px;padding:14px 0;border-bottom:1px solid oklch(0.24 0.005 60);align-items:center">
+          <div style="font-size:13.5px;font-weight:600">Download-Cache</div><div style="font:12.5px 'JetBrains Mono',monospace;color:oklch(0.76 0.01 70)">1,24 GB · 318 Pakete</div>
+          <div style="height:30px;padding:0 12px;border-radius:5px;border:1px solid oklch(0.36 0.006 60);display:flex;align-items:center;font-size:12.5px">Leeren</div>
+        </div>
+        <div style="display:grid;grid-template-columns:220px minmax(0,1fr) auto;gap:24px;padding:14px 0;border-bottom:1px solid oklch(0.24 0.005 60);align-items:center">
+          <div style="font-size:13.5px;font-weight:600">Mod-Index</div><div style="font:12.5px 'JetBrains Mono',monospace;color:oklch(0.76 0.01 70)">6.844 Pakete · vor 4 Min</div>
+          <div style="height:30px;padding:0 12px;border-radius:5px;border:1px solid oklch(0.36 0.006 60);display:flex;align-items:center;font-size:12.5px">Jetzt aktualisieren</div>
+        </div>
+        <div style="display:grid;grid-template-columns:220px minmax(0,1fr) auto;gap:24px;padding:14px 0;align-items:center">
+          <div style="font-size:13.5px;font-weight:600">Datenordner</div><div style="font:12.5px 'JetBrains Mono',monospace;color:oklch(0.76 0.01 70)">%APPDATA%\valheim-mod-manager</div>
+          <div style="height:30px;padding:0 12px;display:flex;align-items:center;font-size:12.5px;color:oklch(0.72 0.01 70)">Öffnen ↗</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+
+</div>
+<p class="dv-next">Nächster Schritt: Filter-System, Autoren-Übersicht und Mehrfachauswahl für <a class="dv-oid" href="#1a">1a</a></p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showDetail&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;1a Werkbank&quot;},}">
+class Component extends DCLogic {
+  state = { sel: 3, pending: { AdventureBackpacks: true, Warfare: true, EpicLoot: true },
+    f2: { status: {}, cat: { 'Client-side': 1, 'Modpacks': -1 }, author: {}, compat: { 'Seit Patch 0.219.16 aktualisiert': 1 }, deps: {}, prof: {} },
+    r2: { upd: { op: 2, f: 21, t: 23 }, created: { op: 0, f: 0, t: 19 }, dl: { op: 1, f: 16, t: 23 }, size: { op: 0, f: 0, t: 16, off: true }, rating: { op: 1, f: 2, t: 23, off: true } },
+    open2: { status: 1, cat: 1, upd: 1, created: 1, author: 1 },
+    sel2: { EpicLoot: 1, Warfare: 1, AdventureBackpacks: 1 }, ctx2: 1,
+    au: 'RandyKnapp', auSel: { ExtendedItemDataFramework: 1, AdvancedPortals: 1 }, follow: { RandyKnapp: 1, Azumatt: 1, shudnal: 1 }, auSort: 0, auOnlyFollow: 0, auOnlyProf: 0 };
+  L2 = {
+    status: { name: 'Status', items: [['Im Profil', 38], ['Update verfügbar', 3], ['Nicht im Profil', 6801], ['Veraltet', 412]] },
+    cat: { name: 'Kategorie', items: [['Client-side', 2764], ['Server-side', 1563], ['Tweaks', 1636], ['Utility', 1558], ['Items', 1102], ['Gebäude', 988], ['Libraries', 214], ['Modpacks', 2442]] },
+    author: { name: 'Autor', search: true, more: 'Alle 1.204 Autoren →', items: [['Azumatt', 112], ['JereKuusela', 48], ['ComfyMods', 37], ['shudnal', 23], ['Therzie', 14], ['Vapok', 11], ['RandyKnapp', 9], ['Advize', 6]] },
+    compat: { name: 'Kompatibilität', items: [['Seit Patch 0.219.16 aktualisiert', 3120], ['Kein Konflikt mit Profil', 6790], ['Server + Client nötig', 1340], ['Nur Client nötig', 4210]] },
+    deps: { name: 'Abhängigkeiten', items: [['Keine', 2210], ['Alle bereits im Profil', 3988], ['Benötigt Jotunn', 1874], ['Benötigt ServerSync', 902]] },
+    prof: { name: 'Andere Profile', items: [['In „Solo Vanilla+“', 11], ['In „Ashlands Test“', 67], ['In keinem Profil', 6760]] }
+  };
+  R2 = {
+    upd: { name: 'Aktualisiert', kind: 'date', presets: ['7 T', '30 T', 'Seit Patch', '1 J'] },
+    created: { name: 'Erstellt', kind: 'date', presets: ['Dieses Jahr', '2025', 'Vor 2024', 'Seit Patch'] },
+    dl: { name: 'Downloads', kind: 'dl', presets: ['≥ 10 Tsd', '≥ 100 Tsd', '≥ 1 Mio'] },
+    size: { name: 'Größe', kind: 'size', presets: ['≤ 1 MB', '≤ 10 MB', '≤ 50 MB'] },
+    rating: { name: 'Bewertung', kind: 'rating', presets: ['≥ 50', '≥ 200'] }
+  };
+  order2 = ['status', 'cat', 'upd', 'created', 'author', 'dl', 'size', 'rating', 'compat', 'deps', 'prof'];
+  qk = { status: 'status', cat: 'kat', author: 'autor', compat: 'kompat', deps: 'abh', prof: 'profil', upd: 'aktualisiert', created: 'erstellt', dl: 'downloads', size: 'größe', rating: 'bewertung' };
+  cats2 = { BepInExPack_Valheim: ['Libraries'], Jotunn: ['Libraries'], PlantEverything: ['Client-side', 'Tweaks'], EpicLoot: ['Client-side', 'Items'], EquipmentAndQuickSlots: ['Client-side', 'Utility'], Warfare: ['Client-side', 'Items'], AdventureBackpacks: ['Client-side', 'Items'], ServerDevcommands: ['Server-side', 'Utility'], AzuCraftyBoxes: ['Client-side', 'Utility'], Seasons: ['Client-side', 'Server-side'], 'Comfy Gizmo': ['Client-side', 'Gebäude'] };
+  created2 = { BepInExPack_Valheim: '02.2021', Jotunn: '03.2021', PlantEverything: '03.2021', EpicLoot: '03.2021', EquipmentAndQuickSlots: '02.2021', Warfare: '11.2022', AdventureBackpacks: '01.2023', ServerDevcommands: '04.2021', AzuCraftyBoxes: '07.2022', Seasons: '09.2024', 'Comfy Gizmo': '05.2021' };
+  authors2 = [['Azumatt', 112, 14.8, 'heute', 0, 3], ['denikson', 1, 7.2, 'vor 8 T', 8, 1], ['RandyKnapp', 9, 6.1, 'vor 8 T', 8, 2], ['JereKuusela', 48, 5.2, 'vor 3 T', 3, 0], ['ValheimModding', 4, 4.8, 'vor 10 T', 10, 1], ['Therzie', 14, 4.4, 'vor 10 T', 10, 0], ['Advize', 6, 3.0, 'vor 7 T', 7, 0], ['ComfyMods', 37, 2.9, 'vor 30 T', 30, 0], ['Smoothbrain', 31, 2.2, 'vor 2 T', 2, 0], ['shudnal', 23, 1.8, 'vor 5 T', 5, 0], ['Vapok', 11, 1.6, 'gestern', 1, 0], ['blacks7ar', 27, 0.9, 'vor 12 T', 12, 0], ['Gratak', 8, 0.7, 'vor 41 T', 41, 0]];
+  pool2 = ['ExtendedItemDataFramework', 'AdvancedPortals', 'ImprovedBuildHud', 'AutoStore', 'ExtendedPlayerInventory', 'ServerSync', 'BetterArchery', 'FarmGrid', 'CookingPlus', 'MiningTweaks', 'SailingSpeed', 'MapSharing', 'PortalStation', 'StackSize'];
+  cb(v) { const amber = 'oklch(0.78 0.14 70)', red = 'oklch(0.64 0.18 25)';
+    return v === 1 ? { cbBg: amber, cbBorder: amber, cbMark: '✓', cbColor: 'oklch(0.2 0.02 60)' } : v === -1 ? { cbBg: red, cbBorder: red, cbMark: '−', cbColor: '#fff' } : v === 2 ? { cbBg: 'transparent', cbBorder: amber, cbMark: '−', cbColor: amber } : { cbBg: 'transparent', cbBorder: 'oklch(0.42 0.006 60)', cbMark: '', cbColor: 'transparent' }; }
+  rl(kind, i) {
+    if (kind === 'date') return String((i % 4) * 3 + 1).padStart(2, '0') + '.' + (2021 + Math.floor(i / 4));
+    if (kind === 'dl') { const v = Number(Math.pow(10, i * 7 / 23).toPrecision(1)); return v >= 1e6 ? (v / 1e6) + ' Mio' : v >= 1e3 ? (v / 1e3) + ' Tsd' : String(v); }
+    if (kind === 'size') { const v = Number((0.1 * Math.pow(10, i * 3.3 / 23)).toPrecision(1)); return String(v).replace('.', ',') + ' MB'; }
+    return String(i * 30);
+  }
+  setF(g, k, v) { this.setState(s => { const f = { ...s.f2, [g]: { ...s.f2[g] } }; if (v) f[g][k] = v; else delete f[g][k]; return { f2: f }; }); }
+  setR(k, patch) { this.setState(s => ({ r2: { ...s.r2, [k]: { ...s.r2[k], off: false, ...patch } } })); }
+  v2() {
+    const S = this.state, amber = 'oklch(0.78 0.14 70)', red = 'oklch(0.64 0.18 25)';
+    const opsDate = ['Vor', 'Nach', 'Zwischen', 'Außerhalb'], opsNum = ['≤', '≥', 'Zwischen', 'Außerhalb'];
+    const rSum = (k) => { const r = S.r2[k], d = this.R2[k], L = i => this.rl(d.kind, i), dt = d.kind === 'date';
+      if (r.off) return ''; return r.op === 0 ? (dt ? 'vor ' : '≤ ') + L(r.t) : r.op === 1 ? (dt ? 'nach ' : '≥ ') + L(r.f) : (r.op === 3 ? 'nicht ' : '') + L(r.f) + ' – ' + L(r.t); };
+    let activeCount = 0; const tokens = [], q = [];
+    const sections = this.order2.map(k => {
+      const open = !!S.open2[k], toggle = () => this.setState(s => ({ open2: { ...s.open2, [k]: !s.open2[k] } }));
+      if (this.L2[k]) { const d = this.L2[k], f = S.f2[k];
+        const inc = Object.keys(f).filter(x => f[x] === 1), exc = Object.keys(f).filter(x => f[x] === -1);
+        activeCount += inc.length + exc.length;
+        const summary = [inc.length ? inc.join(', ') : '', exc.length ? '≠ ' + exc.join(', ') : ''].filter(Boolean).join(' · ');
+        return { name: d.name, chev: open ? '▼' : '▶', summary, toggle, showList: open, showRange: false, search: !!d.search, hasMore: !!d.more, more: d.more,
+          items: d.items.map(([label, n]) => { const v = f[label] || 0; return { label, n: n.toLocaleString('de-DE'), ...this.cb(v), color: v === -1 ? 'oklch(0.72 0.1 25)' : v === 1 ? 'oklch(0.96 0.006 80)' : 'oklch(0.8 0.008 75)', deco: v === -1 ? 'line-through' : 'none', click: () => this.setF(k, label, v === 0 ? 1 : v === 1 ? -1 : 0) }; }) };
+      }
+      const d = this.R2[k], r = S.r2[k], dt = d.kind === 'date', ops = dt ? opsDate : opsNum;
+      if (!r.off) activeCount++;
+      const inR = i => r.op === 0 ? i <= r.t : r.op === 1 ? i >= r.f : r.op === 2 ? i >= r.f && i <= r.t : i < r.f || i > r.t;
+      const seed = k.length * 7;
+      return { name: d.name, chev: open ? '▼' : '▶', summary: rSum(k), toggle, showList: false, showRange: open, isDate: dt,
+        ops: ops.map((label, oi) => ({ label, bg: !r.off && r.op === oi ? 'oklch(0.32 0.03 70)' : 'transparent', color: !r.off && r.op === oi ? 'oklch(0.94 0.04 70)' : 'oklch(0.7 0.01 70)', click: () => this.setR(k, { op: oi }) })),
+        bars: Array.from({ length: 24 }, (_, i) => ({ h: Math.min(100, 12 + ((i * 37 + seed * 11) % 47) + (dt ? i * 1.6 : (12 - Math.abs(12 - i)) * 2.5)) + '%', bg: !r.off && inR(i) ? amber : 'oklch(0.3 0.006 60)',
+          click: () => this.setR(k, r.op === 0 ? { t: i } : r.op === 1 ? { f: i } : (i < (r.f + r.t) / 2 ? { f: i } : { t: i })) })),
+        marks: dt ? [{ left: (13.5 / 24 * 100) + '%' }, { left: (15.5 / 24 * 100) + '%' }] : [],
+        fLabel: this.rl(d.kind, r.f), tLabel: this.rl(d.kind, r.t), fOp: r.off || r.op === 0 ? 0.4 : 1, tOp: r.off || r.op === 1 ? 0.4 : 1,
+        presets: d.presets.map(label => ({ label })) };
+    });
+    const slug = v => v.toLowerCase().replace(/[„“]/g, '').replace(/\s+/g, '-');
+    this.order2.forEach(k => {
+      if (this.L2[k]) { const f = S.f2[k], name = this.L2[k].name;
+        [[1, 'ist', 'ist nicht'], [-1, 'ist nicht', 'ist']].forEach(([sign, op]) => { const vals = Object.keys(f).filter(x => f[x] === sign); if (!vals.length) return;
+          tokens.push({ field: name, op, val: vals.join(', '), border: sign === 1 ? 'oklch(0.36 0.006 60)' : 'oklch(0.45 0.1 25)', opBg: sign === 1 ? 'oklch(0.27 0.006 60)' : 'oklch(0.36 0.1 25)', opColor: sign === 1 ? 'oklch(0.85 0.01 70)' : 'oklch(0.92 0.05 25)', deco: 'none',
+            flip: () => this.setState(s => { const g = { ...s.f2[k] }; vals.forEach(x => g[x] = -sign); return { f2: { ...s.f2, [k]: g } }; }),
+            remove: () => this.setState(s => { const g = { ...s.f2[k] }; vals.forEach(x => delete g[x]); return { f2: { ...s.f2, [k]: g } }; }) });
+          q.push((sign === -1 ? '-' : '') + this.qk[k] + ':' + vals.map(slug).join(','));
+        });
+      } else { const r = S.r2[k], d = this.R2[k]; if (r.off) return; const dt = d.kind === 'date', L = i => this.rl(d.kind, i);
+        const opL = (dt ? ['vor', 'nach', 'zwischen', 'außerhalb'] : ['≤', '≥', 'zwischen', 'außerhalb'])[r.op];
+        tokens.push({ field: d.name, op: opL, val: r.op === 0 ? L(r.t) : r.op === 1 ? L(r.f) : L(r.f) + ' – ' + L(r.t), border: r.op === 3 ? 'oklch(0.45 0.1 25)' : 'oklch(0.36 0.006 60)', opBg: r.op === 3 ? 'oklch(0.36 0.1 25)' : 'oklch(0.27 0.006 60)', opColor: r.op === 3 ? 'oklch(0.92 0.05 25)' : 'oklch(0.85 0.01 70)', deco: 'none',
+          flip: () => this.setR(k, { op: (r.op + 1) % 4 }), remove: () => this.setState(s => ({ r2: { ...s.r2, [k]: { ...s.r2[k], off: true } } })) });
+        const qv = i => dt ? L(i).split('.').reverse().join('-') : slug(L(i));
+        q.push(this.qk[k] + ':' + (r.op === 0 ? '<' + qv(r.t) : r.op === 1 ? '>' + qv(r.f) : (r.op === 3 ? '!' : '') + qv(r.f) + '..' + qv(r.t)));
+      }
+    });
+    const stMap = { 'Im Profil': 'profile', 'Update verfügbar': 'update', 'Nicht im Profil': 'none', 'Veraltet': 'dep' };
+    const match = (g, vals) => { const f = S.f2[g], inc = Object.keys(f).filter(x => f[x] === 1), exc = Object.keys(f).filter(x => f[x] === -1);
+      return (!inc.length || inc.some(x => vals.includes(x))) && !exc.some(x => vals.includes(x)); };
+    const shown = this.mods.filter(m => match('cat', this.cats2[m.name] || []) && match('author', [m.author]) && match('status', Object.keys(stMap).filter(x => stMap[x] === m.st)));
+    const sel2 = S.sel2, selNames = Object.keys(sel2);
+    const rows2 = shown.map((m, i) => { const on = !!sel2[m.name];
+      return { ...m, ini: this.ini(m.name), created: this.created2[m.name], ...this.cb(on ? 1 : 0), stProfile: m.st === 'profile', stUpdate: m.st === 'update', stNone: m.st === 'none',
+        bg: on ? 'oklch(0.23 0.025 70)' : 'transparent', shadow: S.ctx2 === i ? 'inset 0 0 0 1px oklch(0.6 0.1 70)' : on ? 'inset 2px 0 0 oklch(0.78 0.14 70)' : 'none',
+        click: () => this.setState(s => { const n = { ...s.sel2 }; if (n[m.name]) delete n[m.name]; else n[m.name] = 1; return { sel2: n }; }),
+        ctx: e => { e.preventDefault(); e.stopPropagation(); this.setState(s => ({ ctx2: i, sel2: s.sel2[m.name] ? s.sel2 : { [m.name]: 1 } })); } }; });
+    const allOn = shown.length && shown.every(m => sel2[m.name]), someOn = shown.some(m => sel2[m.name]);
+    const hdr = { ...this.cb(allOn ? 1 : someOn ? 2 : 0), click: () => this.setState({ sel2: allOn ? {} : Object.fromEntries(shown.map(m => [m.name, 1])) }) };
+    const cm = S.ctx2 != null ? shown[S.ctx2] : null; let ctxItems = [], ctxTitle = '';
+    if (cm) { const a = cm.author, n = sel2[cm.name] ? selNames.length : 1, close = fn => () => { fn && fn(); this.setState({ ctx2: null }); };
+      ctxTitle = n > 1 ? n + ' Mods ausgewählt' : cm.name;
+      const it = (label, key, fn, color) => ({ item: true, sep: false, label, key: key || '', color: color || 'oklch(0.92 0.006 80)', click: close(fn) }), sep = { item: false, sep: true };
+      ctxItems = [it(n > 1 ? `${n} zum Profil hinzufügen` : 'Zum Profil hinzufügen', 'Enter'), it('Version wählen…', '›'), it('Zu anderem Profil hinzufügen', '›'), sep,
+        it(`Alle Mods von ${a} auswählen`, '', () => this.setState(s => { const x = { ...s.sel2 }; this.mods.filter(m => m.author === a).forEach(m => x[m.name] = 1); return { sel2: x }; })),
+        it(`Nur ${a} anzeigen`, '', () => this.setState(s => ({ f2: { ...s.f2, author: { [a]: 1 } } }))),
+        it(`${a} ausschließen`, '', () => this.setF('author', a, -1), 'oklch(0.78 0.1 25)'), sep,
+        it('Abhängigkeiten mit auswählen', '', () => this.setState(s => { const x = { ...s.sel2 }; Object.keys(x).forEach(nm => { const m = this.mods.find(z => z.name === nm); m && m.deps.forEach(d => x[d] = 1); }); return { sel2: x }; })),
+        it('Mods zeigen, die das benötigen'), sep, it('Auf Thunderstore öffnen', '↗'), it('Link kopieren', 'Strg C'), sep, it('Nie wieder anzeigen', '', null, 'oklch(0.72 0.01 70)')];
+    }
+    const sortFns = [(a, b) => b[2] - a[2], (a, b) => b[1] - a[1], (a, b) => a[4] - b[4], (a, b) => a[0].localeCompare(b[0])];
+    const auList = [...this.authors2].filter(a => (!S.auOnlyFollow || S.follow[a[0]]) && (!S.auOnlyProf || a[5] > 0)).sort(sortFns[S.auSort]);
+    const star = nm => e => { e.stopPropagation(); this.setState(s => { const f = { ...s.follow }; if (f[nm]) delete f[nm]; else f[nm] = 1; return { follow: f }; }); };
+    const fmt = v => v.toFixed(1).replace('.', ',') + ' Mio';
+    const auRows = auList.map(a => ({ name: a[0], ini: a[0].slice(0, 2).toUpperCase(), mods: a[1], dl: fmt(a[2]), last: a[3], prof: a[5] ? a[5] + ' / ' + a[1] : '—', profColor: a[5] ? 'oklch(0.78 0.14 150)' : 'oklch(0.5 0.01 70)',
+      bg: S.au === a[0] ? 'oklch(0.24 0.012 70)' : 'transparent', shadow: S.au === a[0] ? 'inset 2px 0 0 oklch(0.78 0.14 70)' : 'none', starColor: S.follow[a[0]] ? amber : 'oklch(0.36 0.006 60)',
+      click: () => this.setState({ au: a[0], auSel: {} }), star: star(a[0]) }));
+    const A = this.authors2.find(a => a[0] === S.au), ai = this.authors2.indexOf(A);
+    const known = this.mods.filter(m => m.author === A[0]);
+    const names = [...known.map(m => m.name), ...this.pool2.filter(p => !known.some(m => m.name === p))].slice(0, Math.min(A[1], 12));
+    const auMods = names.map((nm, j) => { const m = known.find(z => z.name === nm), on = !!S.auSel[nm], st = m ? m.st : (j < A[5] ? 'profile' : 'none');
+      return { name: nm, ver: m ? m.ver : `${1 + (j + ai) % 3}.${(j * 7 + ai) % 20}.${j % 5}`, dl: m ? m.dl : Math.round(900 / (j + 2 + ai)) + ' Tsd', upd: m ? m.upd : 'vor ' + (3 + j * 9 + ai) + ' T', ...this.cb(on ? 1 : 0), bg: on ? 'oklch(0.23 0.025 70)' : 'transparent',
+        stLabel: st === 'profile' ? '● Im Profil' : st === 'update' ? '↑ ' + m.newVer : '', stColor: st === 'update' ? amber : 'oklch(0.78 0.14 150)',
+        click: () => this.setState(s => { const x = { ...s.auSel }; if (x[nm]) delete x[nm]; else x[nm] = 1; return { auSel: x }; }) }; });
+    const auSelN = names.filter(n => S.auSel[n]).length, auAll = auSelN === names.length;
+    return { sections, tokens, activeCount, queryStr: q.join('  '), resCount: shown.length, rows2, hdr,
+      hasSel: selNames.length > 0, selCount: selNames.length, clearSel: e => { e.stopPropagation(); this.setState({ sel2: {} }); },
+      showCtx: !!cm, ctxTop: (32 + (S.ctx2 || 0) * 50 + 40) + 'px', ctxTitle, ctxItems, closeCtx: () => S.ctx2 != null && this.setState({ ctx2: null }), stop: e => e.stopPropagation(),
+      resetFilters: () => this.setState(s => ({ f2: { status: {}, cat: {}, author: {}, compat: {}, deps: {}, prof: {} }, r2: Object.fromEntries(Object.keys(s.r2).map(k => [k, { ...s.r2[k], off: true }])) })),
+      auSorts: ['Downloads', 'Anzahl Mods', 'Zuletzt aktiv', 'A–Z'].map((label, i) => ({ label, bg: S.auSort === i ? 'oklch(0.3 0.006 60)' : 'transparent', color: S.auSort === i ? 'oklch(0.94 0.006 80)' : 'oklch(0.7 0.01 70)', click: () => this.setState({ auSort: i }) })),
+      auToggles: [['Nur gefolgte', 'auOnlyFollow'], ['Mit Mods im Profil', 'auOnlyProf']].map(([label, key]) => ({ label, ...this.cb(S[key] ? 1 : 0), click: () => this.setState(s => ({ [key]: s[key] ? 0 : 1 })) })),
+      auRows, au: { name: A[0], ini: A[0].slice(0, 2).toUpperCase(), mods: A[1], dl: fmt(A[2]), last: A[3], followLabel: S.follow[A[0]] ? 'Gefolgt' : 'Folgen', followColor: S.follow[A[0]] ? amber : 'oklch(0.86 0.006 80)', star: star(A[0]) },
+      auMods, auSelCount: auSelN, auHdr: { ...this.cb(auAll ? 1 : auSelN ? 2 : 0), label: `Alle ${names.length} auswählen`, click: () => this.setState({ auSel: auAll ? {} : Object.fromEntries(names.map(n => [n, 1])) }) } };
+  }
+  mods = [
+    { name: 'BepInExPack_Valheim', author: 'denikson', ver: '5.4.2351', dl: '7,2 Mio', stars: 655, upd: 'vor 8 T', st: 'profile', size: '1,1 MB', desc: 'BepInEx pack for Valheim. Preconfigured with the correct entry point for mods and preferred defaults.', deps: [] },
+    { name: 'Jotunn', author: 'ValheimModding', ver: '2.30.2', dl: '4,7 Mio', stars: 348, upd: 'vor 10 T', st: 'profile', size: '2,4 MB', desc: 'Jötunn, the Valheim Library, created to make the lives of mod developers easier.', deps: ['BepInExPack_Valheim'] },
+    { name: 'PlantEverything', author: 'Advize', ver: '1.21.3', dl: '2,7 Mio', stars: 430, upd: 'vor 7 T', st: 'none', size: '3,8 MB', desc: 'Allows your cultivator to plant berry bushes, thistle, dandelions, mushrooms and more.', deps: ['BepInExPack_Valheim'] },
+    { name: 'EpicLoot', author: 'RandyKnapp', ver: '0.14.11', newVer: '0.14.13', dl: '2,3 Mio', stars: 341, upd: 'vor 8 T', st: 'update', size: '18,6 MB', desc: 'Adds loot drops, magic items, and enchanting to Valheim.', deps: ['BepInExPack_Valheim', 'Jotunn'] },
+    { name: 'EquipmentAndQuickSlots', author: 'RandyKnapp', ver: '3.1.3', dl: '1,5 Mio', stars: 320, upd: 'vor 17 T', st: 'profile', size: '0,9 MB', desc: 'Give equipped items their own dedicated inventory slots, plus up to six hotkeyable quick slots.', deps: ['BepInExPack_Valheim'] },
+    { name: 'Warfare', author: 'Therzie', ver: '1.9.4', dl: '1,5 Mio', stars: 229, upd: 'vor 10 T', st: 'none', size: '41,2 MB', desc: 'Fills the weapon and shields gap in vanilla Valheim with MANY new weapons and unique extras!', deps: ['Jotunn'] },
+    { name: 'AdventureBackpacks', author: 'Vapok', ver: '2.2.5', dl: '1,0 Mio', stars: 196, upd: 'gestern', st: 'none', size: '6,3 MB', desc: 'A catalogue of Adventuring Backpacks that grow and become more useful as the game progresses.', deps: ['Jotunn'] },
+    { name: 'ServerDevcommands', author: 'JereKuusela', ver: '1.92.0', dl: '880 Tsd', stars: 141, upd: 'vor 3 T', st: 'none', size: '0,6 MB', desc: 'Extends the console commands with autocomplete, aliases and server-side admin tools.', deps: ['BepInExPack_Valheim'] },
+    { name: 'AzuCraftyBoxes', author: 'Azumatt', ver: '1.5.4', dl: '760 Tsd', stars: 133, upd: 'vor 21 T', st: 'profile', size: '0,4 MB', desc: 'Craft and build using materials from nearby containers.', deps: ['BepInExPack_Valheim'] },
+    { name: 'Seasons', author: 'shudnal', ver: '1.4.9', dl: '410 Tsd', stars: 118, upd: 'vor 5 T', st: 'none', size: '22,0 MB', desc: 'Four seasons with changing visuals, weather, temperature and growth rates.', deps: ['BepInExPack_Valheim'] },
+    { name: 'Comfy Gizmo', author: 'ComfyMods', ver: '1.11.0', dl: '390 Tsd', stars: 102, upd: 'vor 30 T', st: 'none', size: '0,2 MB', desc: 'Rotate build pieces freely on all three axes with precise snapping.', deps: ['BepInExPack_Valheim'] }
+  ];
+  ini(n) { return n.replace(/[^A-Z]/g, '').slice(0, 2) || n.slice(0, 2).toUpperCase(); }
+  toggle(name) { this.setState(s => { const p = { ...s.pending }; if (p[name]) delete p[name]; else p[name] = true; return { pending: p }; }); }
+  renderVals() {
+    const { sel, pending } = this.state;
+    const byName = Object.fromEntries(this.mods.map(m => [m.name, m]));
+    const rowsA = this.mods.map((m, i) => ({
+      ...m, ini: this.ini(m.name), ver: m.ver,
+      stProfile: m.st === 'profile', stUpdate: m.st === 'update', stNone: m.st === 'none',
+      bg: i === sel ? 'oklch(0.24 0.012 70)' : 'transparent',
+      shadow: i === sel ? 'inset 2px 0 0 oklch(0.78 0.14 70)' : 'none',
+      select: () => this.setState({ sel: i })
+    }));
+    const s = this.mods[sel];
+    const selObj = {
+      ...s, ini: this.ini(s.name),
+      cta: s.st === 'profile' ? 'Aus Profil entfernen' : s.st === 'update' ? `Aktualisieren auf ${s.newVer}` : 'Zum Profil hinzufügen',
+      depCount: s.deps.length,
+      deps: s.deps.length ? s.deps.map(d => { const dm = byName[d]; const ok = dm && dm.st !== 'none'; return { name: d, ver: dm ? dm.ver : '', state: ok ? '✓ im Profil' : 'wird mitinstalliert', color: ok ? 'oklch(0.78 0.14 150)' : 'oklch(0.78 0.14 70)' }; }) : [{ name: 'Keine', ver: '', state: '', color: 'inherit' }],
+      versions: [
+        { v: s.newVer || s.ver, d: s.upd, t: 'neueste', c: 'oklch(0.78 0.14 70)' },
+        ...(s.newVer ? [{ v: s.ver, d: 'vor 34 T', t: 'installiert', c: 'oklch(0.78 0.14 150)' }] : []),
+        { v: '0.14.10', d: 'vor 2 Mon', t: '', c: 'inherit' },
+        { v: '0.14.9', d: 'vor 3 Mon', t: '', c: 'inherit' }
+      ]
+    };
+    const catNames = [['Mods', 3074], ['Client-side', 2764, 1], ['Server-side', 1563], ['Tweaks', 1636], ['Utility', 1558], ['Items', 1102], ['Gebäude', 988], ['Modpacks', 2442], ['Deep North', 1376]];
+    const cats = catNames.map(([name, n, on]) => ({ name, n: n.toLocaleString('de-DE'), bg: on ? 'oklch(0.24 0.012 70)' : 'transparent', color: on ? 'oklch(0.96 0.006 80)' : 'oklch(0.78 0.008 75)', box: on ? 'oklch(0.78 0.14 70)' : 'oklch(0.4 0.006 60)', fill: on ? 'oklch(0.78 0.14 70)' : 'transparent' }));
+    const chips = [['Alle', '6.844'], ['Client-side', '2.764', 1], ['Server-side', ''], ['Tweaks', ''], ['Utility', ''], ['Items', ''], ['Gebäude', ''], ['Modpacks', '']].map(([name, n, on]) => ({ name, n, bg: on ? 'oklch(0.24 0.012 250)' : 'oklch(0.995 0.002 85)', color: on ? 'oklch(0.98 0.004 85)' : 'oklch(0.38 0.01 250)', border: on ? 'oklch(0.24 0.012 250)' : 'oklch(0.88 0.006 85)' }));
+    const rowsB = this.mods.slice(1).map(m => {
+      const p = !!pending[m.name];
+      return { ...m, ini: this.ini(m.name), aProfile: m.st === 'profile', aUpdate: m.st === 'update' && !p, aPending: p, aAdd: m.st === 'none' && !p, pendingLabel: m.st === 'update' ? 'Update vorgemerkt' : 'Vorgemerkt', toggle: () => this.toggle(m.name) };
+    });
+    const tray = Object.keys(pending).map(n => { const m = byName[n]; const up = m.st === 'update';
+      return { name: n, sign: up ? '↑' : '+', ver: up ? `${m.ver} → ${m.newVer}` : `${m.ver} · ${m.size}`, bg: up ? 'oklch(0.94 0.04 60)' : 'oklch(0.93 0.035 230)', color: up ? 'oklch(0.48 0.13 60)' : 'oklch(0.42 0.12 230)', remove: () => this.toggle(n) }; });
+    const mb = Object.keys(pending).reduce((a, n) => a + parseFloat(byName[n].size.replace(',', '.')), 0);
+    const adds = tray.filter(t => t.sign === '+').length, ups = tray.length - adds;
+    return {
+      rowsA, sel: selObj, cats, chips, rowsB, tray,
+      showDetail: this.props.showDetail ?? true, showTray: this.props.showTray ?? true,
+      trayEmpty: tray.length === 0, hasDeps: tray.length > 0,
+      trayCount: `${adds} neu · ${ups} Update`, traySize: mb.toFixed(1).replace('.', ',') + ' MB',
+      clearTray: () => this.setState({ pending: {} }),
+      ...this.v2()
+    };
+  }
+}
+</script>
+</body>
+</html>

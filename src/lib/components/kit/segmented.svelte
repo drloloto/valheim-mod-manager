@@ -1,0 +1,35 @@
+<script lang="ts">
+	import * as ToggleGroup from "#lib/components/ui/toggle-group/index.js";
+	import { cn } from "#lib/utils.js";
+	import type { SegmentOption } from "./types";
+
+	let {
+		options,
+		value = $bindable(),
+		columns,
+		size = "default",
+		class: className,
+	}: { options: SegmentOption[]; value: string; columns?: number; size?: "default" | "sm"; class?: string } = $props();
+</script>
+
+<ToggleGroup.Root
+	type="single"
+	bind:value={() => value, (v) => v && (value = v)}
+	class={cn("bg-field gap-0.5 rounded-[5px] p-0.5", columns ? "grid w-full" : "inline-flex w-max", className)}
+	style={columns ? `grid-template-columns: repeat(${columns}, minmax(0, 1fr))` : undefined}
+>
+	{#each options as o (o.value)}
+		<ToggleGroup.Item
+			value={o.value}
+			class={cn(
+				"text-foreground-soft hover:text-foreground min-w-0 rounded-[4px] border-0 shadow-none hover:bg-transparent",
+				size === "sm" ? "h-5 px-1.5 text-[11px]" : columns ? "h-7 truncate px-1.5 text-[11.5px]" : "h-7 px-3 text-xs",
+				"data-[state=on]:bg-muted data-[state=on]:text-foreground",
+				o.tone === "primary" && "text-primary",
+			)}
+		>
+			{o.label}
+			{#if o.badge != null && o.badge !== 0}<span class="ml-1 font-mono">{o.badge}</span>{/if}
+		</ToggleGroup.Item>
+	{/each}
+</ToggleGroup.Root>
