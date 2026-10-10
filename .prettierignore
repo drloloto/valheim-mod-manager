@@ -9,3 +9,6 @@ src/lib/components/ui
 src/lib/style-vega.css
 package-lock.json
 docs/design
+
+# Throwaway experiments
+spike

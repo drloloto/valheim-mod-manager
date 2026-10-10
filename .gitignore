@@ -34,3 +34,8 @@ src-tauri/gen
 # Bun lockfiles (npm is the canonical package manager, see CI)
 bun.lock
 bun.lockb
+
+# Spike artifacts (semantic search PoC)
+spike/semantic-search/.model-cache
+spike/semantic-search/index*.json
+spike/semantic-search/dlls.json
