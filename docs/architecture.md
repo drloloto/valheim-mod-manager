@@ -39,11 +39,12 @@ SvelteKit single-page app rendered by WebView2 that owns the interaction. They t
   cache/index.json           compacted Thunderstore index with fetch timestamp
   cache/downloads/           <id>-<version>.zip, shared across profiles
   profiles/<name>/
-    profile.json             explicit mods: namespace, name, version, enabled, source, deps (local only)
+    profile.json             explicit mods: namespace, name, version, enabled, source, deps (local only); optional server link
     installed.json           what is physically installed: version and file list per package
     BepInEx/                 plugins, patchers, config, core … (the real mod installation)
     doorstop/                winhttp.dll, doorstop_config.ini, doorstop_libs (copied into the game on Play)
     local/<id>/              source files of local mods
+    .snapshots/<stamp>-<reason>/   profile.json, installed.json and config/ before a wholesale rewrite (ten kept)
 ```
 
 The game folder only ever receives the doorstop files. Launch arguments
@@ -71,6 +72,16 @@ Valheim pack, adds the pack when any mod is present, and diffs against what is i
 **Play.** `launch_game` waits for a running sync, syncs the doorstop files into the game folder (hash
 compared, copied only when different) and starts `steam.exe -applaunch 892970 <doorstop args>`. Vanilla
 launches pass `--doorstop-enabled false`.
+
+**Linked server.** A profile can carry a `server` block (companion URL, name, token). `check_server`
+fetches `/api/manifest` (2 s timeout) and diffs the local resolved plan against it; the UI shows the result
+in the status bar and, before a modded launch, as a dialog with "adopt server versions and start" (the
+profile is rewritten to the manifest, every entry explicit and pinned, then synced and launched) or "start
+anyway". `publish_profile` stages a release on the companion (`POST /api/releases`: the server pulls and
+checks the local plan plus config files, nothing changes live); `apply_release` then applies it now, when
+nobody is online, or at a time, and `discard_release` drops it. `valheim-mod-manager://import?url=…&name=…&link=…` (deep-link + single-instance
+plugins) downloads the companion's `.r2z`, imports it like any other and stores the link. Spec:
+`docs/superpowers/specs/2026-10-10-server-companion-design.md`.
 
 ## Frontend
 

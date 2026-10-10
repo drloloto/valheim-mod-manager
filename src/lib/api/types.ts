@@ -77,10 +77,110 @@ export interface SyncStatus {
 	queued: boolean;
 }
 
+/** Companion server a profile is linked to (profile.json `server`); the token never leaves the core. */
+export interface ServerLink {
+	url: string;
+	name: string;
+	token?: string | null;
+}
+
+export interface ServerLinkInfo {
+	url: string;
+	name: string;
+	hasToken: boolean;
+}
+
+export interface ManifestMod {
+	id: string;
+	version: string;
+	explicit: boolean;
+	requiredBy: string[];
+}
+
+export interface ServerDiff {
+	onlyServer: ManifestMod[];
+	onlyLocal: ManifestMod[];
+	changed: { id: string; local: string; server: string }[];
+}
+
+export interface ServerCheck {
+	reachable: boolean;
+	error?: string;
+	name: string;
+	world: string;
+	inSync: boolean;
+	diff: ServerDiff;
+	serverMods: number;
+	serverConfigs: number;
+	hash: string;
+	generatedAt: number;
+	/** Companion switches, e.g. `publish: false`. */
+	features: Record<string, boolean>;
+	/** A staged release waiting on the server. */
+	release: ReleaseSummary | null;
+	/** Players online per the server log; null when unknown. */
+	online: number | null;
+}
+
+/** What a pasted address resolved to (autoconfig). */
+export interface ServerDiscovery {
+	url: string;
+	name: string;
+	world: string;
+	mods: number;
+	features: Record<string, boolean>;
+}
+
+export interface ProfileServerCheck {
+	profile: string;
+	check: ServerCheck;
+}
+
+/** A release staged on the companion: pulled and checked, not applied yet. */
+export interface ReleaseSummary {
+	id: string;
+	createdAt: number;
+	install: number;
+	remove: number;
+	configs: number;
+	problems: string[];
+	schedule: { when: "idle" | "at"; at?: number; setAt: number } | null;
+	lastError: string | null;
+}
+
+export interface ReleasePlan {
+	install: { id: string; from: string | null; to: string }[];
+	remove: string[];
+	configsChanged: string[];
+	configsNew: string[];
+}
+
+export interface StageResponse {
+	release: { id: string; plan: ReleasePlan; problems: string[] };
+	summary: ReleaseSummary;
+	online: number | null;
+	log: string[];
+	skippedLocal: string[];
+}
+
+export type ApplyWhen = "now" | "idle" | "at" | "none";
+
+export interface ApplyResponse {
+	applied: boolean;
+	summary?: ReleaseSummary | null;
+	result?: { installed: string[]; removed: string[]; errors: string[] } | null;
+	configsWritten: string[];
+	stopped: { ok: boolean; message: string } | null;
+	started: { ok: boolean; message: string } | null;
+	restartRequired: boolean;
+	log: string[];
+}
+
 export interface AppState {
 	profiles: string[];
 	active: string | null;
 	mods: ProfileMod[];
+	server: ServerLinkInfo | null;
 	installed: Record<string, string>;
 	plan: Plan | null;
 	updates: Record<string, string>;

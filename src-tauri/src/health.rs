@@ -1,5 +1,5 @@
 //! Health hints for a profile: duplicate DLLs, deprecated mods, mods older than the last game update.
-use crate::models::{Installed, Pkg, ProfileMod, Source};
+use crate::models::{Installed, Pkg, ProfileMod, Resolved, Source};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 
@@ -21,7 +21,18 @@ fn dll_name(rel: &str) -> Option<String> {
     name.to_ascii_lowercase().ends_with(".dll").then(|| name.to_string())
 }
 
-pub fn check(mods: &[ProfileMod], installed: &Installed, by_id: Option<&HashMap<String, Pkg>>, game_updated: Option<i64>) -> Vec<HealthIssue> {
+/// `ids`: every Thunderstore package of the profile, explicit mods and resolved dependencies alike.
+pub fn ids_to_check(mods: &[ProfileMod], resolved: Option<&BTreeMap<String, Resolved>>) -> Vec<String> {
+    let mut ids: Vec<String> = mods.iter().filter(|m| m.source == Source::Thunderstore).map(ProfileMod::id).collect();
+    for id in resolved.map(|r| r.keys()).into_iter().flatten() {
+        if !ids.contains(id) {
+            ids.push(id.clone());
+        }
+    }
+    ids
+}
+
+pub fn check(ids: &[String], installed: &Installed, by_id: Option<&HashMap<String, Pkg>>, game_updated: Option<i64>) -> Vec<HealthIssue> {
     let mut out = vec![];
 
     // Same DLL file name installed by more than one package (case-insensitive).
@@ -43,14 +54,14 @@ pub fn check(mods: &[ProfileMod], installed: &Installed, by_id: Option<&HashMap<
     }
 
     if let Some(by_id) = by_id {
-        for m in mods.iter().filter(|m| m.source == Source::Thunderstore) {
-            let Some(p) = by_id.get(&m.id()) else { continue };
+        for id in ids {
+            let Some(p) = by_id.get(id) else { continue };
             if p.dep {
-                out.push(HealthIssue { kind: "deprecated", ids: vec![m.id()], detail: String::new() });
+                out.push(HealthIssue { kind: "deprecated", ids: vec![id.clone()], detail: String::new() });
             }
             if let Some(g) = game_updated {
                 if p.upd > 0 && p.upd < g {
-                    out.push(HealthIssue { kind: "stale", ids: vec![m.id()], detail: p.upd.to_string() });
+                    out.push(HealthIssue { kind: "stale", ids: vec![id.clone()], detail: p.upd.to_string() });
                 }
             }
         }
@@ -88,9 +99,26 @@ mod tests {
         fresh.upd = 5_000;
         let idx: HashMap<String, Pkg> = [old, dep, fresh].into_iter().map(|p| (p.id.clone(), p)).collect();
         let mods = vec![ProfileMod::thunderstore("a", "A", "1.0.0"), ProfileMod::thunderstore("b", "B", "1.0.0"), ProfileMod::thunderstore("c", "C", "1.0.0")];
-        let issues = check(&mods, &Installed::new(), Some(&idx), Some(3_000));
+        let ids = ids_to_check(&mods, None);
+        let issues = check(&ids, &Installed::new(), Some(&idx), Some(3_000));
         assert_eq!(issues.iter().map(|i| (i.kind, i.ids[0].as_str())).collect::<Vec<_>>(), vec![("stale", "a-A"), ("deprecated", "b-B")]);
         assert_eq!(issues[0].detail, "1000");
-        assert!(check(&mods, &Installed::new(), Some(&idx), None).iter().all(|i| i.kind == "deprecated"));
+        assert!(check(&ids, &Installed::new(), Some(&idx), None).iter().all(|i| i.kind == "deprecated"));
+    }
+
+    #[test]
+    fn stale_dependency_is_reported_too() {
+        // Jotunn-style library: not in the profile, only resolved as a dependency, compiled before the game patch.
+        let mut lib = test_pkg("lib-Lib", &[("1.0.0", &[])]);
+        lib.upd = 1_000;
+        let idx: HashMap<String, Pkg> = [lib].into_iter().map(|p| (p.id.clone(), p)).collect();
+        let mods = vec![ProfileMod::thunderstore("a", "A", "1.0.0")];
+        let mut resolved = BTreeMap::new();
+        resolved.insert("a-A".to_string(), Resolved { version: "1.0.0".into(), required_by: vec![] });
+        resolved.insert("lib-Lib".to_string(), Resolved { version: "1.0.0".into(), required_by: vec!["a-A".into()] });
+        let ids = ids_to_check(&mods, Some(&resolved));
+        assert_eq!(ids, vec!["a-A", "lib-Lib"]);
+        let issues = check(&ids, &Installed::new(), Some(&idx), Some(3_000));
+        assert_eq!(issues, vec![HealthIssue { kind: "stale", ids: vec!["lib-Lib".into()], detail: "1000".into() }]);
     }
 }

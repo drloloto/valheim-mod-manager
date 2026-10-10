@@ -32,6 +32,8 @@ sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 tauri-plugin-updater = "2.13.2"
 tauri-plugin-process = "2.4.0"
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

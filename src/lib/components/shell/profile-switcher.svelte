@@ -6,6 +6,7 @@
 	import ImportProfileDialog from "#lib/components/app/ImportProfileDialog.svelte";
 	import MigrateDialog from "#lib/components/app/MigrateDialog.svelte";
 	import ExportCodeDialog from "#lib/components/app/ExportCodeDialog.svelte";
+	import ServerDialog from "#lib/components/app/ServerDialog.svelte";
 	import { store } from "#lib/api/store.svelte.js";
 	import { initials } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
@@ -59,6 +60,7 @@
 			{#each store.state.profiles as p (p)}
 				<DropdownMenu.RadioItem value={p}>
 					{p}
+					{#if store.serverUpdates[p]}<span class="text-primary text-meta ml-1 font-mono" title={t("profile.serverUpdate")}>↓</span>{/if}
 					{#if p === active}<span class="text-muted-foreground text-meta ml-auto font-mono">{t("profile.summary", { mods: store.state.mods.length })}</span
 						>{/if}
 				</DropdownMenu.RadioItem>
@@ -67,6 +69,7 @@
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item onSelect={() => (newOpen = true)}>{t("profile.new")}<DropdownMenu.Shortcut>{t("key.ctrl")} N</DropdownMenu.Shortcut></DropdownMenu.Item>
 		<DropdownMenu.Item onSelect={() => (importOpen = true)}>{t("profile.import")}</DropdownMenu.Item>
+		<DropdownMenu.Item onSelect={() => (store.serverDialog = "add")}>{t("server.menuAdd")}</DropdownMenu.Item>
 		<DropdownMenu.Item onSelect={() => (migrateOpen = true)}>{t("profile.migrate")}</DropdownMenu.Item>
 		{#if active}
 			<DropdownMenu.Item disabled={!store.state.mods.length} onSelect={share}>{t("profile.share")}</DropdownMenu.Item>
@@ -76,6 +79,13 @@
 			<DropdownMenu.Item onSelect={() => (cloneOpen = true)}>{t("profile.clone")}</DropdownMenu.Item>
 			<DropdownMenu.Item onSelect={() => store.openFolder("profile")}>{t("profile.openFolder")}</DropdownMenu.Item>
 			<DropdownMenu.Item onSelect={() => store.repair()}>{t("profile.repair")}</DropdownMenu.Item>
+			<DropdownMenu.Separator />
+			<DropdownMenu.Item onSelect={() => (store.serverDialog = "link")}
+				>{store.server ? t("server.menuEdit", { name: store.server.name || store.server.url }) : t("server.menuLink")}</DropdownMenu.Item
+			>
+			{#if store.server}
+				<DropdownMenu.Item disabled={!store.state.mods.length} onSelect={() => (store.serverDialog = "publish")}>{t("server.menuPublish")}</DropdownMenu.Item>
+			{/if}
 			<DropdownMenu.Separator />
 			<DropdownMenu.Item variant="destructive" onSelect={() => (deleteOpen = true)}>{t("profile.delete")}</DropdownMenu.Item>
 		{/if}
@@ -108,6 +118,7 @@
 <ImportProfileDialog bind:open={importOpen} />
 <MigrateDialog bind:open={migrateOpen} />
 <ExportCodeDialog bind:code={exportCode} />
+<ServerDialog />
 <ConfirmDialog
 	bind:open={deleteOpen}
 	title={t("profile.deleteTitle", { name: active ?? "" })}

@@ -35,6 +35,11 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { api, ApiError } from "./client";
 import type { ForeignProfile, HealthIssue } from "./types";
 import { modStatus, type ModStatus } from "./status";
+import { computeReadiness } from "#lib/readiness.js";
+import { parseDeepLink } from "#lib/deeplink.js";
+import { getCurrent as getCurrentDeepLink, onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import type { ApplyWhen, ServerCheck, ServerDiscovery, StageResponse } from "./types";
+import { formatDateTime } from "#lib/format.js";
 import type { AppState, ExportResult, FolderKind, ImportResult, Pkg, ProfileMod, Settings, SlimPkg, SyncDone, SyncProgress } from "./types";
 
 export type ToastKind = "ok" | "err" | "info";
@@ -51,6 +56,7 @@ const EMPTY_STATE: AppState = {
 	profiles: [],
 	active: null,
 	mods: [],
+	server: null,
 	installed: {},
 	plan: null,
 	updates: {},
@@ -178,6 +184,23 @@ class ModManagerStore {
 
 	modsMap = $derived(new Map(this.state.mods.map((m) => [modId(m), m])));
 	syncing = $derived(this.state.sync.running || this.syncProgress !== null);
+	/** Missing installations and resolver errors of the active profile; Play asks before starting an incomplete profile. */
+	readiness = $derived(computeReadiness(this.state, this.syncing));
+	/** Mod IDs the plan still wants to install (missing or wrong version). */
+	missingIds = $derived(new Set(this.readiness.missing.map((m) => m.id)));
+	/** Open the "start anyway?" dialog of the Play button. */
+	launchConfirm = $state(false);
+	/** Linked companion server of the active profile and the last comparison with it. */
+	server = $derived(this.state.server);
+	serverStatus = $state<ServerCheck | null>(null);
+	serverChecking = $state(false);
+	serverDialog = $state<"link" | "publish" | "diff" | "add" | null>(null);
+	/** Linked profiles whose server runs other versions (from the start-up check). */
+	serverUpdates = $state<Record<string, ServerCheck>>({});
+	/** Result of the last stage (publish step 1), shown in the publish dialog until applied or discarded. */
+	staged = $state.raw<StageResponse | null>(null);
+	/** Set by "adopt and start": launch once the sync that follows has finished. */
+	private launchAfterSync = false;
 	updateCount = $derived(Object.keys(this.state.updates).length);
 	otherProfiles = $derived(this.state.profiles.filter((p) => p !== this.state.active));
 	/** Mod ID → other profiles that contain it. */
@@ -244,6 +267,23 @@ class ModManagerStore {
 		]);
 		await Promise.all([this.loadState(), this.loadIndex(), this.loadSettings()]);
 		if (this.autoUpdate.value && !this.state.app.portable) this.checkUpdate();
+		this.refreshServerStatus();
+		this.checkAllServers();
+		// `valheim-mod-manager://import?…` from a companion page, at startup or while running.
+		const handle = (urls: string[]) => {
+			for (const u of urls) {
+				const d = parseDeepLink(u);
+				if (d) this.importFromUrl(d.url, d.name, d.link);
+				else this.toast(t("toast.deepLinkInvalid"), "err");
+			}
+		};
+		try {
+			const current = await getCurrentDeepLink();
+			if (current?.length) handle(current);
+			unlisten.push(await onOpenUrl(handle));
+		} catch {
+			/* plugin unavailable (browser preview) */
+		}
 		return () => unlisten.forEach((u) => u());
 	}
 
@@ -254,16 +294,190 @@ class ModManagerStore {
 		if (r.removed.length) parts.push(t("toast.removedN", { n: r.removed.length }));
 		if (parts.length) this.toast(`${r.profile}: ${parts.join(", ")}`, "ok");
 		for (const err of r.errors) this.toast(err, "err");
-		this.loadState();
+		this.loadState().then(() => {
+			this.refreshServerStatus();
+			if (this.launchAfterSync && r.profile === this.state.active) {
+				this.launchAfterSync = false;
+				if (!r.errors.length) this.launch(true);
+			}
+		});
 	}
 
 	private async applyState(fn: () => Promise<AppState>, fallback: string): Promise<boolean> {
+		const before = `${this.state.active}|${this.state.server?.url}`;
 		try {
 			this.state = await fn();
 			this.loaded = true;
+			if (`${this.state.active}|${this.state.server?.url}` !== before) this.refreshServerStatus();
 			return true;
 		} catch (e) {
 			this.toast(errorMessage(e, fallback), "err");
+			return false;
+		}
+	}
+
+	/** Background comparison for the status bar; never throws, never toasts. */
+	async refreshServerStatus(): Promise<ServerCheck | null> {
+		const active = this.state.active;
+		if (!active || !this.state.server) {
+			this.serverStatus = null;
+			return null;
+		}
+		this.serverChecking = true;
+		try {
+			const c = await api.checkServer(active);
+			this.serverStatus = c;
+			return c;
+		} catch {
+			this.serverStatus = null;
+			return null;
+		} finally {
+			this.serverChecking = false;
+		}
+	}
+
+	async linkServer(url: string, token: string): Promise<boolean> {
+		const active = this.state.active;
+		if (!active) return false;
+		const ok = await this.applyState(
+			() => api.setServerLink(active, { url, name: this.state.server?.name ?? "", token: token || null }),
+			t("toast.serverLinkFailed"),
+		);
+		if (!ok) return false;
+		const c = await this.refreshServerStatus();
+		if (c?.reachable && c.name && c.name !== this.state.server?.name) {
+			await this.applyState(() => api.setServerLink(active, { url, name: c.name, token: null }), t("toast.serverLinkFailed"));
+		}
+		this.toast(
+			c?.reachable ? t("toast.serverLinked", { name: c.name || url }) : t("server.unreachable", { error: c?.error ?? "" }),
+			c?.reachable ? "ok" : "err",
+		);
+		return true;
+	}
+
+	async unlinkServer() {
+		const active = this.state.active;
+		if (!active) return;
+		if (await this.applyState(() => api.setServerLink(active, null), t("toast.serverLinkFailed"))) {
+			this.serverStatus = null;
+			this.toast(t("toast.serverUnlinked"), "ok");
+		}
+	}
+
+	/** Rewrites the profile to the server's versions; optionally starts the game once installed. */
+	async adoptServer(thenLaunch: boolean, withConfigs = true, intoNew: string | null = null): Promise<boolean> {
+		const active = this.state.active;
+		if (!active) return false;
+		this.launchAfterSync = thenLaunch;
+		const ok = await this.applyState(() => api.adoptServer(active, withConfigs, intoNew), t("toast.adoptFailed"));
+		if (ok) {
+			this.toast(intoNew ? t("toast.adoptedInto", { name: this.state.active ?? intoNew }) : t("toast.adopted"), "ok");
+			delete this.serverUpdates[active];
+		} else this.launchAfterSync = false;
+		return ok;
+	}
+
+	/** "Autoconfig": resolve whatever the player pasted to a companion. */
+	async discoverServer(url: string): Promise<ServerDiscovery | null> {
+		try {
+			return await api.discoverServer(url);
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.discoverFailed")), "err");
+			return null;
+		}
+	}
+
+	/** New profile straight from a companion: its mods, versions and configs, linked for later checks. */
+	async addServer(d: ServerDiscovery): Promise<boolean> {
+		return this.importFromUrl(`${d.url}/api/profile.r2z`, d.name || d.world || "Server", d.url);
+	}
+
+	/** App start: every linked profile vs its server; results feed the profile menu markers and one toast. */
+	async checkAllServers(): Promise<void> {
+		try {
+			const results = await api.checkAllServers();
+			const updates: Record<string, ServerCheck> = {};
+			for (const r of results) if (r.check.reachable && !r.check.inSync) updates[r.profile] = r.check;
+			this.serverUpdates = updates;
+			const others = Object.keys(updates).filter((p) => p !== this.state.active);
+			if (others.length) this.toast(t("toast.serverUpdates", { profiles: others.join(", ") }), "info");
+		} catch {
+			/* offline or no linked profiles: nothing to say */
+		}
+	}
+
+	/** Step 1 of a publish: the server pulls and checks; nothing changes live. */
+	async publish(withConfigs: boolean): Promise<StageResponse | null> {
+		const active = this.state.active;
+		if (!active) return null;
+		try {
+			const r = await api.publishProfile(active, withConfigs);
+			this.staged = r;
+			if (r.skippedLocal.length) this.toast(t("toast.localSkipped", { names: r.skippedLocal.join(", ") }), "info");
+			this.refreshServerStatus();
+			return r;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.publishFailed")), "err");
+			return null;
+		}
+	}
+
+	/** Step 2: apply now, schedule (idle / at), or clear the schedule. */
+	async applyRelease(id: string, when: ApplyWhen, at: number | null = null): Promise<boolean> {
+		const active = this.state.active;
+		if (!active) return false;
+		try {
+			const r = await api.applyRelease(active, id, when, at);
+			if (r.applied) {
+				const res = r.result ?? { installed: [], removed: [], errors: [] };
+				const tail = r.restartRequired
+					? t("server.restartRequired")
+					: r.started
+						? r.started.ok
+							? t("server.restarted")
+							: t("server.restartFailed", { message: r.started.message })
+						: "";
+				this.toast(
+					t("toast.applied", { installed: res.installed.length, removed: res.removed.length, configs: r.configsWritten.length, tail }),
+					res.errors.length ? "info" : "ok",
+				);
+				for (const e of res.errors) this.toast(e, "err");
+				this.staged = null;
+			} else if (when === "none") {
+				this.toast(t("toast.scheduleCleared"), "ok");
+			} else {
+				this.toast(when === "idle" ? t("toast.scheduledIdle") : t("toast.scheduledAt", { time: formatDateTime(at ?? Date.now()) }), "ok");
+			}
+			this.refreshServerStatus();
+			return true;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.applyFailed")), "err");
+			return false;
+		}
+	}
+
+	async discardRelease(id: string): Promise<boolean> {
+		const active = this.state.active;
+		if (!active) return false;
+		try {
+			await api.discardRelease(active, id);
+			this.staged = null;
+			this.toast(t("toast.releaseDiscarded"), "ok");
+			this.refreshServerStatus();
+			return true;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.applyFailed")), "err");
+			return false;
+		}
+	}
+
+	async importFromUrl(url: string, name: string, link: string | null): Promise<boolean> {
+		try {
+			this.onImported(await api.importProfileUrl(url, name, true, link ? { url: link, name, token: null } : null));
+			this.refreshServerStatus();
+			return true;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.importFailed")), "err");
 			return false;
 		}
 	}
@@ -565,6 +779,34 @@ class ModManagerStore {
 		if (await this.applyState(() => api.addLocalMods(name, paths), t("toast.localFailed"))) {
 			this.toast(t("toast.localAdded", { n: paths.length }), "ok");
 		}
+	}
+
+	/** Re-submit the current mod list; the core enqueues a sync, which retries failed downloads and installs. */
+	retrySync() {
+		return this.setMods(this.state.mods);
+	}
+
+	/** Play button and Mod+Enter: an incomplete profile asks first, a linked server is compared, then launch. */
+	async requestLaunch(modded: boolean) {
+		if (this.launching) return;
+		if (modded && this.readiness.status === "incomplete" && this.readiness.missing.length) {
+			this.launchConfirm = true;
+			return;
+		}
+		if (modded && this.state.server) {
+			// The Play button shows "Starting…" while the server is asked (a few seconds at most when it is down).
+			this.launching = true;
+			try {
+				const c = await this.refreshServerStatus();
+				if (c?.reachable && !c.inSync) {
+					this.serverDialog = "diff";
+					return;
+				}
+			} finally {
+				this.launching = false;
+			}
+		}
+		return this.launch(modded);
 	}
 
 	async launch(modded: boolean) {

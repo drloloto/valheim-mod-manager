@@ -1,7 +1,26 @@
 // Thin layer over the Tauri commands of the Rust core (src-tauri/src/commands.rs).
 import { invoke } from "@tauri-apps/api/core";
 import type { ForeignProfile } from "./types";
-import type { AppState, ConfigChange, ExportResult, FolderKind, GameInfo, ImportResult, IndexPayload, ParsedConfig, Pkg, ProfileMod, Settings } from "./types";
+import type {
+	AppState,
+	ConfigChange,
+	ExportResult,
+	FolderKind,
+	GameInfo,
+	ImportResult,
+	IndexPayload,
+	ParsedConfig,
+	Pkg,
+	ProfileMod,
+	ApplyResponse,
+	ApplyWhen,
+	ProfileServerCheck,
+	ServerCheck,
+	ServerDiscovery,
+	StageResponse,
+	ServerLink,
+	Settings,
+} from "./types";
 
 export class ApiError extends Error {
 	constructor(
@@ -48,6 +67,16 @@ export const api = {
 
 	importProfileCode: (code: string, name: string, withConfigs: boolean) => call<ImportResult>("import_profile_code", { code, name, withConfigs }),
 	importProfileFile: (path: string, name: string, withConfigs: boolean) => call<ImportResult>("import_profile_file", { path, name, withConfigs }),
+	importProfileUrl: (url: string, name: string, withConfigs: boolean, link: ServerLink | null) =>
+		call<ImportResult>("import_profile_url", { url, name, withConfigs, link }),
+	setServerLink: (profile: string, link: ServerLink | null) => call<AppState>("set_server_link", { profile, link }),
+	checkServer: (profile: string) => call<ServerCheck>("check_server", { profile }),
+	checkAllServers: () => call<ProfileServerCheck[]>("check_all_servers"),
+	discoverServer: (url: string) => call<ServerDiscovery>("discover_server", { url }),
+	adoptServer: (profile: string, withConfigs: boolean, intoNew: string | null) => call<AppState>("adopt_server", { profile, withConfigs, intoNew }),
+	publishProfile: (profile: string, withConfigs: boolean) => call<StageResponse>("publish_profile", { profile, withConfigs }),
+	applyRelease: (profile: string, id: string, when: ApplyWhen, at: number | null) => call<ApplyResponse>("apply_release", { profile, id, when, at }),
+	discardRelease: (profile: string, id: string) => call<void>("discard_release", { profile, id }),
 	listForeignProfiles: () => call<ForeignProfile[]>("list_foreign_profiles"),
 	importForeignProfile: (path: string, name: string, withConfigs: boolean) => call<ImportResult>("import_foreign_profile", { path, name, withConfigs }),
 	exportProfileCode: (profile: string) => call<ExportResult>("export_profile_code", { profile }),

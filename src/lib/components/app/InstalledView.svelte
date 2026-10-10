@@ -42,8 +42,9 @@
 	const prefs = store.tables.installed;
 
 	const plan = $derived(store.state.plan);
-	const pending = $derived(new Set(plan?.toInstall.map((x) => x.id) ?? []));
 	const updateCount = $derived(store.updateCount);
+	const missing = $derived(store.readiness.status === "incomplete" ? store.readiness.missing : []);
+	const missingNames = $derived(missing.map((m) => store.byId.get(m.id)?.name ?? m.id).join(", "));
 	const compact = $derived(prefs.value.density === "compact");
 	let healthOpen = $state(true);
 	const nameOf = (id: string) => store.byId.get(id)?.name ?? id;
@@ -165,6 +166,14 @@
 					<Button disabled={!updateCount} onclick={() => store.updateAll()}>{t("installed.updateAll")}{updateCount ? ` (${updateCount})` : ""}</Button>
 				</Toolbar>
 
+				{#if missing.length}
+					<div class="text-destructive-text bg-destructive/10 flex items-center gap-3 border-b px-4 py-2 text-[13px]">
+						<TriangleAlert class="size-4 shrink-0" />
+						<span class="min-w-0 flex-1">{t("readiness.missing", { n: missing.length, names: missingNames })}</span>
+						<Button size="sm" variant="outline" onclick={() => store.retrySync()}>{t("readiness.installNow")}</Button>
+					</div>
+				{/if}
+
 				{#if plan?.errors.length}
 					<div class="text-destructive-text bg-destructive/10 border-b px-4 py-2 text-[13px]">
 						{#each plan.errors as err (err)}<p>{err}</p>{/each}
@@ -247,9 +256,9 @@
 						{:else if key === "cats"}
 							<span class="cell-soft block text-xs" title={p?.cats.join(", ")}>{p?.cats.join(", ") ?? ""}</span>
 						{:else if key === "status"}
-							{#if pending.has(r.id)}
+							{#if store.missingIds.has(r.id) && store.syncing}
 								<span class="text-primary text-xs">{t("installed.installing")}</span>
-							{:else if r.kind === "mod" && !(r.id in store.state.installed) && r.m.enabled}
+							{:else if store.missingIds.has(r.id)}
 								<span class="text-destructive-text text-xs">{t("installed.notInstalled")}</span>
 							{:else}
 								{#if store.healthByMod.has(r.id)}<span class="mr-1.5 inline-flex" title={healthText(r.id)}><TriangleAlert class="text-primary size-3.5" /></span

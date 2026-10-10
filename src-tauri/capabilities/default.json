@@ -14,6 +14,7 @@
 		"clipboard-manager:allow-write-text",
 		"window-state:default",
 		"updater:default",
-		"process:default"
+		"process:default",
+		"deep-link:default"
 	]
 }

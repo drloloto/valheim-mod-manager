@@ -21,61 +21,86 @@ struct Resolver<'a> {
 }
 
 impl Resolver<'_> {
-    fn visit(&mut self, ns: &str, name: &str, version: &str, parent: Option<&str>) {
+    /// Explicit profile entry: pinned to its version (unknown versions fall back to the newest).
+    /// Returns the version that was pinned, or None when the package is not in the index.
+    fn pin(&mut self, ns: &str, name: &str, version: &str) -> Option<String> {
         let id = canonical_id(ns, name);
-        let by_id = self.by_id;
-        let Some(pkg) = by_id.get(&id) else {
-            let from = parent.map(|p| format!(" (required by {p})")).unwrap_or_default();
-            self.errors.push(format!("Package not found: {id}{from}"));
+        let Some(pkg) = self.by_id.get(&id) else {
+            self.errors.push(format!("Package not found: {id}"));
+            return None;
+        };
+        let latest = pkg.versions.first()?;
+        let want = if pkg.versions.iter().any(|v| v.v == version) { version.to_string() } else { latest.v.clone() };
+        match self.resolved.get_mut(&id) {
+            Some(cur) => cur.version = want.clone(),
+            None => {
+                self.resolved.insert(id.clone(), Resolved { version: want.clone(), required_by: vec![] });
+            }
+        }
+        Some(want)
+    }
+
+    /// Dependency: a manifest declares a minimum version, so the newest version in the index is taken.
+    /// Packages that are already resolved (pinned or visited) keep their version.
+    fn visit(&mut self, ns: &str, name: &str, parent: &str) {
+        let id = canonical_id(ns, name);
+        let Some(pkg) = self.by_id.get(&id) else {
+            self.errors.push(format!("Package not found: {id} (required by {parent})"));
             return;
         };
         let Some(latest) = pkg.versions.first() else { return };
-        let want = if pkg.versions.iter().any(|v| v.v == version) { version.to_string() } else { latest.v.clone() };
-        match self.resolved.get_mut(&id) {
-            Some(cur) => {
-                if let Some(p) = parent {
-                    if !cur.required_by.iter().any(|x| x == p) {
-                        cur.required_by.push(p.to_string());
-                    }
-                }
-                if cmp_version(&want, &cur.version) != Ordering::Greater {
-                    return;
-                }
-                cur.version = want.clone();
+        if let Some(cur) = self.resolved.get_mut(&id) {
+            if !cur.required_by.iter().any(|x| x == parent) {
+                cur.required_by.push(parent.to_string());
             }
-            None => {
-                self.resolved.insert(id.clone(), Resolved { version: want.clone(), required_by: parent.map(|p| vec![p.to_string()]).unwrap_or_default() });
-            }
+            return;
         }
-        let deps = pkg.versions.iter().find(|v| v.v == want).map(|v| v.deps.clone()).unwrap_or_default();
+        self.resolved.insert(id.clone(), Resolved { version: latest.v.clone(), required_by: vec![parent.to_string()] });
+        self.walk(&id, &latest.v);
+    }
+
+    fn walk(&mut self, id: &str, version: &str) {
+        let deps = self.by_id.get(id).and_then(|p| p.versions.iter().find(|v| v.v == version)).map(|v| v.deps.clone()).unwrap_or_default();
         for d in deps {
             if let Some(f) = parse_full_name(&d) {
-                self.visit(&f.ns, &f.name, &f.version, Some(&id));
+                self.visit(&f.ns, &f.name, id);
             }
         }
     }
 }
 
 /// Pure function: dependency closure of the profile plus the diff against installed.json.
+/// Explicit mods keep their version; dependencies resolve to the newest version in the index.
 pub fn plan(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>, installed: &Installed) -> Plan {
     let mut r = Resolver { by_id, resolved: BTreeMap::new(), errors: vec![] };
+    let mut walk: Vec<(String, Vec<String>)> = vec![];
     for m in mods {
+        let id = m.id();
         match m.source {
-            Source::Thunderstore => r.visit(&m.namespace, &m.name, &m.version, None),
-            Source::Local => {
-                let id = m.id();
-                r.resolved.insert(id.clone(), Resolved { version: m.version.clone(), required_by: vec![] });
-                for d in &m.deps {
-                    if let Some(f) = parse_full_name(d) {
-                        r.visit(&f.ns, &f.name, &f.version, Some(&id));
-                    }
+            Source::Thunderstore => {
+                if let Some(v) = r.pin(&m.namespace, &m.name, &m.version) {
+                    let deps = by_id.get(&id).and_then(|p| p.versions.iter().find(|x| x.v == v)).map(|x| x.deps.clone()).unwrap_or_default();
+                    walk.push((id, deps));
                 }
+            }
+            Source::Local => {
+                r.resolved.insert(id.clone(), Resolved { version: m.version.clone(), required_by: vec![] });
+                walk.push((id, m.deps.clone()));
+            }
+        }
+    }
+    for (id, deps) in walk {
+        for d in deps {
+            if let Some(f) = parse_full_name(&d) {
+                r.visit(&f.ns, &f.name, &id);
             }
         }
     }
     if !mods.is_empty() && !r.resolved.contains_key(BEPINEX_PACK_ID) {
-        match by_id.get(BEPINEX_PACK_ID).and_then(|p| p.versions.first().map(|v| (p, v.v.clone()))) {
-            Some((p, v)) => r.visit(&p.ns, &p.name, &v, None),
+        match by_id.get(BEPINEX_PACK_ID).and_then(|p| p.versions.first().map(|v| v.v.clone())) {
+            Some(v) => {
+                r.resolved.insert(BEPINEX_PACK_ID.to_string(), Resolved { version: v, required_by: vec![] });
+            }
             None => r.errors.push("BepInExPack_Valheim is not in the mod index.".to_string()),
         }
     }
@@ -136,11 +161,23 @@ mod tests {
     }
 
     #[test]
-    fn explicit_pack_dependency_keeps_requested_version() {
+    fn dependency_takes_newest_even_when_declared_older() {
+        // A manifest dependency is a minimum, not a pin: "BepInExPack-5.4.2333" resolves to the newest pack.
         let idx = index(vec![test_pkg("a-A", &[("1.0.0", &["denikson-BepInExPack_Valheim-5.4.2333"])])]);
         let p = plan(&[m("a-A", "1.0.0")], &idx, &Installed::new());
-        assert_eq!(p.resolved[BEPINEX_PACK_ID].version, "5.4.2333");
+        assert_eq!(p.resolved[BEPINEX_PACK_ID].version, "5.4.2351");
         assert_eq!(p.resolved[BEPINEX_PACK_ID].required_by, vec!["a-A"]);
+    }
+
+    #[test]
+    fn explicit_pin_wins_over_dependency_declaration() {
+        // Profile pins b-B to 1.0.0 although a-A declares b-B-2.0.0 and 2.0.0 exists; profile order does not matter.
+        let idx = index(vec![test_pkg("a-A", &[("1.0.0", &["b-B-2.0.0"])]), test_pkg("b-B", &[("2.0.0", &[]), ("1.0.0", &[])])]);
+        for mods in [vec![m("a-A", "1.0.0"), m("b-B", "1.0.0")], vec![m("b-B", "1.0.0"), m("a-A", "1.0.0")]] {
+            let p = plan(&mods, &idx, &Installed::new());
+            assert_eq!(p.resolved["b-B"].version, "1.0.0");
+            assert_eq!(p.resolved["b-B"].required_by, vec!["a-A"]);
+        }
     }
 
     #[test]

@@ -50,6 +50,40 @@
 		<span class="flex items-center gap-1.5"><span class="bg-primary size-1.5 animate-pulse rounded-full"></span>{t("status.syncing")}</span>
 	{/if}
 
+	{#if store.server}
+		{@const name = store.serverStatus?.name || store.server.name || store.server.url}
+		{#if store.serverChecking && !store.serverStatus}
+			<span class="flex items-center gap-1.5"
+				><span class="bg-muted-foreground size-1.5 animate-pulse rounded-full"></span>{t("status.serverChecking", { name })}</span
+			>
+		{:else if store.serverStatus?.reachable && store.serverStatus.release}
+			<button class="text-primary flex items-center gap-1.5 hover:underline" onclick={() => (store.serverDialog = "publish")}>
+				<span class="bg-primary size-1.5 animate-pulse rounded-full"></span>{t("status.serverPending", { name })}
+			</button>
+		{:else if store.serverStatus?.reachable && store.serverStatus.inSync}
+			<span class="flex items-center gap-1.5"><span class="bg-success size-1.5 rounded-full"></span>{t("status.serverInSync", { name })}</span>
+		{:else if store.serverStatus?.reachable}
+			<button class="text-primary flex items-center gap-1.5 hover:underline" onclick={() => (store.serverDialog = "diff")}>
+				<span class="bg-primary size-1.5 rounded-full"></span>{t("status.serverDiffers", { name })}
+			</button>
+		{:else}
+			<button
+				class="text-muted-foreground flex items-center gap-1.5 hover:underline"
+				title={store.serverStatus?.error}
+				onclick={() => store.refreshServerStatus()}
+			>
+				<span class="border-muted-foreground size-1.5 rounded-full border"></span>{t("status.serverUnreachable", { name })}
+			</button>
+		{/if}
+	{/if}
+
+	{#if store.readiness.status === "incomplete" && store.readiness.missing.length}
+		<a href={resolve("installed")} class="text-destructive-text flex items-center gap-1.5 hover:underline">
+			<span class="bg-destructive size-1.5 rounded-full"></span>
+			{t("status.missing", { n: store.readiness.missing.length })}
+		</a>
+	{/if}
+
 	{#if store.updateStatus === "available" && store.update}
 		<button class="text-primary hover:underline" onclick={() => (confirmOpen = true)}>{t("update.statusBar", { v: store.update.version })}</button>
 	{/if}

@@ -66,11 +66,23 @@ impl ProfileMod {
     }
 }
 
+/// A companion server this profile mirrors (see server.rs). The token is needed for publishing only.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct ServerLink {
+    pub url: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct Profile {
     pub name: String,
     #[serde(default)]
     pub mods: Vec<ProfileMod>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server: Option<ServerLink>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

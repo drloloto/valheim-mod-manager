@@ -32,7 +32,7 @@
 			"Mod+4": () => goto(resolve("logs")),
 			"Mod+,": () => goto(resolve("settings")),
 			"Mod+N": () => topBar?.newProfile(),
-			"Mod+Enter": () => store.state.active && !store.launching && store.launch(true),
+			"Mod+Enter": () => store.state.active && store.requestLaunch(true),
 			F5: (e) => {
 				if (e.repeat) return;
 				store.refreshIndex();

@@ -11,6 +11,7 @@ mod models;
 mod paths;
 mod profiles;
 mod resolver;
+mod server;
 mod settings;
 mod share;
 mod sync;
@@ -32,6 +33,14 @@ fn portable_root() -> Option<PathBuf> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Must be first: a second instance (e.g. a `valheim-mod-manager://` link) hands its arguments to this one.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -59,6 +68,14 @@ pub fn run() {
                 paths,
             });
             tauri::async_runtime::spawn(commands::index_worker(app.handle().clone()));
+            // The installers register the scheme; this covers `npm run tauri dev` and the portable build.
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(e) = app.deep_link().register_all() {
+                    eprintln!("deep link registration failed: {e}");
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -77,6 +94,15 @@ pub fn run() {
             commands::add_local_mods,
             commands::import_profile_code,
             commands::import_profile_file,
+            commands::import_profile_url,
+            commands::set_server_link,
+            commands::check_server,
+            commands::check_all_servers,
+            commands::discover_server,
+            commands::adopt_server,
+            commands::publish_profile,
+            commands::apply_release,
+            commands::discard_release,
             commands::list_foreign_profiles,
             commands::import_foreign_profile,
             commands::export_profile_code,

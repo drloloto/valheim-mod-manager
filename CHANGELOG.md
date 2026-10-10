@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Installation readiness: a persistent banner, a red status-bar marker and a "start anyway?" question on
+  Play when mods of the active profile are not installed; dependency rows show the missing state too.
+- Linked servers (companion container, see `docs/superpowers/specs/2026-10-10-server-companion-design.md`):
+  "Add server…" from an address, deep link `valheim-mod-manager://import?…` from the companion's page,
+  comparison with the server before Play and at app start ("adopt and start", "into a new profile", "start
+  anyway", optionally with the server's configs), publishing as a staged release (pull and check on the
+  server, then apply now, when nobody is online, or at a time).
+- Profile snapshots: before a profile is rewritten from a server, its mod list, installed.json and configs
+  are copied to `<profile>/.snapshots/` (ten kept).
+
+### Changed
+
+- Dependencies resolve to the newest version in the index; a manifest's dependency version is a minimum.
+  Explicit profile entries stay pinned.
+- Health hints (deprecated, older than the game update) now cover resolved dependencies, not only explicit
+  mods.
+
 ## [0.1.0] - 2026-10-09
 
 First public version.

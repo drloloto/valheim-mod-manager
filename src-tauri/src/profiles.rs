@@ -40,7 +40,7 @@ pub fn create(paths: &Paths, name: &str) -> Result<String> {
         return Err(AppError::Invalid(format!("Profile \"{name}\" already exists.")));
     }
     std::fs::create_dir_all(paths.profile_dir(&name))?;
-    save(paths, &Profile { name: name.clone(), mods: vec![] })?;
+    save(paths, &Profile { name: name.clone(), mods: vec![], server: None })?;
     Ok(name)
 }
 
@@ -121,6 +121,46 @@ pub fn unique_name(paths: &Paths, base: &str) -> String {
     (2..).map(|i| format!("{base} ({i})")).find(|n| !exists(paths, n)).unwrap()
 }
 
+pub const SNAPSHOT_DIR: &str = ".snapshots";
+const SNAPSHOTS_KEPT: usize = 10;
+
+/// Before anything rewrites a profile wholesale (adopting a server, later: restores), its mod list,
+/// installed.json and config folder are copied to `<profile>/.snapshots/<stamp>-<reason>/`. The ten newest
+/// are kept. Nothing automatic reads them back yet; they are the undo path for a user in trouble.
+pub fn snapshot(paths: &Paths, name: &str, reason: &str) -> Result<std::path::PathBuf> {
+    let root = paths.profile_dir(name).join(SNAPSHOT_DIR);
+    std::fs::create_dir_all(&root)?;
+    let stamp = chrono::DateTime::from_timestamp_millis(crate::util::now_ms())
+        .map(|d| d.format("%Y%m%d-%H%M%S").to_string())
+        .unwrap_or_else(|| crate::util::now_ms().to_string());
+    let reason: String = reason.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(24).collect();
+    let mut dir = root.join(format!("{stamp}-{reason}"));
+    let mut n = 1;
+    while dir.exists() {
+        n += 1;
+        dir = root.join(format!("{stamp}-{reason}-{n}"));
+    }
+    std::fs::create_dir_all(&dir)?;
+    for file in ["profile.json", "installed.json"] {
+        let src = paths.profile_dir(name).join(file);
+        if src.is_file() {
+            std::fs::copy(&src, dir.join(file))?;
+        }
+    }
+    let cfg = paths.config_dir(name);
+    if cfg.is_dir() {
+        copy_dir(&cfg, &dir.join("config"))?;
+    }
+    // Prune: oldest first by directory name (the stamp sorts chronologically).
+    let mut all: Vec<_> = std::fs::read_dir(&root)?.filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).map(|e| e.path()).collect();
+    all.sort();
+    while all.len() > SNAPSHOTS_KEPT {
+        let old = all.remove(0);
+        let _ = std::fs::remove_dir_all(old);
+    }
+    Ok(dir)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,6 +213,23 @@ mod tests {
         assert_eq!(std::fs::read_to_string(paths.config_dir("c").join("x.cfg")).unwrap(), "k=v");
         assert_eq!(load(&paths, "c").unwrap().name, "c");
         assert!(rename(&paths, "b", "c").is_err());
+    }
+
+    #[test]
+    fn snapshot_copies_profile_and_configs_and_prunes() {
+        let (_d, paths) = setup();
+        create(&paths, "p").unwrap();
+        std::fs::create_dir_all(paths.config_dir("p").join("sub")).unwrap();
+        std::fs::write(paths.config_dir("p").join("sub/x.cfg"), "k=v").unwrap();
+        let dir = snapshot(&paths, "p", "adopt server").unwrap();
+        assert!(dir.join("profile.json").is_file());
+        assert_eq!(std::fs::read_to_string(dir.join("config/sub/x.cfg")).unwrap(), "k=v");
+        assert!(dir.file_name().unwrap().to_string_lossy().ends_with("-adoptserver"));
+        for _ in 0..12 {
+            snapshot(&paths, "p", "x").unwrap();
+        }
+        let count = std::fs::read_dir(paths.profile_dir("p").join(SNAPSHOT_DIR)).unwrap().count();
+        assert_eq!(count, SNAPSHOTS_KEPT);
     }
 
     #[test]

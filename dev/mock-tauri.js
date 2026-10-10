@@ -142,6 +142,7 @@
 	const state = {
 		profiles: ["Hardcore", "Vanilla+", "Bauen"],
 		active: "Hardcore",
+		server: { url: "http://10.10.10.123:9002", name: "PetersWelte", hasToken: true },
 		mods: inProfile.map((id, i) => ({
 			namespace: byId.get(id).ns,
 			name: byId.get(id).name,
@@ -149,8 +150,9 @@
 			enabled: i % 9 !== 0,
 			source: "thunderstore",
 		})),
-		installed: Object.fromEntries(inProfile.map((id) => [id, byId.get(id).ver])),
-		plan: { resolved, toInstall: [], toRemove: [], errors: [] },
+		// Jotunn is resolved as a dependency but not installed: shows the readiness banner and the Play gate.
+		installed: Object.fromEntries([BEP, ...inProfile].map((id) => [id, byId.get(id).ver])),
+		plan: { resolved, toInstall: [{ id: JOT, to: byId.get(JOT).ver }], toRemove: [], errors: [] },
 		updates,
 		indexAge: 240000,
 		sync: { running: false, queued: false },
@@ -165,6 +167,7 @@
 	};
 	const settings = { valheimDir: null, steamExe: null, downloadConcurrency: 4, indexTtlMinutes: 30, showNsfw: false };
 
+	const mockRelease = (schedule) => ({ id: "r1", createdAt: NOW - 60000, install: 1, remove: 1, configs: 1, problems: [], schedule, lastError: null });
 	const handlers = {
 		get_state: () => state,
 		get_index: () => new TextEncoder().encode(JSON.stringify({ fetchedAt: NOW - 240000, packages: slim })).buffer,
@@ -190,6 +193,76 @@
 		import_foreign_profile: () => ({ ...state, imported: { name: "Friends", mods: 42, configs: 12, skipped: [] } }),
 		save_settings: ({ settings: s }) => s,
 		set_mods: ({ mods }) => ({ ...state, mods }),
+		// Linked companion server: the mock server runs one older version and one extra mod.
+		set_server_link: ({ link }) => ({
+			...state,
+			server: link ? { url: link.url, name: link.name || "PetersWelte", hasToken: !!link.token || state.server?.hasToken } : null,
+		}),
+		check_server: () => ({
+			reachable: true,
+			name: "PetersWelte",
+			world: "PetersWelte",
+			inSync: false,
+			serverMods: inProfile.length + 1,
+			serverConfigs: 12,
+			hash: "sha256:mock",
+			generatedAt: NOW - 3600000,
+			features: { publish: true, modManager: true },
+			release: null,
+			online: 2,
+			diff: {
+				onlyServer: [{ id: slim[50].id, version: slim[50].ver, explicit: true, requiredBy: [] }],
+				onlyLocal: [],
+				changed: [{ id: inProfile[0], local: byId.get(inProfile[0]).ver, server: "9.9.9" }],
+			},
+		}),
+		adopt_server: ({ intoNew }) => (intoNew ? { ...state, profiles: [...state.profiles, intoNew], active: intoNew } : state),
+		check_all_servers: () => [{ profile: "Vanilla+", check: handlers.check_server() }],
+		discover_server: ({ url }) => ({
+			url: /^https?:/.test(url) ? url.replace(/\/+$/, "") : `http://${url}`,
+			name: "PetersWelte",
+			world: "PetersWelte",
+			mods: 7,
+			features: { publish: true, modManager: true },
+		}),
+		apply_release: ({ when }) =>
+			when === "now"
+				? {
+						applied: true,
+						result: { installed: [`${inProfile[0]}@9.9.9`], removed: [slim[50].id], errors: [] },
+						configsWritten: ["EpicLoot.cfg"],
+						stopped: { ok: true, message: "" },
+						started: { ok: true, message: "" },
+						restartRequired: false,
+						log: [],
+					}
+				: {
+						applied: false,
+						summary: mockRelease(when === "none" ? null : { when, at: Date.now() + 3600000, setAt: Date.now() }),
+						configsWritten: [],
+						stopped: null,
+						started: null,
+						restartRequired: false,
+						log: [],
+					},
+		discard_release: () => undefined,
+		publish_profile: () => ({
+			release: {
+				id: "r1",
+				plan: {
+					install: [{ id: inProfile[0], from: byId.get(inProfile[0]).ver, to: "9.9.9" }],
+					remove: [slim[50].id],
+					configsChanged: ["EpicLoot.cfg"],
+					configsNew: [],
+				},
+				problems: [],
+			},
+			summary: mockRelease(null),
+			online: 2,
+			log: ["downloaded …"],
+			skippedLocal: [],
+		}),
+		import_profile_url: () => ({ ...state, imported: { name: "PetersWelte", mods: 7, configs: 3, skipped: [] } }),
 		list_config_files: () => [],
 		start_log_tail: () => [],
 		stop_log_tail: () => undefined,

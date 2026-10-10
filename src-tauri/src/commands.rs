@@ -7,10 +7,11 @@ use crate::install;
 use crate::localmod;
 use crate::logs;
 use crate::migrate::{self, ForeignProfile};
-use crate::models::{Pkg, Plan, ProfileMod, Source};
+use crate::models::{Pkg, Plan, ProfileMod, ServerLink, Source};
 use crate::paths::Paths;
 use crate::profiles;
 use crate::resolver;
+use crate::server::{self, ApplyResponse, ReleaseSummary, ServerDiff, StageResponse};
 use crate::settings::{self, Settings};
 use crate::share::{self, ImportSummary};
 use crate::sync::{self, SyncHandle, SyncJob, SyncStatus};
@@ -77,12 +78,22 @@ pub struct AppInfo {
     data_dir: String,
 }
 
+/// The active profile's linked companion server, without the token.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerLinkInfo {
+    url: String,
+    name: String,
+    has_token: bool,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppState {
     profiles: Vec<String>,
     active: Option<String>,
     mods: Vec<ProfileMod>,
+    server: Option<ServerLinkInfo>,
     installed: BTreeMap<String, String>,
     plan: Option<Plan>,
     updates: BTreeMap<String, String>,
@@ -97,9 +108,13 @@ pub struct AppState {
 
 fn build_state(ctx: &AppCtx) -> Result<AppState> {
     let active = profiles::active(&ctx.paths);
-    let mods = match &active {
-        Some(n) => profiles::load(&ctx.paths, n)?.mods,
-        None => vec![],
+    let (mods, server) = match &active {
+        Some(n) => {
+            let p = profiles::load(&ctx.paths, n)?;
+            let server = p.server.map(|s| ServerLinkInfo { has_token: s.token.as_deref().is_some_and(|t| !t.trim().is_empty()), url: s.url, name: s.name });
+            (p.mods, server)
+        }
+        None => (vec![], None),
     };
     let installed = active.as_deref().map(|n| profiles::load_installed(&ctx.paths, n)).unwrap_or_default();
     let (plan, updates) = match (ctx.index.get(), &active) {
@@ -109,7 +124,8 @@ fn build_state(ctx: &AppCtx) -> Result<AppState> {
     let game = ctx.game();
     let found = game.valheim_dir.as_deref().is_some_and(|d| game::is_valheim_dir(Path::new(d)));
     let manifest = game.valheim_dir.as_deref().and_then(|d| game::app_manifest(Path::new(d)));
-    let health = health::check(&mods, &installed, ctx.index.get().as_deref().map(|i| &i.by_id), manifest.as_ref().map(|m| m.0));
+    let health_ids = health::ids_to_check(&mods, plan.as_ref().map(|p| &p.resolved));
+    let health = health::check(&health_ids, &installed, ctx.index.get().as_deref().map(|i| &i.by_id), manifest.as_ref().map(|m| m.0));
     let names = profiles::list(&ctx.paths);
     let profile_mods =
         names.iter().filter_map(|n| profiles::load(&ctx.paths, n).ok().map(|p| (n.clone(), p.mods.iter().map(ProfileMod::id).collect()))).collect();
@@ -117,6 +133,7 @@ fn build_state(ctx: &AppCtx) -> Result<AppState> {
         profiles: names,
         active,
         mods,
+        server,
         installed: installed.into_iter().map(|(k, v)| (k, v.version)).collect(),
         plan,
         updates,
@@ -356,6 +373,226 @@ pub async fn import_profile_code(app: AppHandle, ctx: State<'_, AppCtx>, code: S
 pub fn import_profile_file(app: AppHandle, ctx: State<'_, AppCtx>, path: String, name: String, with_configs: bool) -> Result<ImportResponse> {
     let bytes = std::fs::read(&path)?;
     import_bytes(&app, &ctx, &bytes, &name, with_configs)
+}
+
+/// Deep link / companion landing page: download the server's .r2z, import it, remember the server.
+#[tauri::command]
+pub async fn import_profile_url(
+    app: AppHandle,
+    ctx: State<'_, AppCtx>,
+    url: String,
+    name: String,
+    with_configs: bool,
+    link: Option<ServerLink>,
+) -> Result<ImportResponse> {
+    let bytes = server::fetch_bytes(&ctx.client, &url).await?;
+    let mut r = import_bytes(&app, &ctx, &bytes, &name, with_configs)?;
+    if let Some(link) = link {
+        let mut p = profiles::load(&ctx.paths, &r.imported.name)?;
+        p.server = Some(ServerLink { url: server::normalize_url(&link.url)?, name: link.name, token: link.token.filter(|t| !t.trim().is_empty()) });
+        profiles::save(&ctx.paths, &p)?;
+        r.state = build_state(&ctx)?;
+    }
+    Ok(r)
+}
+
+// ---- Linked server (companion) ----
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerCheck {
+    reachable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    name: String,
+    world: String,
+    in_sync: bool,
+    diff: ServerDiff,
+    server_mods: usize,
+    /// Config files the server knows, the manifest hash and its timestamp (for display).
+    server_configs: usize,
+    hash: String,
+    generated_at: i64,
+    /// Companion switches, e.g. `publish: false` when the admin turned publishing off.
+    features: BTreeMap<String, bool>,
+    /// A staged release waiting to be applied on the server.
+    release: Option<ReleaseSummary>,
+    /// Players online according to the server log; None when unknown.
+    online: Option<usize>,
+}
+
+fn link_of(ctx: &AppCtx, profile: &str) -> Result<ServerLink> {
+    profiles::load(&ctx.paths, profile)?.server.ok_or_else(|| AppError::Invalid("This profile is not linked to a server.".into()))
+}
+
+/// `link = None` unlinks. The token is kept when the new link carries none.
+#[tauri::command]
+pub fn set_server_link(ctx: State<'_, AppCtx>, profile: String, link: Option<ServerLink>) -> Result<AppState> {
+    let mut p = profiles::load(&ctx.paths, &profile)?;
+    p.server = match link {
+        None => None,
+        Some(l) => {
+            let token = l.token.filter(|t| !t.trim().is_empty()).or_else(|| p.server.as_ref().and_then(|s| s.token.clone()));
+            Some(ServerLink { url: server::normalize_url(&l.url)?, name: l.name, token })
+        }
+    };
+    profiles::save(&ctx.paths, &p)?;
+    build_state(&ctx)
+}
+
+/// Compares the local resolved plan with the server manifest. Unreachable servers are reported, not errors.
+async fn check_link(ctx: &AppCtx, profile: &str) -> Result<ServerCheck> {
+    let link = link_of(ctx, profile)?;
+    let index = ctx.ensure_index().await?;
+    let p = profiles::load(&ctx.paths, profile)?;
+    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, profile));
+    let quick = thunderstore::http_client(Duration::from_secs(2), Duration::from_secs(4))?;
+    match server::fetch_manifest(&quick, &link).await {
+        Ok(m) => {
+            let diff = server::diff(&plan.resolved, &m.mods);
+            let status = server::fetch_status(&quick, &link).await.unwrap_or_default();
+            Ok(ServerCheck {
+                reachable: true,
+                error: None,
+                name: m.server.name,
+                world: m.server.world,
+                in_sync: diff.is_empty(),
+                diff,
+                server_mods: m.mods.len(),
+                server_configs: m.configs.len(),
+                hash: m.hash,
+                generated_at: m.generated_at,
+                features: m.features,
+                release: status.release,
+                online: status.online,
+            })
+        }
+        Err(e) => Ok(ServerCheck {
+            reachable: false,
+            error: Some(e.to_string()),
+            name: link.name,
+            world: String::new(),
+            in_sync: false,
+            diff: ServerDiff::default(),
+            server_mods: 0,
+            server_configs: 0,
+            hash: String::new(),
+            generated_at: 0,
+            features: BTreeMap::new(),
+            release: None,
+            online: None,
+        }),
+    }
+}
+
+#[tauri::command]
+pub async fn check_server(ctx: State<'_, AppCtx>, profile: String) -> Result<ServerCheck> {
+    check_link(&ctx, &profile).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileServerCheck {
+    profile: String,
+    check: ServerCheck,
+}
+
+/// App start: every linked profile is compared with its server, so "new versions" shows up before Play.
+#[tauri::command]
+pub async fn check_all_servers(ctx: State<'_, AppCtx>) -> Result<Vec<ProfileServerCheck>> {
+    let linked: Vec<String> =
+        profiles::list(&ctx.paths).into_iter().filter(|n| profiles::load(&ctx.paths, n).ok().is_some_and(|p| p.server.is_some())).collect();
+    let checks = futures::future::join_all(linked.iter().map(|n| check_link(&ctx, n))).await;
+    Ok(linked.into_iter().zip(checks).filter_map(|(profile, c)| c.ok().map(|check| ProfileServerCheck { profile, check })).collect())
+}
+
+/// "Autoconfig": anything that points at a companion becomes a link candidate.
+#[tauri::command]
+pub async fn discover_server(_ctx: State<'_, AppCtx>, url: String) -> Result<server::Discovery> {
+    let quick = thunderstore::http_client(Duration::from_secs(3), Duration::from_secs(6))?;
+    server::discover(&quick, &url).await
+}
+
+/// Rewrites the profile (or a fresh clone named `into_new`) to the server manifest, every entry explicit and
+/// pinned, optionally with the server's config files, then syncs. The clone becomes the active profile.
+#[tauri::command]
+pub async fn adopt_server(app: AppHandle, ctx: State<'_, AppCtx>, profile: String, with_configs: bool, into_new: Option<String>) -> Result<AppState> {
+    let link = link_of(&ctx, &profile)?;
+    let m = server::fetch_manifest(&ctx.client, &link).await?;
+    let configs = if with_configs {
+        let bytes = server::fetch_bytes(&ctx.client, &format!("{}/api/profile.r2z", server::normalize_url(&link.url)?)).await?;
+        share::read_r2z(&bytes)?.configs
+    } else {
+        vec![]
+    };
+    let guard = ctx.sync.lock.lock().await;
+    let target = match into_new {
+        Some(name) => {
+            let name = profiles::unique_name(&ctx.paths, &name);
+            let name = profiles::clone_profile(&ctx.paths, &profile, &name)?;
+            profiles::set_active(&ctx.paths, &name)?;
+            name
+        }
+        None => profile,
+    };
+    // Undo path: the previous mod list and configs survive in <profile>/.snapshots/.
+    profiles::snapshot(&ctx.paths, &target, "adopt-server")?;
+    let mut p = profiles::load(&ctx.paths, &target)?;
+    server::adopt(&mut p, &m.mods);
+    if let Some(s) = p.server.as_mut() {
+        if !m.server.name.is_empty() {
+            s.name = m.server.name.clone();
+        }
+    }
+    profiles::save(&ctx.paths, &p)?;
+    let dir = ctx.paths.config_dir(&target);
+    for (rel, bytes) in configs {
+        let Ok(dest) = crate::util::safe_join(&dir, &rel) else { continue };
+        std::fs::create_dir_all(dest.parent().unwrap())?;
+        std::fs::write(dest, bytes)?;
+    }
+    drop(guard);
+    request_sync(&app, &target, false);
+    build_state(&ctx)
+}
+
+/// Stages the local resolved plan (and optionally the profile's config files) on the server. Nothing
+/// changes live until `apply_release`; players are never kicked by a publish.
+#[tauri::command]
+pub async fn publish_profile(ctx: State<'_, AppCtx>, profile: String, with_configs: bool) -> Result<StageResponse> {
+    let link = link_of(&ctx, &profile)?;
+    let index = ctx.ensure_index().await?;
+    let p = profiles::load(&ctx.paths, &profile)?;
+    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    if !plan.errors.is_empty() {
+        return Err(AppError::Invalid(format!("The profile cannot be resolved: {}", plan.errors.join("; "))));
+    }
+    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved);
+    let mut configs = vec![];
+    if with_configs {
+        let dir = ctx.paths.config_dir(&profile);
+        for rel in config::list_files_with_ext(&dir, &share::CONFIG_EXTS) {
+            configs.push(server::encode_config(&rel, &std::fs::read(crate::util::safe_join(&dir, &rel)?)?));
+        }
+    }
+    let slow = thunderstore::http_client(Duration::from_secs(10), Duration::from_secs(600))?;
+    let mut r = server::stage(&slow, &link, &server::StageBody { mods, configs }).await?;
+    r.skipped_local = skipped_local;
+    Ok(r)
+}
+
+/// `when`: "now" (stop, backup, install, start), "idle" (when nobody is online), "at" (+ `at` ms), "none".
+#[tauri::command]
+pub async fn apply_release(ctx: State<'_, AppCtx>, profile: String, id: String, when: String, at: Option<i64>) -> Result<ApplyResponse> {
+    let link = link_of(&ctx, &profile)?;
+    let slow = thunderstore::http_client(Duration::from_secs(10), Duration::from_secs(600))?;
+    server::apply(&slow, &link, &id, &when, at).await
+}
+
+#[tauri::command]
+pub async fn discard_release(ctx: State<'_, AppCtx>, profile: String, id: String) -> Result<()> {
+    let link = link_of(&ctx, &profile)?;
+    server::discard(&ctx.client, &link, &id).await
 }
 
 #[tauri::command]

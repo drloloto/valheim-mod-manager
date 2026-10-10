@@ -10,11 +10,12 @@
 		disabled = false,
 		menu,
 		menuLabel,
-	}: { children: Snippet; onclick: () => void; disabled?: boolean; menu: Snippet; menuLabel: string } = $props();
+		title,
+	}: { children: Snippet; onclick: () => void; disabled?: boolean; menu: Snippet; menuLabel: string; title?: string } = $props();
 </script>
 
 <div class="flex overflow-hidden rounded-md">
-	<Button size="lg" class="rounded-none" {disabled} {onclick}>{@render children()}</Button>
+	<Button size="lg" class="rounded-none" {disabled} {onclick} {title}>{@render children()}</Button>
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
 			{#snippet child({ props })}

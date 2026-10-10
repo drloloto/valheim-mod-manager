@@ -34,6 +34,11 @@
 		"createUpdaterArtifacts": true
 	},
 	"plugins": {
+		"deep-link": {
+			"desktop": {
+				"schemes": ["valheim-mod-manager"]
+			}
+		},
 		"updater": {
 			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwODY3RDgyMzYxOTI2N0YKUldSL0poazJnbjJHZ0cxa0NnQ1NXTmhpZWNveW5HSTRBb28wTkgzQ1UyMzlXWUpWN09oMjZqS0cK",
 			"endpoints": ["https://github.com/drloloto/valheim-mod-manager/releases/latest/download/latest.json"]
