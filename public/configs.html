@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Mod configs</title>
+		<link rel="icon" href="data:," />
+		<link rel="stylesheet" href="/public/style.css" />
+	</head>
+	<body>
+		<header>
+			<h1>Mod configs <span class="dim small">read-only</span></h1>
+			<p class="dim">
+				<a href="/">← Server</a> · This is how the server's mods are configured. Clients get these values pushed by the mods that sync, the rest is
+				informational.
+			</p>
+		</header>
+		<main class="split">
+			<aside>
+				<input id="filter" type="search" placeholder="Filter files…" />
+				<ul id="files"></ul>
+			</aside>
+			<section id="view" class="card">
+				<p class="dim">Choose a file.</p>
+			</section>
+		</main>
+		<script type="module">
+			const $ = (s, el = document) => el.querySelector(s);
+			const esc = (s) =>
+				String(s ?? "").replace(
+					/[&<>"']/g,
+					(c) =>
+						({
+							"&": "&amp;",
+							"<": "&lt;",
+							">": "&gt;",
+							'"': "&quot;",
+							"'": "&#39;",
+						})[c],
+				);
+			let files = [];
+			async function load() {
+				files = (await (await fetch("/api/configs")).json()).files;
+				render();
+				if (location.hash) open(decodeURIComponent(location.hash.slice(1)));
+			}
+			function render() {
+				const q = $("#filter").value.toLowerCase();
+				$("#files").innerHTML = files
+					.filter((f) => f.toLowerCase().includes(q))
+					.map((f) => `<li><a href="#${encodeURIComponent(f)}" data-file="${esc(f)}">${esc(f)}</a></li>`)
+					.join("");
+			}
+			async function open(file) {
+				const res = await fetch(`/api/configs/${file.split("/").map(encodeURIComponent).join("/")}`);
+				if (!res.ok) return ($("#view").innerHTML = `<p class="dim">Not found.</p>`);
+				const cfg = await res.json();
+				const sections = new Map();
+				for (const s of cfg.settings) sections.set(s.section, [...(sections.get(s.section) ?? []), s]);
+				$("#view").innerHTML =
+					`<h2 class="mono">${esc(cfg.file)}</h2>` +
+					[...sections]
+						.map(
+							([sec, rows]) =>
+								`<h3>[${esc(sec)}]</h3><table><tbody>${rows
+									.map(
+										(
+											r,
+										) => `<tr><td class="key"><div class="mono">${esc(r.key)}</div><div class="dim small">${esc(r.description)}${r.acceptableValues ? ` · ${esc(r.acceptableValues)}` : ""}</div></td>
+									<td class="mono val">${esc(r.value)}${r.defaultValue !== undefined && r.defaultValue !== r.value ? `<div class="dim small">default ${esc(r.defaultValue)}</div>` : ""}</td></tr>`,
+									)
+									.join("")}</tbody></table>`,
+						)
+						.join("");
+			}
+			$("#filter").oninput = render;
+			$("#files").onclick = (e) => {
+				const a = e.target.closest("[data-file]");
+				if (a) open(a.dataset.file);
+			};
+			load();
+		</script>
+	</body>
+</html>
