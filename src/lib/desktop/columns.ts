@@ -14,7 +14,19 @@ export interface ColumnDef {
 	hidden?: boolean;
 	/** Cannot be hidden (e.g. the name column). */
 	fixed?: boolean;
+	/** px tracks: resize floor (default MIN_WIDTH). fr tracks: the minimum the column keeps when space is short (default FLEX_MIN). */
 	minWidth?: number;
+	/** When the table is narrower than its columns, lower priority is dropped first (default 0; ties: rightmost first). */
+	priority?: number;
+}
+
+export interface FitOptions {
+	/** Gap between tracks in px. */
+	gap: number;
+	/** Horizontal padding of the row in px (both sides together). */
+	padding: number;
+	/** Width of a leading non-column track (selection checkbox), 0 when none. */
+	lead?: number;
 }
 
 export type Density = "compact" | "normal";
@@ -28,6 +40,8 @@ export interface TablePrefs {
 
 export const DEFAULT_PREFS: TablePrefs = { hidden: {}, order: [], widths: {}, density: "normal" };
 export const MIN_WIDTH = 48;
+/** Minimum of a flexible (fr) column; below this, other columns are dropped instead. */
+export const FLEX_MIN = 160;
 
 export function parsePrefs(v: unknown): TablePrefs | null {
 	if (!isRecord(v)) return null;
@@ -99,9 +113,41 @@ export function resetColumns(prefs: TablePrefs): TablePrefs {
 	return { ...DEFAULT_PREFS, density: prefs.density };
 }
 
+/** Width a column needs at least: its px track (user-resized or default) or the flexible minimum. */
+export function minTrackWidth(def: ColumnDef, prefs: TablePrefs): number {
+	if (isResizable(def)) return prefs.widths[def.key] ?? parseInt(def.width, 10);
+	return def.minWidth ?? FLEX_MIN;
+}
+
 export function trackOf(def: ColumnDef, prefs: TablePrefs): string {
-	const w = prefs.widths[def.key];
-	return w && isResizable(def) ? `${w}px` : def.width;
+	if (isResizable(def)) return `${minTrackWidth(def, prefs)}px`;
+	return def.width.includes("fr") ? `minmax(${minTrackWidth(def, prefs)}px,1fr)` : def.width;
+}
+
+/** Total width the given columns need, including gaps, padding and the lead track. */
+export function requiredWidth(cols: readonly ColumnDef[], prefs: TablePrefs, opts: FitOptions): number {
+	const lead = opts.lead ?? 0;
+	const tracks = cols.length + (lead ? 1 : 0);
+	return opts.padding + lead + cols.reduce((sum, c) => sum + minTrackWidth(c, prefs), 0) + Math.max(0, tracks - 1) * opts.gap;
+}
+
+/**
+ * The subset of `cols` that fits into `width`: columns are dropped by ascending priority, ties from the
+ * right, fixed columns never. Returns the same array when everything fits or the width is unknown (<= 0).
+ */
+export function fitColumns(cols: ColumnDef[], prefs: TablePrefs, width: number, opts: FitOptions): ColumnDef[] {
+	if (width <= 0 || requiredWidth(cols, prefs, opts) <= width) return cols;
+	let out = cols;
+	while (requiredWidth(out, prefs, opts) > width) {
+		let drop = -1;
+		for (let i = 0; i < out.length; i++) {
+			if (out[i].fixed) continue;
+			if (drop < 0 || (out[i].priority ?? 0) <= (out[drop].priority ?? 0)) drop = i;
+		}
+		if (drop < 0) break;
+		out = out.filter((_, i) => i !== drop);
+	}
+	return out;
 }
 
 export function rowHeight(density: Density, normal = 54, compact = 38): number {

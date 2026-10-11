@@ -77,9 +77,15 @@
 		@apply bg-raised text-foreground border-line-strong border text-xs;
 	}
 
-	/* Dialogs */
+	/* Dialogs: never taller than the window (the content scrolls), footers wrap instead of overflowing */
 	.cn-dialog-content {
-		@apply bg-panel ring-line-strong rounded-lg;
+		@apply bg-panel ring-line-strong scroll-y max-h-[calc(100vh-2rem)] rounded-lg;
+	}
+	.cn-dialog-footer {
+		@apply flex-wrap;
+	}
+	.cn-select-trigger > :not(svg) {
+		@apply min-w-0 truncate;
 	}
 	.cn-dialog-overlay {
 		@apply bg-black/50;

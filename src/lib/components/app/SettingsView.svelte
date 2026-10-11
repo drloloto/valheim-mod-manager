@@ -121,11 +121,14 @@
 			{/each}
 		</nav>
 
-		<div bind:this={scroller} onscroll={onScroll} class="min-w-0 flex-1 overflow-y-auto">
-			<div class="flex max-w-[860px] flex-col gap-8 px-10 py-7">
-				<div class="flex items-baseline justify-between">
-					<h1 class="text-[22px] font-bold">{t("settings.title")}</h1>
-					<span class={cn("font-mono text-[11.5px]", store.settingsError ? "text-destructive-text" : "text-success")}>
+		<div bind:this={scroller} onscroll={onScroll} class="scroll-y min-w-0 flex-1">
+			<div class="@container flex max-w-[860px] flex-col gap-8 px-10 py-7">
+				<div class="flex items-baseline justify-between gap-4">
+					<h1 class="shrink-0 text-[22px] font-bold">{t("settings.title")}</h1>
+					<span
+						class={cn("min-w-0 truncate font-mono text-[11.5px]", store.settingsError ? "text-destructive-text" : "text-success")}
+						title={store.settingsError ?? undefined}
+					>
 						{#if saving}{t("settings.saving")}{:else if store.settingsError}✗ {store.settingsError}{:else}{t("settings.saved")}{/if}
 					</span>
 				</div>
@@ -158,7 +161,7 @@
 					<SettingRow label={t("settings.concurrency")} align="center">
 						<div class="flex items-center gap-3.5">
 							<Stepper bind:value={form.downloadConcurrency} min={1} max={16} label={t("settings.concurrency")} />
-							<span class="text-muted-foreground text-xs">{t("settings.concurrencyHint")}</span>
+							<span class="text-muted-foreground min-w-0 text-xs">{t("settings.concurrencyHint")}</span>
 						</div>
 					</SettingRow>
 					<SettingRow label={t("settings.indexTtl")} align="center">
@@ -175,7 +178,7 @@
 					<SettingRow label={t("settings.nsfw")} align="center">
 						<div class="flex items-center gap-2.5">
 							<Switch bind:checked={form.showNsfw} aria-label={t("settings.nsfw")} />
-							<span class="text-muted-foreground text-xs">{t("settings.nsfwHint")}</span>
+							<span class="text-muted-foreground min-w-0 text-xs">{t("settings.nsfwHint")}</span>
 						</div>
 					</SettingRow>
 				</section>
@@ -251,7 +254,7 @@
 						{#snippet aside()}<Button size="sm" variant="outline" onclick={clearCache}>{t("common.clear")}</Button>{/snippet}
 					</SettingRow>
 					<SettingRow label={t("settings.index")} align="center">
-						<span class="text-foreground-soft font-mono text-[12.5px]">
+						<span class="text-foreground-soft block truncate font-mono text-[12.5px]">
 							{t("settings.packages", { n: formatNumber(store.packages.length) })}{#if store.indexFetchedAt}
 								· {relativeTime(store.indexFetchedAt)}{/if}
 						</span>
@@ -260,7 +263,8 @@
 							>{/snippet}
 					</SettingRow>
 					<SettingRow label={t("settings.dataFolder")} hint={store.state.app.portable ? t("settings.portable") : t("settings.dataFolderHint")} align="center">
-						<span class="text-foreground-soft selectable truncate font-mono text-[12.5px]" title={store.state.app.dataDir}>{store.state.app.dataDir}</span>
+						<span class="text-foreground-soft selectable block truncate font-mono text-[12.5px]" title={store.state.app.dataDir}>{store.state.app.dataDir}</span
+						>
 						{#snippet aside()}<Button size="sm" variant="ghost" onclick={() => store.openFolder("data")}>{t("common.open")}</Button>{/snippet}
 					</SettingRow>
 				</section>

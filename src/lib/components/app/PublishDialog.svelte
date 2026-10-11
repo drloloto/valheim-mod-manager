@@ -109,7 +109,7 @@
 				<Button onclick={() => store.openExternal(result!.url)}>{t("publish.openPage")}</Button>
 			</Dialog.Footer>
 		{:else}
-			<div class="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-4">
+			<div class="scroll-y grid min-h-0 flex-1 gap-4 px-5 py-4">
 				{#if preview && !preview.hasToken}
 					<p class="bg-primary-tint text-primary-text rounded-[5px] px-3 py-2 text-xs">{t("publish.noToken")}</p>
 				{/if}

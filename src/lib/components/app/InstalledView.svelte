@@ -71,13 +71,13 @@
 	const columns: Column[] = $derived([
 		{ key: "on", label: t("col.active"), width: "44px", fixed: true },
 		{ key: "mod", label: t("col.mod"), width: "minmax(0,1fr)", fixed: true },
-		{ key: "author", label: t("col.author"), width: "130px" },
-		{ key: "version", label: t("col.version"), width: "100px" },
+		{ key: "author", label: t("col.author"), width: "130px", priority: 1 },
+		{ key: "version", label: t("col.version"), width: "100px", priority: 2 },
 		{ key: "dl", label: t("col.dl"), width: "84px", align: "right", hidden: true },
 		{ key: "upd", label: t("col.upd"), width: "104px", align: "right", hidden: true },
 		{ key: "size", label: t("col.size"), width: "76px", align: "right", hidden: true },
 		{ key: "cats", label: t("col.cats"), width: "180px", hidden: true },
-		{ key: "status", label: t("col.status"), width: "150px", align: "right" },
+		{ key: "status", label: t("col.status"), width: "150px", align: "right", priority: 3 },
 	]);
 
 	onMount(() => {
@@ -326,7 +326,7 @@
 			</div>
 		</Resizable.Pane>
 		<Resizable.Handle />
-		<Resizable.Pane defaultSize={28} minSize={20} maxSize={40} order={2} id="installed-detail">
+		<Resizable.Pane defaultSize={28} minSize={24} maxSize={40} order={2} id="installed-detail">
 			<PackageDetail id={focus} />
 		</Resizable.Pane>
 	</Resizable.PaneGroup>

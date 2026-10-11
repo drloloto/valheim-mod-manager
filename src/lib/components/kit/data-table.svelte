@@ -3,6 +3,7 @@
 	import * as ContextMenu from "#lib/components/ui/context-menu/index.js";
 	import {
 		DEFAULT_PREFS,
+		fitColumns,
 		isHidden,
 		isResizable,
 		moveColumn,
@@ -68,19 +69,25 @@
 	let viewport = $state<HTMLDivElement>();
 	let scrollTop = $state(0);
 	let height = $state(0);
+	let width = $state(0);
 	/** Widths while dragging; not written to prefs until release */
 	let liveWidths = $state<Record<string, number>>({});
 	let dragKey = $state<string | null>(null);
 	let dropKey = $state<string | null>(null);
 	let dropSide = $state<"before" | "after">("before");
 
-	const visible = $derived(visibleColumns(columns, prefs));
+	// Row geometry shared by header and rows: 14px checkbox track, gap-3, px-4.
+	const LEAD = 14;
+	const GAP = 12;
+	const PADDING = 32;
 	const all = $derived(orderedColumns(columns, prefs));
+	// Columns the user wants, then only as many of them as the current width can hold (never a horizontal scroll).
+	const visible = $derived(fitColumns(visibleColumns(columns, prefs), prefs, width, { gap: GAP, padding: PADDING, lead: selectable ? LEAD : 0 }));
 	const rh = $derived(prefs.density === "compact" ? compactRowHeight : rowHeight);
 	const order = $derived(rows.map(getId));
 	const range = $derived(visibleRange(scrollTop, height, rh, rows.length));
 	const track = (c: ColumnDef) => (liveWidths[c.key] ? `${liveWidths[c.key]}px` : trackOf(c, prefs));
-	const template = $derived([selectable ? "14px" : null, ...visible.map(track)].filter(Boolean).join(" "));
+	const template = $derived([selectable ? `${LEAD}px` : null, ...visible.map(track)].filter(Boolean).join(" "));
 	const headerState: TriState = $derived(!selection.ids.size ? 0 : order.length && order.every((id) => selection.ids.has(id)) ? 1 : "mixed");
 
 	// Fit the selection to the currently visible rows (filter change); prune returns the same object when nothing changed.
@@ -194,10 +201,14 @@
 	}
 </script>
 
-<div class={cn("flex min-h-0 flex-col", className)}>
+<div class={cn("flex min-h-0 flex-col", className)} bind:clientWidth={width}>
 	<ContextMenu.Root>
 		<ContextMenu.Trigger>
-			<div class="label-caps grid h-8 shrink-0 items-center gap-3 border-b px-4 tracking-[0.06em]" style:grid-template-columns={template} role="row">
+			<div
+				class="label-caps grid h-8 shrink-0 items-center gap-3 overflow-hidden border-b px-4 tracking-[0.06em]"
+				style:grid-template-columns={template}
+				role="row"
+			>
 				{#if selectable}
 					<TriCheckbox
 						state={headerState}
@@ -282,7 +293,7 @@
 				role="grid"
 				aria-multiselectable={selectable}
 				aria-rowcount={rows.length}
-				class="h-full overflow-y-auto outline-none"
+				class="scroll-y h-full outline-none"
 			>
 				{#if !rows.length}
 					{@render empty?.()}

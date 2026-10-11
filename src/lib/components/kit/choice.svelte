@@ -21,7 +21,7 @@
 		}
 	}
 >
-	<Select.Trigger class={cn("w-full font-mono text-[12.5px]", className)}>{value}</Select.Trigger>
+	<Select.Trigger class={cn("w-full font-mono text-[12.5px]", className)} title={value}><span class="min-w-0 truncate">{value}</span></Select.Trigger>
 	<Select.Content>
 		{#each options as o (o)}
 			<Select.Item value={o} label={o} class="font-mono text-[12.5px]">{o}</Select.Item>

@@ -68,7 +68,7 @@
 		>
 			<TriCheckbox state={tri} label={it.label} />
 			<span class="min-w-0 flex-1 truncate text-left">{it.label}</span>
-			<span class="text-subtle-foreground text-meta font-mono tabular-nums">{formatNumber(it.count)}</span>
+			<span class="text-subtle-foreground text-meta shrink-0 font-mono tabular-nums">{formatNumber(it.count)}</span>
 		</button>
 	{:else}
 		<p class="text-muted-foreground px-0 py-1 text-xs">{t("filter.noEntries")}</p>

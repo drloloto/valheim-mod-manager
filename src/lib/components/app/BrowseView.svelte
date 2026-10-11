@@ -42,19 +42,20 @@
 	const compact = $derived(prefs.value.density === "compact");
 
 	const columns: Column[] = $derived([
+		// priority: what survives when the pane is narrow (the name column always does)
 		{ key: "mod", label: t("col.mod"), width: "minmax(0,1fr)", sortable: true, defaultDir: "asc", fixed: true },
-		{ key: "author", label: t("col.author"), width: "116px", sortable: true, defaultDir: "asc" },
+		{ key: "author", label: t("col.author"), width: "116px", sortable: true, defaultDir: "asc", priority: 2 },
 		{ key: "version", label: t("col.version"), width: "88px" },
-		{ key: "dl", label: t("col.dl"), width: "84px", align: "right", sortable: true },
+		{ key: "dl", label: t("col.dl"), width: "84px", align: "right", sortable: true, priority: 1 },
 		{ key: "rating", label: t("col.rating"), width: "80px", align: "right", sortable: true, hidden: true },
-		{ key: "upd", label: t("col.upd"), width: "104px", align: "right", sortable: true },
+		{ key: "upd", label: t("col.upd"), width: "104px", align: "right", sortable: true, priority: 1 },
 		{ key: "created", label: t("col.created"), width: "88px", align: "right", sortable: true, hidden: true },
 		{ key: "size", label: t("col.size"), width: "76px", align: "right", sortable: true, hidden: true },
 		{ key: "ndeps", label: t("col.ndeps"), width: "56px", align: "right", sortable: true, hidden: true },
 		{ key: "ndependants", label: t("col.ndependants"), width: "76px", align: "right", sortable: true, hidden: true },
 		{ key: "nver", label: t("col.nver"), width: "80px", align: "right", sortable: true, hidden: true },
 		{ key: "cats", label: t("col.cats"), width: "180px", hidden: true },
-		{ key: "status", label: t("col.profile"), width: "132px", align: "right" },
+		{ key: "status", label: t("col.profile"), width: "132px", align: "right", priority: 3 },
 	]);
 	const sortLabel = $derived(f.sort ? `${t(`sort.${f.sort.key}` as Parameters<typeof t>[0])} ${f.sort.dir === "desc" ? "↓" : "↑"}` : t("browse.relevance"));
 
@@ -322,7 +323,7 @@
 	</Resizable.Pane>
 
 	<Resizable.Handle />
-	<Resizable.Pane defaultSize={25} minSize={18} maxSize={40} order={3} id="browse-detail">
+	<Resizable.Pane defaultSize={26} minSize={22} maxSize={40} order={3} id="browse-detail">
 		<PackageDetail id={focus} />
 	</Resizable.Pane>
 </Resizable.PaneGroup>

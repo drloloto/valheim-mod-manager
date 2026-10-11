@@ -107,7 +107,7 @@
 		<Button size="sm" variant="outline" onclick={() => (lines = [])}>{t("common.clear")}</Button>
 		<Button size="sm" variant="ghost" onclick={() => store.openFolder("profile")} disabled={!store.state.active}>{t("log.openFolder")}</Button>
 	</Toolbar>
-	<div bind:this={scroller} class="bg-chrome selectable min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-5">
+	<div bind:this={scroller} class="bg-chrome selectable scroll-y min-h-0 flex-1 px-4 py-3 font-mono text-xs leading-5">
 		{#if !lines.length}
 			<p class="text-muted-foreground font-sans text-[13px]">{t("log.empty")}</p>
 		{/if}

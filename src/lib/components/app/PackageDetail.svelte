@@ -81,7 +81,8 @@
 	}
 </script>
 
-<aside class="bg-panel flex h-full flex-col overflow-y-auto border-l">
+<!-- Designed down to 240px of pane width: buttons stack, stats go two per row, every row truncates. -->
+<aside class="bg-panel scroll-y @container flex h-full flex-col border-l">
 	{#if !id}
 		<EmptyState title={t("detail.empty")}>{t("detail.emptyHint")}</EmptyState>
 	{:else if error}
@@ -94,7 +95,7 @@
 				<ModAvatar name={pkg.name} icon={pkg.icon} size="lg" />
 				<div class="flex min-w-0 flex-col gap-[3px]">
 					<h2 class="truncate text-lg font-bold">{pkg.name}</h2>
-					<p class="text-muted-foreground text-[12.5px]">
+					<p class="text-muted-foreground truncate text-[12.5px]">
 						{t("detail.by")} <button class="text-foreground-soft hover:underline" onclick={() => filterBy(() => store.filterOwner(pkg!.ns))}>{pkg.ns}</button>
 					</p>
 				</div>
@@ -105,8 +106,8 @@
 					<TriangleAlert class="mt-0.5 size-3.5 shrink-0" />{describeIssue(h, (x) => store.byId.get(x)?.name ?? x, store.state.game.lastUpdated)}
 				</p>
 			{/each}
-			<div class="flex gap-2">
-				<Button class="flex-1" variant={mod && status !== "update" ? "outline" : "default"} onclick={primary}>
+			<div class="grid grid-cols-1 gap-2 @sm:grid-cols-[minmax(0,1fr)_auto]">
+				<Button class="min-w-0" variant={mod && status !== "update" ? "outline" : "default"} onclick={primary}>
 					{status === "update" ? t("detail.updateTo", { v: update ?? "" }) : mod ? t("detail.remove") : t("detail.add")}
 				</Button>
 				<Button variant="outline" onclick={() => store.openExternal(pkg!.url)}>{t("detail.thunderstore")}</Button>
@@ -123,7 +124,7 @@
 		{#if activeTab !== "details"}
 			<ModDocs {pkg} tab={activeTab} {wiki} />
 		{:else}
-			<div class="grid grid-cols-4 border-b px-5 py-3">
+			<div class="grid grid-cols-2 gap-x-3 gap-y-3 border-b px-5 py-3 @sm:grid-cols-4">
 				<Stat label={t("detail.downloads")} value={formatNumber(pkg.dl)} />
 				<Stat label={t("detail.rating")} value={`★ ${formatNumber(pkg.rating)}`} />
 				<Stat label={t("detail.size")} value={latest ? formatBytes(latest.size) : "—"} />
@@ -144,9 +145,14 @@
 				{#each latest?.deps ?? [] as dep (dep)}
 					{@const d = depId(dep)}
 					{@const there = store.modsMap.has(d.id) || !!store.state.plan?.resolved[d.id]}
-					<div class="flex items-center justify-between text-[13px]">
-						<span class="flex items-baseline gap-2 truncate">{d.id}<span class="text-subtle-foreground text-meta font-mono">{d.version}</span></span>
-						<span class={there ? "text-success text-xs" : "text-primary text-xs"}>{there ? t("detail.depInProfile") : t("detail.depWillInstall")}</span>
+					<div class="flex items-center justify-between gap-2 text-[13px]">
+						<span class="flex min-w-0 items-baseline gap-2">
+							<span class="truncate" title={d.id}>{d.id}</span>
+							<span class="text-subtle-foreground text-meta shrink-0 font-mono">{d.version}</span>
+						</span>
+						<span class={there ? "text-success shrink-0 text-xs" : "text-primary shrink-0 text-xs"}
+							>{there ? t("detail.depInProfile") : t("detail.depWillInstall")}</span
+						>
 					</div>
 				{:else}
 					<p class="text-muted-foreground text-[13px]">{t("detail.noDeps")}</p>
@@ -156,12 +162,14 @@
 			<PanelSection title={t("detail.versions")} count={pkg.versions.length}>
 				{#each pkg.versions.slice(0, 12) as v, i (v.v)}
 					<div class="group flex h-7 items-center gap-2.5 text-[12.5px]">
-						<span class="text-foreground-soft w-[70px] font-mono text-xs">{v.v}</span>
-						<span class="text-muted-foreground flex-1" title={formatDate(v.date)}>{relativeTime(v.date)}</span>
-						{#if mod?.version === v.v}<span class="text-success text-meta">{t("detail.installed")}</span>
-						{:else if i === 0}<span class="text-primary text-meta">{t("detail.latest")}</span>{/if}
+						<span class="text-foreground-soft w-[70px] shrink-0 truncate font-mono text-xs" title={v.v}>{v.v}</span>
+						<span class="text-muted-foreground min-w-0 flex-1 truncate" title={formatDate(v.date)}>{relativeTime(v.date)}</span>
+						{#if mod?.version === v.v}<span class="text-success text-meta shrink-0">{t("detail.installed")}</span>
+						{:else if i === 0}<span class="text-primary text-meta shrink-0">{t("detail.latest")}</span>{/if}
 						{#if mod?.version !== v.v}
-							<Button size="sm" variant="ghost" class="invisible h-6 group-hover:visible" onclick={() => store.toggleMod(id!, v.v)}>{t("detail.pick")}</Button>
+							<Button size="sm" variant="ghost" class="invisible h-6 shrink-0 group-hover:visible" onclick={() => store.toggleMod(id!, v.v)}
+								>{t("detail.pick")}</Button
+							>
 						{/if}
 					</div>
 				{/each}

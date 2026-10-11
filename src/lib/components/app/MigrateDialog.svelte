@@ -49,7 +49,7 @@
 			<Dialog.Title>{t("migrate.title")}</Dialog.Title>
 			<Dialog.Description>{t("migrate.desc")}</Dialog.Description>
 		</Dialog.Header>
-		<div class="flex max-h-80 flex-col gap-px overflow-y-auto">
+		<div class="scroll-y flex max-h-80 flex-col gap-px">
 			{#if loading}
 				<p class="text-muted-foreground p-2 text-sm">{t("common.loading")}</p>
 			{:else if !profiles.length}

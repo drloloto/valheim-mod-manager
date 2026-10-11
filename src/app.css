@@ -103,6 +103,14 @@
 	--spacing-label: 220px;
 }
 
+/* The only way to scroll vertically: the gutter is reserved, so an appearing scrollbar never shifts content,
+   and nothing can scroll sideways by accident. */
+@utility scroll-y {
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-gutter: stable;
+}
+
 @utility label-caps {
 	font-family: var(--font-mono);
 	font-size: 10.5px;

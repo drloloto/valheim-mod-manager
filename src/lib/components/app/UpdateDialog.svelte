@@ -65,7 +65,7 @@
 			<Dialog.Title>{rows.length === 1 ? t("modupdate.titleOne", { name: rows[0].name }) : t("modupdate.titleMany", { n: rows.length })}</Dialog.Title>
 			<Dialog.Description>{t("modupdate.desc")}</Dialog.Description>
 		</Dialog.Header>
-		<div class="min-h-0 flex-1 overflow-y-auto">
+		<div class="scroll-y min-h-0 flex-1">
 			{#each rows as r (r.id)}
 				{@const log = logs[r.id]}
 				<div class="border-b last:border-b-0">

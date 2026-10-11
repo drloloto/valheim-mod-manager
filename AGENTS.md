@@ -49,6 +49,11 @@ Run the full set before declaring a task done. `npm run format` / `cargo fmt` fi
 7. Keep `package.json`, `Cargo.toml` and `tauri.conf.json` versions identical.
 8. Do not add dependencies casually; prefer what is already there (bits-ui, lucide, Intl APIs).
 9. Never kill all Node processes to stop the dev server; stop by port (it would also kill tool servers).
+10. Layout must survive the minimum window (1100 × 680) and the German catalog. Width decisions use
+    container queries on the pane (`@container`, `@sm:` …), never the viewport; tables fit their columns
+    with `fitColumns`; text in flex rows gets `min-w-0 truncate`, icons and counts `shrink-0`; scroll
+    containers use the `scroll-y` utility (`layout.test.ts` enforces it). Details in
+    `docs/superpowers/specs/2026-10-11-small-window-layout-design.md`.
 
 ## Workflow for bigger changes
 
@@ -58,6 +63,8 @@ expected depth. Commit in meaningful slices with conventional commit messages.
 
 ## Verifying UI work without the Tauri window
 
-Start the mock preview, then drive a headless browser over the Chrome DevTools Protocol (Edge ships with
-Windows: `msedge --headless=new --remote-debugging-port=9222`) to click and screenshot. The mock lives in
+Start the mock preview, then `node dev/screenshot.mjs 1100 680 /installed out.png` drives headless Edge over
+the Chrome DevTools Protocol, runs `dev/layout-audit.js` (overflow, stray scrollbars, overlapping text) and
+saves a screenshot; `PRESET` and `ACTION` (see the file header) set the locale or click a row first. Check
+every changed page at 1100 × 680 in German before claiming a UI change done. The mock lives in
 `dev/mock-tauri.js`; extend it when a new command is needed.

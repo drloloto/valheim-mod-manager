@@ -51,6 +51,14 @@ All notable changes to this project are documented here. The format follows
 - Health hints (deprecated, older than the game update) now cover resolved dependencies, not only explicit
   mods.
 
+### Fixed
+
+- Layout at the minimum window size (1100 × 680) and with the German catalog: tables drop columns by
+  priority instead of letting text overlap, the detail panel stacks its buttons and stats, the selection
+  bar wraps, settings and config rows collapse on narrow panes, status-bar entries truncate, dialogs never
+  grow taller than the window, and scroll containers reserve their gutter so an appearing scrollbar no
+  longer shifts content. `dev/screenshot.mjs` and `dev/layout-audit.js` verify this in the mock preview.
+
 ## [0.1.0] - 2026-10-09
 
 First public version.

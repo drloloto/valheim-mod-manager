@@ -63,7 +63,7 @@
 			{/each}
 		</div>
 	{/if}
-	<div class={wide ? "min-h-0 flex-1 overflow-y-auto px-6 py-5" : "px-5 py-4"}>
+	<div class={wide ? "scroll-y min-h-0 flex-1 px-6 py-5" : "px-5 py-4"}>
 		{#if error}
 			<p class="text-destructive-text text-sm">{t("detail.docsFailed", { e: error })}</p>
 		{:else if md === null}

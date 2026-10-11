@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
 	DEFAULT_PREFS,
+	fitColumns,
 	moveColumn,
 	orderedColumns,
 	parsePrefs,
+	requiredWidth,
 	resetColumns,
 	resetWidths,
 	rowHeight,
@@ -51,7 +53,8 @@ describe("columns", () => {
 		p = setWidth(p, defs[1], 10);
 		expect(trackOf(defs[1], p)).toBe("48px");
 		expect(setWidth(p, defs[0], 300)).toBe(p);
-		expect(trackOf(defs[0], p)).toBe("minmax(0,1fr)");
+		expect(trackOf(defs[0], p)).toBe("minmax(160px,1fr)");
+		expect(trackOf({ ...defs[0], minWidth: 120 }, p)).toBe("minmax(120px,1fr)");
 		expect(trackOf(defs[1], resetWidths(p))).toBe("120px");
 		expect(resetColumns({ ...p, density: "compact" })).toEqual({ ...DEFAULT_PREFS, density: "compact" });
 	});
@@ -66,5 +69,39 @@ describe("columns", () => {
 		expect(parsePrefs(null)).toBeNull();
 		expect(rowHeight("compact")).toBe(38);
 		expect(rowHeight("normal", 50)).toBe(50);
+	});
+
+	describe("fitColumns", () => {
+		const cols: ColumnDef[] = [
+			{ key: "mod", label: "Mod", width: "minmax(0,1fr)", fixed: true },
+			{ key: "author", label: "Autor", width: "120px", priority: 1 },
+			{ key: "version", label: "Version", width: "80px" },
+			{ key: "dl", label: "Downloads", width: "80px" },
+			{ key: "status", label: "Status", width: "100px", priority: 2 },
+		];
+		const opts = { gap: 12, padding: 32, lead: 14 };
+		const keys = (w: number, p = DEFAULT_PREFS) => fitColumns(cols, p, w, opts).map((c) => c.key);
+
+		it("sums px tracks, the flexible minimum, gaps, padding and the lead track", () => {
+			expect(requiredWidth(cols, DEFAULT_PREFS, opts)).toBe(32 + 14 + 160 + 120 + 80 + 80 + 100 + 5 * 12);
+			expect(requiredWidth(cols.slice(0, 1), DEFAULT_PREFS, { gap: 12, padding: 0 })).toBe(160);
+		});
+
+		it("returns the same array when everything fits or the width is unknown", () => {
+			expect(fitColumns(cols, DEFAULT_PREFS, 700, opts)).toBe(cols);
+			expect(fitColumns(cols, DEFAULT_PREFS, 0, opts)).toBe(cols);
+		});
+
+		it("drops the lowest priority first, ties from the right, fixed columns never", () => {
+			expect(keys(600)).toEqual(["mod", "author", "version", "status"]);
+			expect(keys(500)).toEqual(["mod", "author", "status"]);
+			expect(keys(400)).toEqual(["mod", "status"]);
+			expect(keys(200)).toEqual(["mod"]);
+		});
+
+		it("counts user-resized widths", () => {
+			const p = setWidth(DEFAULT_PREFS, cols[1], 300);
+			expect(keys(600, p)).toEqual(["mod", "status"]);
+		});
 	});
 });

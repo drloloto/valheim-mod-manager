@@ -57,7 +57,7 @@
 </script>
 
 {#if dev}
-	<div class="h-full overflow-y-auto p-8">
+	<div class="scroll-y h-full p-8">
 		<div class="flex max-w-4xl flex-col gap-8">
 			<SectionLabel>Buttons</SectionLabel>
 			<div class="flex flex-wrap items-center gap-2">

@@ -104,8 +104,8 @@
 	const viewLabel = $derived(current ? current.name : count ? t("filter.active", { n: count }) : t("filter.view"));
 </script>
 
-<div class="flex h-full flex-col">
-	<!-- Header: one row, the view as a menu instead of a chip cloud, Clear on the right. -->
+<div class="@container flex h-full flex-col">
+	<!-- Header: one row, the view as a menu instead of a chip cloud, Clear on the right. The caps label gives way first. -->
 	<div class="border-line-subtle flex h-[58px] items-center gap-1 border-b px-2.5">
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
@@ -115,7 +115,7 @@
 						class="hover:bg-hover data-[state=open]:bg-muted flex h-[34px] min-w-0 flex-1 items-center gap-1.5 rounded-[5px] px-2 text-left"
 						title={t("filter.views")}
 					>
-						<span class="label-caps text-foreground-soft shrink-0">{t("filter.title")}</span>
+						<span class="label-caps text-foreground-soft hidden shrink-0 @min-[240px]:inline">{t("filter.title")}</span>
 						<span class="text-primary text-meta min-w-0 flex-1 truncate font-mono">{viewLabel}</span>
 						<ChevronDown class="text-muted-foreground size-3.5 shrink-0" />
 					</button>
@@ -141,7 +141,7 @@
 		<Button variant="ghost" size="sm" disabled={!count && !c.query} onclick={() => f.reset()}>{t("common.clear")}</Button>
 	</div>
 
-	<div class="min-h-0 flex-1 overflow-y-auto">
+	<div class="scroll-y min-h-0 flex-1">
 		<FilterSection
 			id="filter-status"
 			title={fieldLabel("status")}

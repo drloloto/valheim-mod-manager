@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
 	import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-	import { ConfirmDialog } from "#lib/components/kit/index.js";
+	import { ConfirmDialog, StatusItem } from "#lib/components/kit/index.js";
 	import { store } from "#lib/api/store.svelte.js";
 	import { relativeTime } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
@@ -21,76 +21,63 @@
 	}
 </script>
 
+<!-- Every entry truncates when the bar fills up; the action on the right always stays visible. -->
 <footer class="bg-chrome text-muted-foreground h-statusbar text-meta flex shrink-0 items-center gap-5 border-t px-3.5 font-mono">
-	{#if store.state.game.found}
-		<span class="flex items-center gap-1.5"><span class="bg-success size-1.5 rounded-full"></span>{t("status.gameFound")}</span>
-	{:else}
-		<a href={resolve("settings")} class="text-destructive-text flex items-center gap-1.5 hover:underline">
-			<span class="bg-destructive size-1.5 rounded-full"></span>
-			{t("status.gameMissing")}
-		</a>
-	{/if}
-
-	<span>
-		{#if store.indexLoading && !store.packages.length}{t("status.indexLoading")}
-		{:else if store.indexError}<span class="text-destructive-text">{store.indexError}</span>
-		{:else if store.indexFetchedAt}{t("status.index", { time: relativeTime(store.indexFetchedAt) })}{/if}
-	</span>
-
-	{#if progress}
-		<span class="flex min-w-0 items-center gap-2" title={progress.id}>
-			<span class="truncate">{t(`status.phase.${progress.phase}`)} {progress.id}</span>
-
-			<span class="bg-muted h-1 w-[120px] shrink-0 overflow-hidden rounded-full">
-				<span class="bg-primary block h-full" style:width="{progress.total ? (progress.done / progress.total) * 100 : 0}%"></span>
-			</span>
-			{progress.done}/{progress.total}
-		</span>
-	{:else if store.state.sync.running}
-		<span class="flex items-center gap-1.5"><span class="bg-primary size-1.5 animate-pulse rounded-full"></span>{t("status.syncing")}</span>
-	{/if}
-
-	{#if store.server}
-		{@const name = store.serverStatus?.name || store.server.name || store.server.url}
-		{#if store.serverChecking && !store.serverStatus}
-			<span class="flex items-center gap-1.5"
-				><span class="bg-muted-foreground size-1.5 animate-pulse rounded-full"></span>{t("status.serverChecking", { name })}</span
-			>
-		{:else if store.serverStatus?.reachable && store.serverStatus.release}
-			<button class="text-primary flex items-center gap-1.5 hover:underline" onclick={() => (store.serverDialog = "publish")}>
-				<span class="bg-primary size-1.5 animate-pulse rounded-full"></span>{t("status.serverPending", { name })}
-			</button>
-		{:else if store.serverStatus?.reachable && store.serverStatus.inSync}
-			<span class="flex items-center gap-1.5"><span class="bg-success size-1.5 rounded-full"></span>{t("status.serverInSync", { name })}</span>
-		{:else if store.serverStatus?.reachable}
-			<button class="text-primary flex items-center gap-1.5 hover:underline" onclick={() => (store.serverDialog = "diff")}>
-				<span class="bg-primary size-1.5 rounded-full"></span>{t("status.serverDiffers", { name })}
-			</button>
+	<div class="flex min-w-0 flex-1 items-center gap-5">
+		{#if store.state.game.found}
+			<StatusItem tone="ok">{t("status.gameFound")}</StatusItem>
 		{:else}
-			<button
-				class="text-muted-foreground flex items-center gap-1.5 hover:underline"
-				title={store.serverStatus?.error}
-				onclick={() => store.refreshServerStatus()}
-			>
-				<span class="border-muted-foreground size-1.5 rounded-full border"></span>{t("status.serverUnreachable", { name })}
-			</button>
+			<StatusItem tone="err" href={resolve("settings")} class="text-destructive-text">{t("status.gameMissing")}</StatusItem>
 		{/if}
-	{/if}
 
-	{#if store.readiness.status === "incomplete" && store.readiness.missing.length}
-		<a href={resolve("installed")} class="text-destructive-text flex items-center gap-1.5 hover:underline">
-			<span class="bg-destructive size-1.5 rounded-full"></span>
-			{t("status.missing", { n: store.readiness.missing.length })}
-		</a>
-	{/if}
+		{#if store.indexLoading && !store.packages.length}
+			<StatusItem tone="none">{t("status.indexLoading")}</StatusItem>
+		{:else if store.indexError}
+			<StatusItem tone="none" class="text-destructive-text" title={store.indexError}>{store.indexError}</StatusItem>
+		{:else if store.indexFetchedAt}
+			<StatusItem tone="none">{t("status.index", { time: relativeTime(store.indexFetchedAt) })}</StatusItem>
+		{/if}
 
-	{#if store.updateStatus === "available" && store.update}
-		<button class="text-primary hover:underline" onclick={() => (confirmOpen = true)}>{t("update.statusBar", { v: store.update.version })}</button>
-	{/if}
+		{#if progress}
+			<span class="flex min-w-0 items-center gap-2" title={progress.id}>
+				<span class="truncate">{t(`status.phase.${progress.phase}`)} {progress.id}</span>
+				<span class="bg-muted h-1 w-[120px] shrink-0 overflow-hidden rounded-full">
+					<span class="bg-primary block h-full" style:width="{progress.total ? (progress.done / progress.total) * 100 : 0}%"></span>
+				</span>
+				<span class="shrink-0">{progress.done}/{progress.total}</span>
+			</span>
+		{:else if store.state.sync.running}
+			<StatusItem tone="warn" pulse>{t("status.syncing")}</StatusItem>
+		{/if}
 
-	<span class="flex-1"></span>
+		{#if store.server}
+			{@const name = store.serverStatus?.name || store.server.name || store.server.url}
+			{#if store.serverChecking && !store.serverStatus}
+				<StatusItem tone="muted" pulse>{t("status.serverChecking", { name })}</StatusItem>
+			{:else if store.serverStatus?.reachable && store.serverStatus.release}
+				<StatusItem tone="warn" pulse class="text-primary" onclick={() => (store.serverDialog = "publish")}>{t("status.serverPending", { name })}</StatusItem>
+			{:else if store.serverStatus?.reachable && store.serverStatus.inSync}
+				<StatusItem tone="ok">{t("status.serverInSync", { name })}</StatusItem>
+			{:else if store.serverStatus?.reachable}
+				<StatusItem tone="warn" class="text-primary" onclick={() => (store.serverDialog = "diff")}>{t("status.serverDiffers", { name })}</StatusItem>
+			{:else}
+				<StatusItem tone="hollow" title={store.serverStatus?.error} onclick={() => store.refreshServerStatus()}
+					>{t("status.serverUnreachable", { name })}</StatusItem
+				>
+			{/if}
+		{/if}
+
+		{#if store.readiness.status === "incomplete" && store.readiness.missing.length}
+			<StatusItem tone="err" href={resolve("installed")} class="text-destructive-text">{t("status.missing", { n: store.readiness.missing.length })}</StatusItem>
+		{/if}
+
+		{#if store.updateStatus === "available" && store.update}
+			<StatusItem tone="none" class="text-primary" onclick={() => (confirmOpen = true)}>{t("update.statusBar", { v: store.update.version })}</StatusItem>
+		{/if}
+	</div>
+
 	{#if store.state.active && store.state.mods.length}
-		<button class="hover:text-foreground" onclick={copyCode}>{t("status.copyCode")}</button>
+		<button class="hover:text-foreground shrink-0" onclick={copyCode}>{t("status.copyCode")}</button>
 	{/if}
 </footer>
 

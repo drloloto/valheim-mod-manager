@@ -7,6 +7,7 @@ export { default as TriCheckbox } from "./tri-checkbox.svelte";
 export { default as Segmented } from "./segmented.svelte";
 export { default as Chip } from "./chip.svelte";
 export { default as StatusPill } from "./status-pill.svelte";
+export { default as StatusItem } from "./status-item.svelte";
 export { default as ModAvatar } from "./mod-avatar.svelte";
 export { default as Stat } from "./stat.svelte";
 export { default as SettingRow } from "./setting-row.svelte";

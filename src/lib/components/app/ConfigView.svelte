@@ -116,13 +116,13 @@
 />
 
 <Resizable.PaneGroup direction="horizontal" autoSaveId="config" class="h-full">
-	<Resizable.Pane defaultSize={22} minSize={15} maxSize={40} order={1} id="config-files">
+	<Resizable.Pane defaultSize={22} minSize={18} maxSize={40} order={1} id="config-files">
 		<div class="flex h-full flex-col">
 			<div class="flex flex-col gap-2 border-b p-3">
 				<Input placeholder={t("config.filterFiles")} bind:value={fileFilter} />
 				<Button variant="outline" size="sm" onclick={() => store.openFolder("config")} disabled={!store.state.active}>{t("config.openFolder")}</Button>
 			</div>
-			<div class="flex-1 overflow-y-auto p-1.5">
+			<div class="scroll-y flex-1 p-1.5">
 				{#if !loading && !filteredFiles.length}
 					<p class="text-muted-foreground p-2 text-[13px]">{t("config.noFiles")}</p>
 				{/if}
@@ -146,21 +146,21 @@
 		{#if !currentFile}
 			<EmptyState title={t("config.chooseFile")}>{t("config.chooseFileHint")}</EmptyState>
 		{:else}
-			<div class="flex h-full flex-col">
+			<div class="@container flex h-full flex-col">
 				<Toolbar>
-					<span class="truncate font-mono text-[13px] font-medium">{currentFile}</span>
-					{#if dirty.size}<span class="text-primary text-meta font-mono">{t("config.changed", { n: dirty.size })}</span>{/if}
-					<div class="flex-1"></div>
-					<Input data-search class="w-64" placeholder={t("config.filterSettings")} bind:value={settingFilter} />
+					<span class="min-w-0 flex-1 truncate font-mono text-[13px] font-medium" title={currentFile}>{currentFile}</span>
+					{#if dirty.size}<span class="text-primary text-meta shrink-0 font-mono whitespace-nowrap">{t("config.changed", { n: dirty.size })}</span>{/if}
+					<Input data-search class="w-56" placeholder={t("config.filterSettings")} bind:value={settingFilter} />
 					<Button variant="outline" size="sm" onclick={() => (dirty = new Map())} disabled={!dirty.size}>{t("common.discard")}</Button>
 					<Button size="sm" onclick={save} disabled={!dirty.size} title={t("config.saveTitle")}>{t("common.save")}</Button>
 				</Toolbar>
-				<div class="flex-1 overflow-y-auto px-6">
+				<div class="scroll-y flex-1 px-6">
 					{#each visible as { s, i }, n (i)}
 						{#if n === 0 || visible[n - 1].s.section !== s.section}
 							<SectionLabel class="border-b pt-5 pb-2.5">{s.section}</SectionLabel>
 						{/if}
-						<div class="border-line-subtle grid grid-cols-[minmax(0,1fr)_14rem] items-center gap-6 border-b py-3">
+						<!-- Text left, control right; below 42rem of pane width the control moves under the text. -->
+						<div class="border-line-subtle grid grid-cols-1 gap-x-6 gap-y-2 border-b py-3 @2xl:grid-cols-[minmax(0,1fr)_14rem] @2xl:items-center">
 							<div class="flex min-w-0 flex-col gap-1">
 								<span class="text-row flex items-center gap-2 font-semibold">
 									{s.key}{#if dirty.has(i)}<span class="bg-primary size-1.5 rounded-full"></span>{/if}
