@@ -336,6 +336,14 @@ export const de: Record<MessageKey, string> = {
 	"detail.latest": "neueste",
 	"detail.pick": "Wählen",
 	"detail.website": "Website ↗",
+	"detail.tabDetails": "Details",
+	"detail.tabReadme": "Readme",
+	"detail.tabChangelog": "Änderungen",
+	"detail.tabWiki": "Wiki",
+	"detail.expand": "Groß öffnen",
+	"detail.noReadme": "Dieser Mod hat auf Thunderstore keine Readme.",
+	"detail.noChangelog": "Dieser Mod hat auf Thunderstore kein Changelog.",
+	"detail.docsFailed": "Laden fehlgeschlagen: {e}",
 
 	"installed.noProfile": "Kein Profil aktiv",
 	"installed.noProfileHint": "Lege oben in der Profilwahl ein Profil an oder importiere eins.",
@@ -444,6 +452,8 @@ export const de: Record<MessageKey, string> = {
 	"import.nameLabel": "Name (optional)",
 	"import.namePlaceholder": "Originalname übernehmen",
 	"import.withConfigs": "Configs aus dem Profil übernehmen",
+	"import.installAll": "Alle Mods und Abhängigkeiten jetzt herunterladen, installieren und aktivieren",
+	"import.installAllHint": "Sonst wird das Profil nur angelegt; installieren geht später über die Seite „Installiert“.",
 	"import.submit": "Importieren",
 
 	"export.title": "Profil geteilt",

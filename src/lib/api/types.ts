@@ -35,6 +35,14 @@ export interface Version {
 	date: number;
 }
 
+/** Text tabs of the detail panel; readme and changelog are per version, the wiki per package. */
+export type DocTab = "readme" | "changelog" | "wiki";
+
+export interface WikiIndex {
+	title: string;
+	pages: { id: string; title: string }[];
+}
+
 export interface Pkg {
 	id: string;
 	ns: string;

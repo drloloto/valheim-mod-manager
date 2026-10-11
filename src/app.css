@@ -172,3 +172,144 @@
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
+
+/* Rendered markdown (readme, changelog, wiki): compact in the detail panel, roomier in the wide dialog */
+.md {
+	font-size: 13px;
+	line-height: 1.55;
+	color: var(--foreground-soft);
+	overflow-wrap: anywhere;
+}
+.md-wide {
+	font-size: 14px;
+	line-height: 1.6;
+	max-width: 72ch;
+	margin: 0 auto;
+}
+.md > :first-child {
+	margin-top: 0;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+	color: var(--foreground);
+	font-weight: 600;
+	line-height: 1.25;
+	margin: 1.4em 0 0.5em;
+}
+.md h1 {
+	font-size: 1.35em;
+	padding-bottom: 0.3em;
+	border-bottom: 1px solid var(--border);
+}
+.md h2 {
+	font-size: 1.15em;
+}
+.md h3 {
+	font-size: 1.02em;
+}
+.md h4 {
+	font-size: 0.95em;
+	color: var(--foreground-soft);
+}
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md pre,
+.md table {
+	margin: 0 0 0.8em;
+}
+.md ul,
+.md ol {
+	padding-left: 1.4em;
+}
+.md ul {
+	list-style: disc;
+}
+.md ol {
+	list-style: decimal;
+}
+.md li + li {
+	margin-top: 0.2em;
+}
+.md a {
+	color: var(--primary-text);
+	text-decoration: underline;
+	text-decoration-color: color-mix(in oklab, var(--primary-text) 40%, transparent);
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+.md a:hover {
+	text-decoration-color: var(--primary-text);
+}
+.md strong {
+	color: var(--foreground);
+	font-weight: 600;
+}
+.md code {
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+	background: var(--code);
+	color: var(--code-foreground);
+	padding: 0.1em 0.35em;
+	border-radius: 3px;
+}
+.md pre {
+	background: var(--code);
+	border: 1px solid var(--line-subtle);
+	border-radius: 5px;
+	padding: 0.7em 0.9em;
+	overflow-x: auto;
+}
+.md pre code {
+	background: none;
+	padding: 0;
+	font-size: 12px;
+}
+.md blockquote {
+	border-left: 3px solid var(--line-strong);
+	padding-left: 0.9em;
+	color: var(--muted-foreground);
+}
+.md img {
+	max-width: 100%;
+	height: auto;
+	border-radius: 4px;
+	display: inline-block;
+}
+.md hr {
+	border: 0;
+	border-top: 1px solid var(--border);
+	margin: 1.2em 0;
+}
+.md table {
+	display: block;
+	max-width: 100%;
+	overflow-x: auto;
+	border-collapse: collapse;
+	font-size: 0.95em;
+}
+.md th,
+.md td {
+	border: 1px solid var(--border);
+	padding: 0.3em 0.6em;
+	text-align: left;
+	vertical-align: top;
+}
+.md th {
+	background: var(--raised);
+	color: var(--foreground);
+	font-weight: 600;
+}
+.md details {
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	padding: 0.4em 0.8em;
+	margin: 0 0 0.8em;
+}
+.md summary {
+	cursor: pointer;
+	color: var(--foreground);
+}

@@ -10,6 +10,7 @@
 	let file = $state<string | null>(null);
 	let name = $state("");
 	let withConfigs = $state(true);
+	let installAll = $state(true);
 	let busy = $state(false);
 
 	const ready = $derived(mode === "code" ? !!code.trim() : !!file);
@@ -24,7 +25,10 @@
 		if (!ready || busy) return;
 		busy = true;
 		try {
-			const ok = mode === "code" ? await store.importCode(code.trim(), name.trim(), withConfigs) : await store.importFile(file!, name.trim(), withConfigs);
+			const ok =
+				mode === "code"
+					? await store.importCode(code.trim(), name.trim(), withConfigs, installAll)
+					: await store.importFile(file!, name.trim(), withConfigs, installAll);
 			if (ok) {
 				open = false;
 				code = "";
@@ -67,6 +71,13 @@
 				<Checkbox bind:checked={withConfigs} />
 				{t("import.withConfigs")}
 			</label>
+			<div class="grid gap-1">
+				<label class="flex items-center gap-2 text-sm">
+					<Checkbox bind:checked={installAll} />
+					{t("import.installAll")}
+				</label>
+				<p class="text-muted-foreground pl-6 text-xs">{t("import.installAllHint")}</p>
+			</div>
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)}>{t("common.cancel")}</Button>

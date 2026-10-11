@@ -1,23 +1,32 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
-	import { Button, Chip, EmptyState, ModAvatar, PanelSection, Stat } from "#lib/components/kit/index.js";
+	import { Button, Chip, Dialog, EmptyState, ModAvatar, PanelSection, Segmented, Stat } from "#lib/components/kit/index.js";
+	import type { SegmentOption } from "#lib/components/kit/index.js";
 	import { store } from "#lib/api/store.svelte.js";
-	import type { Pkg } from "#lib/api/types.js";
+	import type { DocTab, Pkg, WikiIndex } from "#lib/api/types.js";
 	import { formatBytes, formatDate, formatNumber, relativeTime } from "#lib/format.js";
 	import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
+	import Maximize2 from "@lucide/svelte/icons/maximize-2";
 	import { describeIssue } from "#lib/health.js";
 	import { t } from "#lib/i18n/index.svelte.js";
+	import ModDocs from "./ModDocs.svelte";
 
 	let { id }: { id: string | null } = $props();
 
 	let pkg = $state<Pkg | null>(null);
 	let error = $state<string | null>(null);
+	let wiki = $state<WikiIndex | null>(null);
+	type Tab = "details" | DocTab;
+	let tab = $state<Tab>("details");
+	let expanded = $state(false);
+	let expandedTab = $state<DocTab>("readme");
 
 	$effect(() => {
 		const current = id;
 		pkg = null;
 		error = null;
+		wiki = null;
 		if (!current) return;
 		store
 			.getPackage(current)
@@ -27,12 +36,27 @@
 			.catch((e: unknown) => {
 				if (id === current) error = e instanceof Error ? e.message : t("detail.loadFailed");
 			});
+		// The wiki tab only appears when the package has one; a failed lookup just hides it.
+		store
+			.getWiki(current)
+			.then((w) => {
+				if (id === current) wiki = w;
+			})
+			.catch(() => {});
 	});
 
+	// A package without a wiki cannot stay on the wiki tab.
+	const activeTab = $derived<Tab>(tab === "wiki" && !wiki ? "details" : tab);
 	const status = $derived(id ? store.modStatus(id) : "none");
 	const mod = $derived(id ? store.modsMap.get(id) : undefined);
 	const update = $derived(id ? store.state.updates[id] : undefined);
 	const latest = $derived(pkg?.versions[0]);
+	const docTabs = $derived<SegmentOption[]>([
+		{ value: "readme", label: t("detail.tabReadme") },
+		{ value: "changelog", label: t("detail.tabChangelog") },
+		...(wiki ? [{ value: "wiki", label: t("detail.tabWiki"), badge: wiki.pages.length > 1 ? wiki.pages.length : undefined }] : []),
+	]);
+	const tabs = $derived<SegmentOption[]>([{ value: "details", label: t("detail.tabDetails") }, ...docTabs]);
 
 	function depId(dep: string) {
 		const parts = dep.split("-");
@@ -49,6 +73,11 @@
 	function filterBy(fn: () => void) {
 		fn();
 		goto(resolve("/"));
+	}
+
+	function expand() {
+		expandedTab = activeTab === "details" ? "readme" : activeTab;
+		expanded = true;
 	}
 </script>
 
@@ -84,51 +113,75 @@
 			</div>
 		</div>
 
-		<div class="grid grid-cols-3 border-b px-5 py-3">
-			<Stat label={t("detail.downloads")} value={formatNumber(pkg.dl)} />
-			<Stat label={t("detail.rating")} value={`★ ${formatNumber(pkg.rating)}`} />
-			<Stat label={t("detail.size")} value={latest ? formatBytes(latest.size) : "—"} />
+		<div class="flex items-center gap-2 border-b px-5 py-2.5">
+			<Segmented options={tabs} bind:value={() => activeTab, (v) => (tab = v as Tab)} size="sm" class="min-w-0 flex-1" columns={tabs.length} />
+			<Button size="sm" variant="ghost" class="h-7 w-7 shrink-0 p-0" title={t("detail.expand")} onclick={expand}>
+				<Maximize2 class="size-3.5" />
+			</Button>
 		</div>
 
-		{#if pkg.cats.length}
-			<PanelSection title={t("detail.categories")}>
-				<div class="flex flex-wrap gap-1">
-					{#each pkg.cats as cat (cat)}
-						<Chip onclick={() => filterBy(() => store.filterCategory(cat))}>{cat}</Chip>
-					{/each}
-				</div>
+		{#if activeTab !== "details"}
+			<ModDocs {pkg} tab={activeTab} {wiki} />
+		{:else}
+			<div class="grid grid-cols-3 border-b px-5 py-3">
+				<Stat label={t("detail.downloads")} value={formatNumber(pkg.dl)} />
+				<Stat label={t("detail.rating")} value={`★ ${formatNumber(pkg.rating)}`} />
+				<Stat label={t("detail.size")} value={latest ? formatBytes(latest.size) : "—"} />
+			</div>
+
+			{#if pkg.cats.length}
+				<PanelSection title={t("detail.categories")}>
+					<div class="flex flex-wrap gap-1">
+						{#each pkg.cats as cat (cat)}
+							<Chip onclick={() => filterBy(() => store.filterCategory(cat))}>{cat}</Chip>
+						{/each}
+					</div>
+				</PanelSection>
+			{/if}
+
+			<PanelSection title={t("detail.dependencies")} count={latest?.deps.length ?? 0}>
+				{#each latest?.deps ?? [] as dep (dep)}
+					{@const d = depId(dep)}
+					{@const there = store.modsMap.has(d.id) || !!store.state.plan?.resolved[d.id]}
+					<div class="flex items-center justify-between text-[13px]">
+						<span class="flex items-baseline gap-2 truncate">{d.id}<span class="text-subtle-foreground text-meta font-mono">{d.version}</span></span>
+						<span class={there ? "text-success text-xs" : "text-primary text-xs"}>{there ? t("detail.depInProfile") : t("detail.depWillInstall")}</span>
+					</div>
+				{:else}
+					<p class="text-muted-foreground text-[13px]">{t("detail.noDeps")}</p>
+				{/each}
 			</PanelSection>
+
+			<PanelSection title={t("detail.versions")} count={pkg.versions.length}>
+				{#each pkg.versions.slice(0, 12) as v, i (v.v)}
+					<div class="group flex h-7 items-center gap-2.5 text-[12.5px]">
+						<span class="text-foreground-soft w-[70px] font-mono text-xs">{v.v}</span>
+						<span class="text-muted-foreground flex-1" title={formatDate(v.date)}>{relativeTime(v.date)}</span>
+						{#if mod?.version === v.v}<span class="text-success text-meta">{t("detail.installed")}</span>
+						{:else if i === 0}<span class="text-primary text-meta">{t("detail.latest")}</span>{/if}
+						{#if mod?.version !== v.v}
+							<Button size="sm" variant="ghost" class="invisible h-6 group-hover:visible" onclick={() => store.toggleMod(id!, v.v)}>{t("detail.pick")}</Button>
+						{/if}
+					</div>
+				{/each}
+			</PanelSection>
+
+			{#if pkg.web}
+				<div class="px-5 py-4"><Button variant="ghost" onclick={() => store.openExternal(pkg!.web)}>{t("detail.website")}</Button></div>
+			{/if}
 		{/if}
 
-		<PanelSection title={t("detail.dependencies")} count={latest?.deps.length ?? 0}>
-			{#each latest?.deps ?? [] as dep (dep)}
-				{@const d = depId(dep)}
-				{@const there = store.modsMap.has(d.id) || !!store.state.plan?.resolved[d.id]}
-				<div class="flex items-center justify-between text-[13px]">
-					<span class="flex items-baseline gap-2 truncate">{d.id}<span class="text-subtle-foreground text-meta font-mono">{d.version}</span></span>
-					<span class={there ? "text-success text-xs" : "text-primary text-xs"}>{there ? t("detail.depInProfile") : t("detail.depWillInstall")}</span>
-				</div>
-			{:else}
-				<p class="text-muted-foreground text-[13px]">{t("detail.noDeps")}</p>
-			{/each}
-		</PanelSection>
-
-		<PanelSection title={t("detail.versions")} count={pkg.versions.length}>
-			{#each pkg.versions.slice(0, 12) as v, i (v.v)}
-				<div class="group flex h-7 items-center gap-2.5 text-[12.5px]">
-					<span class="text-foreground-soft w-[70px] font-mono text-xs">{v.v}</span>
-					<span class="text-muted-foreground flex-1" title={formatDate(v.date)}>{relativeTime(v.date)}</span>
-					{#if mod?.version === v.v}<span class="text-success text-meta">{t("detail.installed")}</span>
-					{:else if i === 0}<span class="text-primary text-meta">{t("detail.latest")}</span>{/if}
-					{#if mod?.version !== v.v}
-						<Button size="sm" variant="ghost" class="invisible h-6 group-hover:visible" onclick={() => store.toggleMod(id!, v.v)}>{t("detail.pick")}</Button>
-					{/if}
-				</div>
-			{/each}
-		</PanelSection>
-
-		{#if pkg.web}
-			<div class="px-5 py-4"><Button variant="ghost" onclick={() => store.openExternal(pkg!.web)}>{t("detail.website")}</Button></div>
-		{/if}
+		<!-- Wide reading view for image-heavy modpack pages. -->
+		<Dialog.Root bind:open={expanded}>
+			<Dialog.Content class="flex h-[86vh] flex-col gap-0 p-0 sm:max-w-4xl">
+				<Dialog.Header class="flex-row items-center gap-3 space-y-0 border-b px-5 py-3 pr-12">
+					<ModAvatar name={pkg.name} icon={pkg.icon} size="sm" />
+					<Dialog.Title class="min-w-0 flex-1 truncate text-base">{pkg.name}</Dialog.Title>
+					<Dialog.Description class="sr-only">{pkg.desc}</Dialog.Description>
+					<Segmented options={docTabs} bind:value={() => expandedTab, (v) => (expandedTab = v as DocTab)} size="sm" />
+				</Dialog.Header>
+				<ModDocs {pkg} tab={expandedTab} {wiki} wide />
+			</Dialog.Content>
+		</Dialog.Root>
 	{/if}
 </aside>

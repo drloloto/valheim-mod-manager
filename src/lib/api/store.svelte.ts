@@ -38,7 +38,7 @@ import { modStatus, type ModStatus } from "./status";
 import { computeReadiness } from "#lib/readiness.js";
 import { parseDeepLink } from "#lib/deeplink.js";
 import { getCurrent as getCurrentDeepLink, onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import type { ApplyWhen, ServerCheck, ServerDiscovery, StageResponse } from "./types";
+import type { ApplyWhen, ServerCheck, ServerDiscovery, StageResponse, WikiIndex } from "./types";
 import { formatDateTime } from "#lib/format.js";
 import type { AppState, ExportResult, FolderKind, ImportResult, Pkg, ProfileMod, Settings, SlimPkg, SyncDone, SyncProgress } from "./types";
 
@@ -388,8 +388,8 @@ class ModManagerStore {
 	}
 
 	/** New profile straight from a companion: its mods, versions and configs, linked for later checks. */
-	async addServer(d: ServerDiscovery): Promise<boolean> {
-		return this.importFromUrl(`${d.url}/api/profile.r2z`, d.name || d.world || "Server", d.url);
+	async addServer(d: ServerDiscovery, installAll = true): Promise<boolean> {
+		return this.importFromUrl(`${d.url}/api/profile.r2z`, d.name || d.world || "Server", d.url, installAll);
 	}
 
 	/** App start: every linked profile vs its server; results feed the profile menu markers and one toast. */
@@ -471,9 +471,9 @@ class ModManagerStore {
 		}
 	}
 
-	async importFromUrl(url: string, name: string, link: string | null): Promise<boolean> {
+	async importFromUrl(url: string, name: string, link: string | null, installAll = true): Promise<boolean> {
 		try {
-			this.onImported(await api.importProfileUrl(url, name, true, link ? { url: link, name, token: null } : null));
+			this.onImported(await api.importProfileUrl(url, name, true, installAll, link ? { url: link, name, token: null } : null));
 			this.refreshServerStatus();
 			return true;
 		} catch (e) {
@@ -680,9 +680,9 @@ class ModManagerStore {
 		this.toast(t("toast.imported", { name: imported.name, mods: imported.mods, configs: imported.configs, skipped }), "ok");
 	}
 
-	async importCode(code: string, name: string, withConfigs: boolean): Promise<boolean> {
+	async importCode(code: string, name: string, withConfigs: boolean, installAll: boolean): Promise<boolean> {
 		try {
-			this.onImported(await api.importProfileCode(code, name, withConfigs));
+			this.onImported(await api.importProfileCode(code, name, withConfigs, installAll));
 			return true;
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.importFailed")), "err");
@@ -695,9 +695,9 @@ class ModManagerStore {
 	}
 
 	/** Import a profile folder of r2modman or the Thunderstore Mod Manager. */
-	async importForeign(path: string, name: string, withConfigs: boolean): Promise<boolean> {
+	async importForeign(path: string, name: string, withConfigs: boolean, installAll: boolean): Promise<boolean> {
 		try {
-			this.onImported(await api.importForeignProfile(path, name, withConfigs));
+			this.onImported(await api.importForeignProfile(path, name, withConfigs, installAll));
 			return true;
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.importFailed")), "err");
@@ -733,9 +733,9 @@ class ModManagerStore {
 		}
 	}
 
-	async importFile(path: string, name: string, withConfigs: boolean): Promise<boolean> {
+	async importFile(path: string, name: string, withConfigs: boolean, installAll: boolean): Promise<boolean> {
 		try {
-			this.onImported(await api.importProfileFile(path, name, withConfigs));
+			this.onImported(await api.importProfileFile(path, name, withConfigs, installAll));
 			return true;
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.importFailed")), "err");
@@ -866,6 +866,27 @@ class ModManagerStore {
 			this.packageCache.set(id, p);
 		}
 		return p;
+	}
+
+	/** Readme / changelog / wiki text, fetched once per session (the core caches readme and changelog on disk). */
+	private docCache = new Map<string, Promise<unknown>>();
+	private cached<T>(key: string, fetch: () => Promise<T>): Promise<T> {
+		let p = this.docCache.get(key) as Promise<T> | undefined;
+		if (!p) {
+			p = fetch();
+			p.catch(() => this.docCache.delete(key));
+			this.docCache.set(key, p);
+		}
+		return p;
+	}
+	getDoc(id: string, version: string, kind: "readme" | "changelog"): Promise<string> {
+		return this.cached(`${kind}:${id}:${version}`, () => api.getPackageDoc(id, version, kind));
+	}
+	getWiki(id: string): Promise<WikiIndex | null> {
+		return this.cached(`wiki:${id}`, () => api.getPackageWiki(id));
+	}
+	getWikiPage(page: string): Promise<string> {
+		return this.cached(`wikipage:${page}`, () => api.getWikiPage(page));
 	}
 
 	/** From the detail panel: include a category or author (again: off). */

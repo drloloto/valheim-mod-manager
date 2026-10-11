@@ -10,6 +10,7 @@
 	let urlEdit = $state<string | null>(null);
 	let token = $state("");
 	let withConfigs = $state(true);
+	let installAll = $state(true);
 	let busy = $state(false);
 	let atValue = $state("");
 	let adoptConfigs = $state(true);
@@ -221,10 +222,17 @@
 					</p>
 					{#if discovery.features.modManager === false}<p class="text-destructive-text text-xs">{t("server.noModManager")}</p>{/if}
 				{/if}
+				<div class="grid gap-1">
+					<label class="flex items-center gap-2 text-sm">
+						<Checkbox bind:checked={installAll} />
+						{t("import.installAll")}
+					</label>
+					<p class="text-muted-foreground pl-6 text-xs">{t("import.installAllHint")}</p>
+				</div>
 			</div>
 			<Dialog.Footer>
 				<Button variant="outline" onclick={close}>{t("common.cancel")}</Button>
-				<Button disabled={busy || !discovery || discovery.features.modManager === false} onclick={() => run(() => store.addServer(discovery!))}
+				<Button disabled={busy || !discovery || discovery.features.modManager === false} onclick={() => run(() => store.addServer(discovery!, installAll))}
 					>{t("server.createProfile")}</Button
 				>
 			</Dialog.Footer>

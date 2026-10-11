@@ -334,6 +334,14 @@ export const en = {
 	"detail.latest": "latest",
 	"detail.pick": "Pick",
 	"detail.website": "Website ↗",
+	"detail.tabDetails": "Details",
+	"detail.tabReadme": "Readme",
+	"detail.tabChangelog": "Changelog",
+	"detail.tabWiki": "Wiki",
+	"detail.expand": "Open large",
+	"detail.noReadme": "This mod has no readme on Thunderstore.",
+	"detail.noChangelog": "This mod has no changelog on Thunderstore.",
+	"detail.docsFailed": "Could not load: {e}",
 
 	"installed.noProfile": "No active profile",
 	"installed.noProfileHint": "Create a profile in the profile menu above or import one.",
@@ -442,6 +450,8 @@ export const en = {
 	"import.nameLabel": "Name (optional)",
 	"import.namePlaceholder": "Keep original name",
 	"import.withConfigs": "Import configs from the profile",
+	"import.installAll": "Download, install and enable all mods and dependencies now",
+	"import.installAllHint": "Otherwise the profile is only created; install later from the Installed page.",
 	"import.submit": "Import",
 
 	"export.title": "Profile shared",

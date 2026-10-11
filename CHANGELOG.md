@@ -17,6 +17,12 @@ All notable changes to this project are documented here. The format follows
   server, then apply now, when nobody is online, or at a time).
 - Profile snapshots: before a profile is rewritten from a server, its mod list, installed.json and configs
   are copied to `<profile>/.snapshots/` (ten kept).
+- Readme, changelog and wiki of a mod in the detail panel (tabs next to "Details"), with a wide reading
+  view for image-heavy modpack pages. Links open in the system browser; readme and changelog are cached per
+  version. "Thunderstore ↗" stays for everything else.
+- Every import (code, `.r2z`, server, r2modman migration) asks whether all mods and dependencies should be
+  downloaded, installed and enabled right away (on by default). Off creates the profile as exported, nothing
+  is downloaded until "Install now" on the Installed page.
 
 ### Changed
 

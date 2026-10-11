@@ -18,6 +18,7 @@ import type {
 	ServerCheck,
 	ServerDiscovery,
 	StageResponse,
+	WikiIndex,
 	ServerLink,
 	Settings,
 } from "./types";
@@ -54,6 +55,9 @@ export const api = {
 	},
 	refreshIndex: () => call<number | null>("refresh_index"),
 	getPackage: (id: string) => call<Pkg>("get_package", { id }),
+	getPackageDoc: (id: string, version: string, kind: "readme" | "changelog") => call<string>("get_package_doc", { id, version, kind }),
+	getPackageWiki: (id: string) => call<WikiIndex | null>("get_package_wiki", { id }),
+	getWikiPage: (page: string) => call<string>("get_wiki_page", { page }),
 
 	createProfile: (name: string) => call<AppState>("create_profile", { name }),
 	deleteProfile: (name: string) => call<AppState>("delete_profile", { name }),
@@ -65,10 +69,12 @@ export const api = {
 	repairProfile: (profile: string) => call<AppState>("repair_profile", { profile }),
 	addLocalMods: (profile: string, paths: string[]) => call<AppState>("add_local_mods", { profile, paths }),
 
-	importProfileCode: (code: string, name: string, withConfigs: boolean) => call<ImportResult>("import_profile_code", { code, name, withConfigs }),
-	importProfileFile: (path: string, name: string, withConfigs: boolean) => call<ImportResult>("import_profile_file", { path, name, withConfigs }),
-	importProfileUrl: (url: string, name: string, withConfigs: boolean, link: ServerLink | null) =>
-		call<ImportResult>("import_profile_url", { url, name, withConfigs, link }),
+	importProfileCode: (code: string, name: string, withConfigs: boolean, installAll: boolean) =>
+		call<ImportResult>("import_profile_code", { code, name, withConfigs, installAll }),
+	importProfileFile: (path: string, name: string, withConfigs: boolean, installAll: boolean) =>
+		call<ImportResult>("import_profile_file", { path, name, withConfigs, installAll }),
+	importProfileUrl: (url: string, name: string, withConfigs: boolean, installAll: boolean, link: ServerLink | null) =>
+		call<ImportResult>("import_profile_url", { url, name, withConfigs, installAll, link }),
 	setServerLink: (profile: string, link: ServerLink | null) => call<AppState>("set_server_link", { profile, link }),
 	checkServer: (profile: string) => call<ServerCheck>("check_server", { profile }),
 	checkAllServers: () => call<ProfileServerCheck[]>("check_all_servers"),
@@ -78,7 +84,8 @@ export const api = {
 	applyRelease: (profile: string, id: string, when: ApplyWhen, at: number | null) => call<ApplyResponse>("apply_release", { profile, id, when, at }),
 	discardRelease: (profile: string, id: string) => call<void>("discard_release", { profile, id }),
 	listForeignProfiles: () => call<ForeignProfile[]>("list_foreign_profiles"),
-	importForeignProfile: (path: string, name: string, withConfigs: boolean) => call<ImportResult>("import_foreign_profile", { path, name, withConfigs }),
+	importForeignProfile: (path: string, name: string, withConfigs: boolean, installAll: boolean) =>
+		call<ImportResult>("import_foreign_profile", { path, name, withConfigs, installAll }),
 	exportProfileCode: (profile: string) => call<ExportResult>("export_profile_code", { profile }),
 	exportProfileFile: (profile: string, path: string) => call<ExportResult>("export_profile_file", { profile, path }),
 

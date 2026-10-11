@@ -21,6 +21,7 @@ export { default as DataTable } from "./data-table.svelte";
 export { default as SelectionBar } from "./selection-bar.svelte";
 export { default as Toolbar } from "./toolbar.svelte";
 export { default as BrandMark } from "./brand-mark.svelte";
+export { default as Markdown } from "./markdown.svelte";
 export { default as FilterSection } from "./filter-section.svelte";
 export { default as FilterList } from "./filter-list.svelte";
 export { default as Histogram } from "./histogram.svelte";

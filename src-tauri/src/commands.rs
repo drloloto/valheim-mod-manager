@@ -254,6 +254,33 @@ pub async fn get_package(ctx: State<'_, AppCtx>, id: String) -> Result<Pkg> {
     idx.by_id.get(&id).cloned().ok_or_else(|| AppError::NotFound(format!("Package {id} not found.")))
 }
 
+/// Readme or changelog markdown of one version; cached on disk forever (a version never changes).
+#[tauri::command]
+pub async fn get_package_doc(ctx: State<'_, AppCtx>, id: String, version: String, kind: thunderstore::DocKind) -> Result<String> {
+    if version.is_empty() || !version.chars().all(|c| c.is_ascii_alphanumeric() || c == '.') {
+        return Err(AppError::Invalid(format!("Invalid version \"{version}\".")));
+    }
+    let cache = ctx.paths.doc_cache(&id, &version, kind.as_str());
+    if let Ok(md) = std::fs::read_to_string(&cache) {
+        return Ok(md);
+    }
+    let pkg = get_package(ctx.clone(), id).await?;
+    let md = thunderstore::fetch_doc(&ctx.client, &pkg.ns, &pkg.name, &version, kind).await?;
+    let _ = crate::util::write_atomic(&cache, md.as_bytes());
+    Ok(md)
+}
+
+#[tauri::command]
+pub async fn get_package_wiki(ctx: State<'_, AppCtx>, id: String) -> Result<Option<thunderstore::Wiki>> {
+    let pkg = get_package(ctx.clone(), id).await?;
+    thunderstore::fetch_wiki(&ctx.client, &pkg.ns, &pkg.name).await
+}
+
+#[tauri::command]
+pub async fn get_wiki_page(ctx: State<'_, AppCtx>, page: String) -> Result<String> {
+    thunderstore::fetch_wiki_page(&ctx.client, &page).await
+}
+
 // ---- Profile ----
 
 #[tauri::command]
@@ -355,24 +382,45 @@ pub async fn add_local_mods(app: AppHandle, ctx: State<'_, AppCtx>, profile: Str
 
 // ---- Sharing ----
 
-fn import_bytes(app: &AppHandle, ctx: &AppCtx, bytes: &[u8], name: &str, with_configs: bool) -> Result<ImportResponse> {
-    let contents = share::read_r2z(bytes)?;
-    let imported = share::apply_import(&ctx.paths, name, contents, with_configs)?;
+/// `install_all`: enable every imported mod and start the sync right away. Otherwise the profile is
+/// created as exported and nothing is downloaded until the user asks (readiness banner).
+fn finish_import(app: &AppHandle, ctx: &AppCtx, contents: share::R2zContents, name: &str, with_configs: bool, install_all: bool) -> Result<ImportResponse> {
+    let imported = share::apply_import(&ctx.paths, name, contents, with_configs, install_all)?;
     profiles::set_active(&ctx.paths, &imported.name)?;
-    request_sync(app, &imported.name, false);
+    if install_all {
+        request_sync(app, &imported.name, false);
+    }
     Ok(ImportResponse { state: build_state(ctx)?, imported })
 }
 
-#[tauri::command]
-pub async fn import_profile_code(app: AppHandle, ctx: State<'_, AppCtx>, code: String, name: String, with_configs: bool) -> Result<ImportResponse> {
-    let bytes = share::fetch_code(&ctx.client, &code).await?;
-    import_bytes(&app, &ctx, &bytes, &name, with_configs)
+fn import_bytes(app: &AppHandle, ctx: &AppCtx, bytes: &[u8], name: &str, with_configs: bool, install_all: bool) -> Result<ImportResponse> {
+    finish_import(app, ctx, share::read_r2z(bytes)?, name, with_configs, install_all)
 }
 
 #[tauri::command]
-pub fn import_profile_file(app: AppHandle, ctx: State<'_, AppCtx>, path: String, name: String, with_configs: bool) -> Result<ImportResponse> {
+pub async fn import_profile_code(
+    app: AppHandle,
+    ctx: State<'_, AppCtx>,
+    code: String,
+    name: String,
+    with_configs: bool,
+    install_all: bool,
+) -> Result<ImportResponse> {
+    let bytes = share::fetch_code(&ctx.client, &code).await?;
+    import_bytes(&app, &ctx, &bytes, &name, with_configs, install_all)
+}
+
+#[tauri::command]
+pub fn import_profile_file(
+    app: AppHandle,
+    ctx: State<'_, AppCtx>,
+    path: String,
+    name: String,
+    with_configs: bool,
+    install_all: bool,
+) -> Result<ImportResponse> {
     let bytes = std::fs::read(&path)?;
-    import_bytes(&app, &ctx, &bytes, &name, with_configs)
+    import_bytes(&app, &ctx, &bytes, &name, with_configs, install_all)
 }
 
 /// Deep link / companion landing page: download the server's .r2z, import it, remember the server.
@@ -383,10 +431,11 @@ pub async fn import_profile_url(
     url: String,
     name: String,
     with_configs: bool,
+    install_all: bool,
     link: Option<ServerLink>,
 ) -> Result<ImportResponse> {
     let bytes = server::fetch_bytes(&ctx.client, &url).await?;
-    let mut r = import_bytes(&app, &ctx, &bytes, &name, with_configs)?;
+    let mut r = import_bytes(&app, &ctx, &bytes, &name, with_configs, install_all)?;
     if let Some(link) = link {
         let mut p = profiles::load(&ctx.paths, &r.imported.name)?;
         p.server = Some(ServerLink { url: server::normalize_url(&link.url)?, name: link.name, token: link.token.filter(|t| !t.trim().is_empty()) });
@@ -602,12 +651,15 @@ pub fn list_foreign_profiles(ctx: State<'_, AppCtx>) -> Result<Vec<ForeignProfil
 }
 
 #[tauri::command]
-pub fn import_foreign_profile(app: AppHandle, ctx: State<'_, AppCtx>, path: String, name: String, with_configs: bool) -> Result<ImportResponse> {
-    let contents = migrate::read_profile(Path::new(&path))?;
-    let imported = share::apply_import(&ctx.paths, &name, contents, with_configs)?;
-    profiles::set_active(&ctx.paths, &imported.name)?;
-    request_sync(&app, &imported.name, false);
-    Ok(ImportResponse { state: build_state(&ctx)?, imported })
+pub fn import_foreign_profile(
+    app: AppHandle,
+    ctx: State<'_, AppCtx>,
+    path: String,
+    name: String,
+    with_configs: bool,
+    install_all: bool,
+) -> Result<ImportResponse> {
+    finish_import(&app, &ctx, migrate::read_profile(Path::new(&path))?, &name, with_configs, install_all)
 }
 
 #[tauri::command]

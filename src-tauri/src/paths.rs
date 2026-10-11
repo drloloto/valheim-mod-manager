@@ -32,6 +32,10 @@ impl Paths {
     pub fn zip_cache(&self, id: &str, version: &str) -> PathBuf {
         self.downloads().join(format!("{id}-{version}.zip"))
     }
+    /// Readme / changelog markdown of one package version (immutable, so cached forever).
+    pub fn doc_cache(&self, id: &str, version: &str, kind: &str) -> PathBuf {
+        self.root.join("cache").join("docs").join(format!("{id}-{version}-{kind}.md"))
+    }
     pub fn profiles_dir(&self) -> PathBuf {
         self.root.join("profiles")
     }

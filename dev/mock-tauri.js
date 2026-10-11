@@ -185,6 +185,38 @@
 				],
 			};
 		},
+		get_package_doc: ({ id, kind }) => {
+			const p = byId.get(id);
+			if (!p) throw { message: `Package not found: ${id}`, kind: "notFound" };
+			if (kind === "changelog")
+				return id.endsWith("Pack_Valheim")
+					? ""
+					: `## ${p.ver}\n\n- Fixed a crash on world load\n- Added config option \`Speed\`\n\n## 0.9.0\n\n- Initial release`;
+			return [
+				`# ${p.name}`,
+				`![Banner](https://picsum.photos/seed/${encodeURIComponent(id)}/640/200)`,
+				p.desc,
+				"## Features",
+				"- Works out of the box\n- Configurable through BepInEx\n- Compatible with **Jötunn**",
+				"## Installation",
+				"Install through this mod manager or drop the DLL into `BepInEx/plugins`.",
+				"| Setting | Default |\n|---|---|\n| Speed | 1.0 |\n| Enabled | true |",
+				"See the [wiki](https://thunderstore.io/c/valheim/p/" + p.ns + "/" + p.name + "/wiki/) for details.",
+			].join("\n\n");
+		},
+		get_package_wiki: ({ id }) =>
+			id.endsWith("Jotunn") || byId.get(id)?.cats.includes("Modpacks")
+				? {
+						title: `${id} Wiki`,
+						pages: [
+							{ id: "417", title: "Summary" },
+							{ id: "418", title: "Getting started" },
+							{ id: "419", title: "FAQ" },
+						],
+					}
+				: null,
+		get_wiki_page: ({ page }) =>
+			`## Page ${page}\n\nWiki text with an image:\n\n![](https://picsum.photos/seed/wiki${page}/480/160)\n\n1. Step one\n2. Step two`,
 		get_settings: () => settings,
 		list_foreign_profiles: () => [
 			{ manager: "r2modman", name: "Friends", path: "C:\\r2modman\\Friends", mods: 42 },

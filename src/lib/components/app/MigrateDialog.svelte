@@ -9,6 +9,7 @@
 	let profiles = $state<ForeignProfile[]>([]);
 	let loading = $state(false);
 	let withConfigs = $state(true);
+	let installAll = $state(true);
 	let busy = $state<string | null>(null);
 
 	$effect(() => {
@@ -28,7 +29,7 @@
 		if (busy) return;
 		busy = path;
 		try {
-			if (await store.importForeign(path, name, withConfigs)) open = false;
+			if (await store.importForeign(path, name, withConfigs, installAll)) open = false;
 		} finally {
 			busy = null;
 		}
@@ -70,6 +71,13 @@
 			<Checkbox bind:checked={withConfigs} />
 			{t("migrate.withConfigs")}
 		</label>
+		<div class="grid gap-1">
+			<label class="flex items-center gap-2 text-sm">
+				<Checkbox bind:checked={installAll} />
+				{t("import.installAll")}
+			</label>
+			<p class="text-muted-foreground pl-6 text-xs">{t("import.installAllHint")}</p>
+		</div>
 		<Dialog.Footer>
 			<Button variant="ghost" disabled={busy !== null} onclick={pickFolder}>{t("migrate.pickFolder")}</Button>
 			<Button variant="outline" onclick={() => (open = false)}>{t("common.cancel")}</Button>

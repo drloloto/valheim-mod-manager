@@ -17,6 +17,92 @@ pub fn download_url(ns: &str, name: &str, version: &str) -> String {
     format!("https://thunderstore.io/package/download/{ns}/{name}/{version}/")
 }
 
+const EXPERIMENTAL_API: &str = "https://thunderstore.io/api/experimental";
+
+/// Readme or changelog of one package version, as Thunderstore serves it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DocKind {
+    Readme,
+    Changelog,
+}
+
+impl DocKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DocKind::Readme => "readme",
+            DocKind::Changelog => "changelog",
+        }
+    }
+}
+
+pub fn doc_url(ns: &str, name: &str, version: &str, kind: DocKind) -> String {
+    format!("{EXPERIMENTAL_API}/package/{ns}/{name}/{version}/{}/", kind.as_str())
+}
+
+pub fn wiki_url(ns: &str, name: &str) -> String {
+    format!("{EXPERIMENTAL_API}/package/{ns}/{name}/wiki/")
+}
+
+pub fn wiki_page_url(page_id: &str) -> String {
+    format!("{EXPERIMENTAL_API}/wiki/page/{page_id}/")
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WikiPage {
+    pub id: String,
+    pub title: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Wiki {
+    pub title: String,
+    pub pages: Vec<WikiPage>,
+}
+
+/// Markdown of a readme or changelog; an empty string when the package has none.
+pub async fn fetch_doc(client: &reqwest::Client, ns: &str, name: &str, version: &str, kind: DocKind) -> Result<String> {
+    #[derive(Deserialize)]
+    struct Body {
+        markdown: Option<String>,
+    }
+    let res = client.get(doc_url(ns, name, version, kind)).send().await?;
+    if res.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(String::new());
+    }
+    if !res.status().is_success() {
+        return Err(AppError::Network(format!("Thunderstore responded with {}", res.status())));
+    }
+    Ok(res.json::<Body>().await?.markdown.unwrap_or_default())
+}
+
+/// The package's wiki index, `None` when it has no wiki.
+pub async fn fetch_wiki(client: &reqwest::Client, ns: &str, name: &str) -> Result<Option<Wiki>> {
+    let res = client.get(wiki_url(ns, name)).send().await?;
+    if res.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    if !res.status().is_success() {
+        return Err(AppError::Network(format!("Thunderstore responded with {}", res.status())));
+    }
+    Ok(Some(res.json::<Wiki>().await?))
+}
+
+pub async fn fetch_wiki_page(client: &reqwest::Client, page_id: &str) -> Result<String> {
+    #[derive(Deserialize)]
+    struct Body {
+        markdown_content: Option<String>,
+    }
+    if page_id.is_empty() || !page_id.chars().all(|c| c.is_ascii_digit()) {
+        return Err(AppError::Invalid(format!("Invalid wiki page id \"{page_id}\".")));
+    }
+    let res = client.get(wiki_page_url(page_id)).send().await?;
+    if !res.status().is_success() {
+        return Err(AppError::Network(format!("Thunderstore responded with {}", res.status())));
+    }
+    Ok(res.json::<Body>().await?.markdown_content.unwrap_or_default())
+}
+
 #[derive(Deserialize)]
 struct RawPkg {
     owner: String,
@@ -289,6 +375,21 @@ pub async fn refresh(store: &IndexStore, client: &reqwest::Client, cache: &Path,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn doc_urls_follow_the_experimental_api() {
+        assert_eq!(
+            doc_url("ValheimModding", "Jotunn", "2.26.0", DocKind::Readme),
+            "https://thunderstore.io/api/experimental/package/ValheimModding/Jotunn/2.26.0/readme/"
+        );
+        assert_eq!(
+            doc_url("ValheimModding", "Jotunn", "2.26.0", DocKind::Changelog),
+            "https://thunderstore.io/api/experimental/package/ValheimModding/Jotunn/2.26.0/changelog/"
+        );
+        assert_eq!(wiki_url("ValheimModding", "Jotunn"), "https://thunderstore.io/api/experimental/package/ValheimModding/Jotunn/wiki/");
+        assert_eq!(wiki_page_url("417"), "https://thunderstore.io/api/experimental/wiki/page/417/");
+        assert_eq!(serde_json::to_string(&DocKind::Readme).unwrap(), "\"readme\"");
+    }
 
     const RAW: &str = r#"[{
         "owner": "denikson", "name": "BepInExPack_Valheim", "package_url": "https://thunderstore.io/p",

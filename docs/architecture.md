@@ -73,6 +73,12 @@ Valheim pack, adds the pack when any mod is present, and diffs against what is i
 compared, copied only when different) and starts `steam.exe -applaunch 892970 <doorstop args>`. Vanilla
 launches pass `--doorstop-enabled false`.
 
+**Mod docs.** The detail panel's Readme / Changelog / Wiki tabs come from Thunderstore's experimental API
+(`get_package_doc`, `get_package_wiki`, `get_wiki_page`). Readme and changelog are immutable per version
+and cached under `cache/docs/`; the wiki is fetched per request. The UI renders with `marked`, sanitizes
+with DOMPurify (`lib/markdown.ts`) and routes every link through `openExternal`. Spec:
+`docs/superpowers/specs/2026-10-11-mod-docs-and-import-install.md`.
+
 **Linked server.** A profile can carry a `server` block (companion URL, name, token). `check_server`
 fetches `/api/manifest` (2 s timeout) and diffs the local resolved plan against it; the UI shows the result
 in the status bar and, before a modded launch, as a dialog with "adopt server versions and start" (the

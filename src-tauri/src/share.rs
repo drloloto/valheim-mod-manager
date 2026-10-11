@@ -156,12 +156,18 @@ pub struct ImportSummary {
     pub skipped: Vec<String>,
 }
 
-pub fn apply_import(paths: &Paths, requested_name: &str, c: R2zContents, with_configs: bool) -> Result<ImportSummary> {
+/// Creates a new profile from an export. `enable_all` turns on mods the export had disabled; the caller
+/// decides whether a sync follows (the "install everything now" question on import).
+pub fn apply_import(paths: &Paths, requested_name: &str, c: R2zContents, with_configs: bool, enable_all: bool) -> Result<ImportSummary> {
     let base = if requested_name.trim().is_empty() { &c.profile_name } else { requested_name };
     let name = profiles::unique_name(paths, &sanitize_profile_name(base));
     let name = profiles::create(paths, &name)?;
     let mods = c.mods.len();
-    profiles::save(paths, &Profile { name: name.clone(), mods: c.mods, server: None })?;
+    let mut list = c.mods;
+    if enable_all {
+        list.iter_mut().for_each(|m| m.enabled = true);
+    }
+    profiles::save(paths, &Profile { name: name.clone(), mods: list, server: None })?;
     let mut configs = 0;
     if with_configs {
         let dir = paths.config_dir(&name);
@@ -271,10 +277,27 @@ mod tests {
             configs: vec![("sub/x.cfg".into(), b"k = v".to_vec())],
             skipped: vec![],
         };
-        let s = apply_import(&paths, "", contents(), true).unwrap();
+        let s = apply_import(&paths, "", contents(), true, false).unwrap();
         assert_eq!((s.name.as_str(), s.mods, s.configs), ("A_B_", 1, 1));
         assert_eq!(std::fs::read_to_string(paths.config_dir("A_B_").join("sub/x.cfg")).unwrap(), "k = v");
-        let s2 = apply_import(&paths, "", contents(), false).unwrap();
+        let s2 = apply_import(&paths, "", contents(), false, false).unwrap();
         assert_eq!((s2.name.as_str(), s2.configs), ("A_B_ (2)", 0));
+    }
+
+    #[test]
+    fn import_can_enable_everything_or_keep_the_export_flags() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::new(d.path().to_path_buf());
+        paths.ensure().unwrap();
+        let contents = || {
+            let mut off = ProfileMod::thunderstore("a", "Off", "1.0.0");
+            off.enabled = false;
+            R2zContents { profile_name: "p".into(), mods: vec![ProfileMod::thunderstore("a", "On", "1.0.0"), off], configs: vec![], skipped: vec![] }
+        };
+        let kept = apply_import(&paths, "kept", contents(), false, false).unwrap();
+        let flags = |n: &str| profiles::load(&paths, n).unwrap().mods.iter().map(|m| m.enabled).collect::<Vec<_>>();
+        assert_eq!(flags(&kept.name), vec![true, false]);
+        let all = apply_import(&paths, "all", contents(), false, true).unwrap();
+        assert_eq!(flags(&all.name), vec![true, true]);
     }
 }
