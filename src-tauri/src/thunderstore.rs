@@ -4,14 +4,20 @@ use crate::error::{AppError, Result};
 use crate::models::{Pkg, Version};
 use crate::resolver::canonical_id;
 use crate::util::{now_ms, parse_full_name, write_atomic};
+use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
+/// The old full index. Marked deprecated in Thunderstore's Swagger since release 0.182.0; kept as the
+/// fallback while it still answers.
 pub const API_URL: &str = "https://thunderstore.io/c/valheim/api/v1/package/";
+/// The successor: a 302 to a gzip blob listing gzip JSON chunks on the CDN, same package shape as v1.
+pub const LISTING_INDEX_URL: &str = "https://thunderstore.io/c/valheim/api/v1/package-listing-index/";
 const RETRY_BACKOFF: Duration = Duration::from_secs(5 * 60);
+const CHUNK_PARALLEL: usize = 4;
 
 pub fn download_url(ns: &str, name: &str, version: &str) -> String {
     format!("https://thunderstore.io/package/download/{ns}/{name}/{version}/")
@@ -227,6 +233,8 @@ struct SlimPayload<'a> {
 
 pub struct Index {
     pub fetched_at: i64,
+    /// Listing-index blob URL this index was built from (None for v1 or old caches).
+    pub source: Option<String>,
     pub by_id: HashMap<String, Pkg>,
     pub slim_json: Vec<u8>,
 }
@@ -263,13 +271,14 @@ pub fn build(fetched_at: i64, pkgs: Vec<Pkg>) -> Index {
     };
     let slim_json = serde_json::to_vec(&slim).expect("slim index is serializable");
     let by_id = pkgs.into_iter().map(|p| (p.id.clone(), p)).collect();
-    Index { fetched_at, by_id, slim_json }
+    Index { fetched_at, source: None, by_id, slim_json }
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CacheRef<'a> {
     fetched_at: i64,
+    source: &'a Option<String>,
     pkgs: &'a [Pkg],
 }
 
@@ -277,17 +286,21 @@ struct CacheRef<'a> {
 #[serde(rename_all = "camelCase")]
 struct CacheOwned {
     fetched_at: i64,
+    #[serde(default)]
+    source: Option<String>,
     pkgs: Vec<Pkg>,
 }
 
 pub fn load_cache(path: &Path) -> Option<Index> {
     let bytes = std::fs::read(path).ok()?;
     let c: CacheOwned = serde_json::from_slice(&bytes).ok()?;
-    Some(build(c.fetched_at, c.pkgs))
+    let mut idx = build(c.fetched_at, c.pkgs);
+    idx.source = c.source;
+    Some(idx)
 }
 
-pub fn save_cache(path: &Path, fetched_at: i64, pkgs: &[Pkg]) -> Result<()> {
-    write_atomic(path, &serde_json::to_vec(&CacheRef { fetched_at, pkgs })?)
+pub fn save_cache(path: &Path, fetched_at: i64, source: &Option<String>, pkgs: &[Pkg]) -> Result<()> {
+    write_atomic(path, &serde_json::to_vec(&CacheRef { fetched_at, source, pkgs })?)
 }
 
 /// The app's HTTP client. The timeouts keep a stalled connection from blocking the
@@ -301,19 +314,125 @@ pub fn http_client(connect_timeout: Duration, read_timeout: Duration) -> Result<
         .build()?)
 }
 
-pub async fn fetch(client: &reqwest::Client) -> Result<Vec<Pkg>> {
-    let res = client.get(API_URL).send().await?;
-    if !res.status().is_success() {
-        return Err(AppError::Network(format!("Thunderstore API responded with {}", res.status())));
+/// A freshly downloaded index and where it came from: the listing-index blob URL carries the content
+/// hash, so the next refresh can skip the download when the redirect still points at the same blob.
+pub struct Fetched {
+    pub pkgs: Vec<Pkg>,
+    pub source: Option<String>,
+}
+
+pub enum FetchOutcome {
+    Changed(Fetched),
+    Unchanged,
+}
+
+/// Listing index first, v1 as the fallback (logged, so a broken successor does not go unnoticed).
+pub async fn fetch(client: &reqwest::Client, known_source: Option<&str>) -> Result<FetchOutcome> {
+    match fetch_listing_index(client, known_source).await {
+        Ok(outcome) => Ok(outcome),
+        Err(e) => {
+            eprintln!("package-listing-index failed ({e}); falling back to {API_URL}");
+            Ok(FetchOutcome::Changed(Fetched { pkgs: fetch_v1(client).await?, source: None }))
+        }
     }
-    let bytes = res.bytes().await?;
+}
+
+async fn fetch_v1(client: &reqwest::Client) -> Result<Vec<Pkg>> {
+    let bytes = get_bytes_retry(client, API_URL).await?;
     tokio::task::spawn_blocking(move || parse_raw(&bytes)).await.map_err(|e| AppError::Invalid(e.to_string()))?
+}
+
+/// Thunderstore's CDN has documented outages; one retry after a short pause covers the usual blip.
+async fn get_bytes_retry(client: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
+    let mut last = AppError::Network(format!("{url}: no attempt"));
+    for attempt in 0..2 {
+        if attempt > 0 {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+        match client.get(url).send().await {
+            Ok(res) if res.status().is_success() => match res.bytes().await {
+                Ok(b) => return Ok(b.to_vec()),
+                Err(e) => last = AppError::Network(format!("{url}: {e}")),
+            },
+            Ok(res) => last = AppError::Network(format!("{url}: HTTP {}", res.status())),
+            Err(e) => last = AppError::Network(format!("{url}: {e}")),
+        }
+    }
+    Err(last)
+}
+
+/// CDN blobs are gzip without a Content-Encoding header, so reqwest leaves them compressed.
+pub fn maybe_gunzip(bytes: &[u8]) -> Result<Vec<u8>> {
+    use std::io::Read;
+    if !bytes.starts_with(&[0x1f, 0x8b]) {
+        return Ok(bytes.to_vec());
+    }
+    let mut out = Vec::with_capacity(bytes.len() * 8);
+    flate2::read::GzDecoder::new(bytes).read_to_end(&mut out)?;
+    Ok(out)
+}
+
+async fn fetch_listing_index(client: &reqwest::Client, known_source: Option<&str>) -> Result<FetchOutcome> {
+    // Resolve the redirect by hand: the target URL is the change detector.
+    let probe = reqwest::Client::builder()
+        .user_agent(concat!("valheim-modmanager/", env!("CARGO_PKG_VERSION")))
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(60))
+        .build()?;
+    let res = probe.get(LISTING_INDEX_URL).send().await?;
+    let (blob_url, index_bytes) = if res.status().is_redirection() {
+        let loc = res
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string)
+            .ok_or_else(|| AppError::Network("listing index redirect without Location".into()))?;
+        if known_source == Some(loc.as_str()) {
+            return Ok(FetchOutcome::Unchanged);
+        }
+        let bytes = get_bytes_retry(client, &loc).await?;
+        (Some(loc), bytes)
+    } else if res.status().is_success() {
+        (None, res.bytes().await?.to_vec())
+    } else {
+        return Err(AppError::Network(format!("listing index responded with {}", res.status())));
+    };
+    let urls: Vec<String> = serde_json::from_slice(&maybe_gunzip(&index_bytes)?)?;
+    if urls.is_empty() {
+        return Err(AppError::Network("listing index has no chunks".into()));
+    }
+    // Owned captures only: a borrowed async closure here is not `Send` enough for the index worker.
+    let chunks: Vec<Vec<Pkg>> = futures::stream::iter(urls.into_iter().map(|u| {
+        let client = client.clone();
+        async move {
+            let bytes = get_bytes_retry(&client, &u).await?;
+            tokio::task::spawn_blocking(move || parse_raw(&maybe_gunzip(&bytes)?)).await.map_err(|e| AppError::Invalid(e.to_string()))?
+        }
+    }))
+    .buffered(CHUNK_PARALLEL)
+    .try_collect()
+    .await?;
+    let pkgs = merge_chunks(chunks);
+    if pkgs.is_empty() {
+        return Err(AppError::Network("listing index chunks were empty".into()));
+    }
+    Ok(FetchOutcome::Changed(Fetched { pkgs, source: blob_url }))
+}
+
+/// Concatenates chunks in index order; a package listed twice (chunk boundary during an upload) keeps
+/// its first occurrence.
+pub fn merge_chunks(chunks: Vec<Vec<Pkg>>) -> Vec<Pkg> {
+    let mut seen = std::collections::HashSet::new();
+    chunks.into_iter().flatten().filter(|p| seen.insert(p.id.clone())).collect()
 }
 
 pub struct IndexStore {
     current: RwLock<Option<Arc<Index>>>,
     refresh_lock: tokio::sync::Mutex<()>,
     last_failure: Mutex<Option<Instant>>,
+    /// Last time the listing index was probed and found unchanged; the worker treats that like a refresh.
+    last_check: Mutex<Option<Instant>>,
 }
 
 impl Default for IndexStore {
@@ -324,7 +443,14 @@ impl Default for IndexStore {
 
 impl IndexStore {
     pub fn new() -> Self {
-        IndexStore { current: RwLock::new(None), refresh_lock: tokio::sync::Mutex::new(()), last_failure: Mutex::new(None) }
+        IndexStore { current: RwLock::new(None), refresh_lock: tokio::sync::Mutex::new(()), last_failure: Mutex::new(None), last_check: Mutex::new(None) }
+    }
+
+    /// Milliseconds since the index was fetched or last confirmed unchanged.
+    pub fn staleness_ms(&self) -> Option<i64> {
+        let age = self.age_ms()?;
+        let checked = self.last_check.lock().unwrap().map(|t| t.elapsed().as_millis() as i64);
+        Some(checked.map_or(age, |c| c.min(age)))
     }
 
     pub fn get(&self) -> Option<Arc<Index>> {
@@ -351,17 +477,26 @@ pub async fn refresh(store: &IndexStore, client: &reqwest::Client, cache: &Path,
             }
         }
     }
-    match fetch(client).await {
-        Ok(pkgs) => {
+    let known = store.get().and_then(|i| i.source.clone());
+    match fetch(client, if force { None } else { known.as_deref() }).await {
+        Ok(FetchOutcome::Unchanged) => {
+            *store.last_check.lock().unwrap() = Some(Instant::now());
+            *store.last_failure.lock().unwrap() = None;
+            Ok(false)
+        }
+        Ok(FetchOutcome::Changed(Fetched { pkgs, source })) => {
             let at = now_ms();
             let cache = cache.to_path_buf();
             let idx = tokio::task::spawn_blocking(move || {
-                let _ = save_cache(&cache, at, &pkgs);
-                build(at, pkgs)
+                let _ = save_cache(&cache, at, &source, &pkgs);
+                let mut idx = build(at, pkgs);
+                idx.source = source;
+                idx
             })
             .await
             .map_err(|e| AppError::Invalid(e.to_string()))?;
             store.set(idx);
+            *store.last_check.lock().unwrap() = Some(Instant::now());
             *store.last_failure.lock().unwrap() = None;
             Ok(true)
         }
@@ -375,6 +510,49 @@ pub async fn refresh(store: &IndexStore, client: &reqwest::Client, cache: &Path,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gunzip_is_transparent_and_chunks_merge_in_order() {
+        use std::io::Write;
+        let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        enc.write_all(RAW.as_bytes()).unwrap();
+        let gz = enc.finish().unwrap();
+        assert_eq!(maybe_gunzip(&gz).unwrap(), RAW.as_bytes());
+        assert_eq!(maybe_gunzip(b"[]").unwrap(), b"[]");
+        let a = parse_raw(RAW.as_bytes()).unwrap();
+        let b = parse_raw(RAW.as_bytes()).unwrap();
+        let merged = merge_chunks(vec![a.clone(), b]);
+        assert_eq!(merged.len(), a.len(), "duplicates across chunks collapse");
+        assert_eq!(merged[0].id, a[0].id);
+    }
+
+    #[test]
+    fn cache_round_trips_the_source() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("index.json");
+        let pkgs = parse_raw(RAW.as_bytes()).unwrap();
+        save_cache(&path, 5, &Some("https://cdn/blob".into()), &pkgs).unwrap();
+        let idx = load_cache(&path).unwrap();
+        assert_eq!((idx.fetched_at, idx.source.as_deref()), (5, Some("https://cdn/blob")));
+        // Old caches without a source still load.
+        std::fs::write(&path, br#"{"fetchedAt":1,"pkgs":[]}"#).unwrap();
+        assert_eq!(load_cache(&path).unwrap().source, None);
+    }
+
+    /// Network: `cargo test listing_index -- --ignored`. Downloads the real Valheim index both ways.
+    #[tokio::test]
+    #[ignore]
+    async fn listing_index_matches_v1_in_size_and_detects_unchanged() {
+        let client = http_client(Duration::from_secs(15), Duration::from_secs(60)).unwrap();
+        let FetchOutcome::Changed(first) = fetch_listing_index(&client, None).await.unwrap() else { panic!("expected a download") };
+        assert!(first.pkgs.len() > 10_000, "got {} packages", first.pkgs.len());
+        assert!(first.source.as_deref().is_some_and(|s| s.contains("blob")));
+        assert!(matches!(fetch_listing_index(&client, first.source.as_deref()).await.unwrap(), FetchOutcome::Unchanged));
+        let v1 = fetch_v1(&client).await.unwrap();
+        let diff = (v1.len() as i64 - first.pkgs.len() as i64).abs();
+        assert!(diff < 50, "v1 {} vs listing {}", v1.len(), first.pkgs.len());
+        assert!(first.pkgs.iter().any(|p| p.id == "ValheimModding-Jotunn"));
+    }
 
     #[test]
     fn doc_urls_follow_the_experimental_api() {
@@ -434,7 +612,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = dir.path().join("cache").join("index.json");
         assert!(load_cache(&cache).is_none());
-        save_cache(&cache, 1000, &pkgs).unwrap();
+        save_cache(&cache, 1000, &None, &pkgs).unwrap();
         let loaded = load_cache(&cache).unwrap();
         assert_eq!(loaded.fetched_at, 1000);
         assert_eq!(loaded.by_id["denikson-BepInExPack_Valheim"], pkgs[0]);

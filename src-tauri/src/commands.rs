@@ -205,7 +205,7 @@ pub async fn index_worker(app: AppHandle) {
     }
     loop {
         let ttl = ctx.settings.read().unwrap().index_ttl_minutes as i64 * 60_000;
-        if ctx.index.age_ms().is_none_or(|age| age > ttl) {
+        if ctx.index.staleness_ms().is_none_or(|age| age > ttl) {
             match thunderstore::refresh(&ctx.index, &ctx.client, &ctx.paths.index_cache(), false).await {
                 Ok(true) => emit_index_updated(&app, &ctx),
                 Ok(false) => {}
