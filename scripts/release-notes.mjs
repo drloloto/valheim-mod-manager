@@ -1,11 +1,12 @@
-// Writes the CHANGELOG.md section of the current package.json version to dist/release-notes.md, which the
+// Writes the CHANGELOG.md section of the package.json version (or the version given as argument) to
+// dist/release-notes.md, which the
 // release workflow uses as the GitHub release body. Fails when the version has no section yet.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+const version = process.argv[2] ?? JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
 const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
 
 const start = changelog.indexOf(`## [${version}]`);
