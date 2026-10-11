@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-11
+
 ### Added
 
 - Installation readiness: a persistent banner, a red status-bar marker and a "start anyway?" question on
@@ -45,7 +47,6 @@ All notable changes to this project are documented here. The format follows
 - Mod downloads retry once before a mod is dropped from the sync.
 - Readme and changelog caches expire after a week (authors can edit them on Thunderstore).
 - A real Content Security Policy for the app window (scripts only from the app, no frames or objects).
-
 - Dependencies resolve to the newest version in the index; a manifest's dependency version is a minimum.
   Explicit profile entries stay pinned.
 - Health hints (deprecated, older than the game update) now cover resolved dependencies, not only explicit

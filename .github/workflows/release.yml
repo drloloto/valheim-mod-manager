@@ -1,8 +1,9 @@
 name: Release
 
 # Tag a commit on main as vX.Y.Z (matching package.json, Cargo.toml and tauri.conf.json) to build the
-# Windows installers, the updater manifest (latest.json) and a portable zip, attached to a draft release.
-# Publish the draft by hand after a smoke test.
+# Windows installers, the updater manifest (latest.json) and a portable zip. The release is assembled as a
+# draft and published in the last step, once every asset is attached, with the CHANGELOG.md section of
+# that version as its body.
 #
 # Secrets: TAURI_SIGNING_PRIVATE_KEY (content of the updater private key) and
 # TAURI_SIGNING_PRIVATE_KEY_PASSWORD (empty string if the key has none).
@@ -45,14 +46,20 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Valheim Mod Manager ${{ github.ref_name }}"
-          releaseBody: "See CHANGELOG.md for details. Installers are unsigned; Windows SmartScreen will warn on first start. The portable zip needs no installation."
+          releaseBody: "Assembling…"
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
-      - name: Build the portable zip
-        run: node scripts/portable.mjs
-      - uses: softprops/action-gh-release@v3
+      - name: Build the portable zip and the release notes
+        run: |
+          node scripts/portable.mjs
+          node scripts/release-notes.mjs
+      - name: Attach the portable zip and publish the release
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          draft: true
+          name: "Valheim Mod Manager ${{ github.ref_name }}"
+          body_path: dist/release-notes.md
+          draft: false
+          prerelease: false
           files: dist/valheim-mod-manager-*-portable-win64.zip
