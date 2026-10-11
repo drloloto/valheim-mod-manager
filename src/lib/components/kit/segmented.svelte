@@ -12,12 +12,13 @@
 	}: { options: SegmentOption[]; value: string; columns?: number; size?: "default" | "sm"; class?: string } = $props();
 </script>
 
-<!-- Never wider than its parent: with `columns` the items share the width, otherwise the group shrinks and labels truncate. -->
+<!-- Never wider than its parent: with `columns` the items share the width by content (long labels keep
+     their room, extra space is spread evenly), otherwise the group shrinks; labels truncate as a last resort. -->
 <ToggleGroup.Root
 	type="single"
 	bind:value={() => value, (v) => v && (value = v)}
 	class={cn("bg-field gap-0.5 rounded-[5px] p-0.5", columns ? "grid w-full" : "inline-flex max-w-full min-w-0", className)}
-	style={columns ? `grid-template-columns: repeat(${columns}, minmax(0, 1fr))` : undefined}
+	style={columns ? `grid-template-columns: repeat(${columns}, minmax(0, auto))` : undefined}
 >
 	{#each options as o (o.value)}
 		<ToggleGroup.Item
