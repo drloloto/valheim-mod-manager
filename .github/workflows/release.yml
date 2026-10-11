@@ -18,8 +18,8 @@ jobs:
     name: Windows installers, updater manifest, portable zip
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -37,7 +37,7 @@ jobs:
           cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
           echo "tag=$tag package.json=$pkg tauri.conf.json=$conf Cargo.toml=$cargo"
           [ "$tag" = "$pkg" ] && [ "$tag" = "$conf" ] && [ "$tag" = "$cargo" ]
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -48,10 +48,10 @@ jobs:
           releaseBody: "See CHANGELOG.md for details. Installers are unsigned; Windows SmartScreen will warn on first start. The portable zip needs no installation."
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
+          uploadUpdaterJson: true
       - name: Build the portable zip
         run: node scripts/portable.mjs
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
