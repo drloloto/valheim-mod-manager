@@ -51,7 +51,7 @@ jobs:
           includeUpdaterJson: true
       - name: Build the portable zip
         run: node scripts/portable.mjs
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
