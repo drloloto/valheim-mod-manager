@@ -1,6 +1,6 @@
 // Writes the CHANGELOG.md section of the package.json version (or the version given as argument) to
-// dist/release-notes.md, which the
-// release workflow uses as the GitHub release body. Fails when the version has no section yet.
+// dist/release-notes.md, which the release workflow uses as the GitHub release body. Fails when the
+// version has no section yet.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
