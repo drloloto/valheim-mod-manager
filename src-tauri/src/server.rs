@@ -419,7 +419,15 @@ mod tests {
     #[test]
     fn manifest_mods_and_adopt_round_trip() {
         let mut p = Profile { name: "p".into(), mods: vec![ProfileMod::thunderstore("a", "A", "1.0.0")], server: None };
-        p.mods.push(ProfileMod { namespace: "local".into(), name: "Mine".into(), version: "0.1.0".into(), enabled: true, source: Source::Local, deps: vec![] });
+        p.mods.push(ProfileMod {
+            namespace: "local".into(),
+            name: "Mine".into(),
+            version: "0.1.0".into(),
+            enabled: true,
+            source: Source::Local,
+            pinned: false,
+            deps: vec![],
+        });
         let mut resolved = BTreeMap::new();
         resolved.insert("a-A".to_string(), res("1.0.0", &[]));
         resolved.insert("b-B".to_string(), res("2.0.0", &["a-A"]));

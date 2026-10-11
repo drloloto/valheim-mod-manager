@@ -70,6 +70,8 @@ export interface ProfileMod {
 	version: string;
 	enabled: boolean;
 	source: ModSource;
+	/** Skipped by update detection and "Update all"; set when an older version is picked on purpose. */
+	pinned?: boolean;
 	deps?: string[];
 }
 

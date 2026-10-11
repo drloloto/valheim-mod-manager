@@ -8,6 +8,7 @@
 	import TitleBar from "#lib/components/shell/title-bar.svelte";
 	import TopBar from "#lib/components/shell/top-bar.svelte";
 	import StatusBar from "#lib/components/shell/status-bar.svelte";
+	import UpdateDialog from "#lib/components/app/UpdateDialog.svelte";
 	import { store } from "#lib/api/store.svelte.js";
 	import { installDesktopGuards } from "#lib/desktop/guards.js";
 	import { bindShortcuts } from "#lib/desktop/shortcuts.js";
@@ -65,4 +66,5 @@
 	<StatusBar />
 </div>
 
+<UpdateDialog />
 <Toaster theme="dark" position="bottom-right" offset={{ bottom: 40, right: 16 }} />

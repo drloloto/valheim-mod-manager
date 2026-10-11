@@ -149,6 +149,7 @@
 			version: byId.get(id).ver,
 			enabled: i % 9 !== 0,
 			source: "thunderstore",
+			pinned: i === 7,
 		})),
 		// Jotunn is resolved as a dependency but not installed: shows the readiness banner and the Play gate.
 		installed: Object.fromEntries([BEP, ...inProfile].map((id) => [id, byId.get(id).ver])),

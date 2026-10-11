@@ -4,6 +4,7 @@
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
 	import Columns3 from "@lucide/svelte/icons/columns-3";
 	import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
+	import Pin from "@lucide/svelte/icons/pin";
 	import {
 		Button,
 		ContextMenu,
@@ -246,7 +247,12 @@
 						{:else if key === "author"}
 							<span class="cell-soft block">{r.kind === "mod" ? r.m.namespace : r.id.split("-")[0]}</span>
 						{:else if key === "version"}
-							<span class="cell-mono">{r.kind === "mod" ? r.m.version : r.version}</span>
+							<span class="cell-mono inline-flex items-center gap-1"
+								>{r.kind === "mod" ? r.m.version : r.version}{#if r.kind === "mod" && r.m.pinned}<Pin
+										class="text-primary size-3"
+										aria-label={t("installed.pinnedTitle")}
+									/>{/if}</span
+							>
 						{:else if key === "dl"}
 							<span class="cell-mono" title={p ? formatNumber(p.dl) : undefined}>{p ? formatCompact(p.dl) : "—"}</span>
 						{:else if key === "upd"}
@@ -268,7 +274,7 @@
 									version={store.state.updates[r.id]}
 									onclick={(e) => {
 										stop(e);
-										store.updateMods([r.id]);
+										store.requestUpdate([r.id]);
 									}}
 								/>
 							{/if}
@@ -279,8 +285,11 @@
 						<ContextMenu.Label>{ids.length > 1 ? t("installed.entriesSelected", { n: ids.length }) : ids[0]}</ContextMenu.Label>
 						<ContextMenu.Item disabled={!mods.length} onSelect={() => store.setEnabledMany(mods, true)}>{t("common.enable")}</ContextMenu.Item>
 						<ContextMenu.Item disabled={!mods.length} onSelect={() => store.setEnabledMany(mods, false)}>{t("common.disable")}</ContextMenu.Item>
-						<ContextMenu.Item disabled={!mods.some((id) => id in store.state.updates)} onSelect={() => store.updateMods(mods)}
+						<ContextMenu.Item disabled={!mods.some((id) => id in store.state.updates)} onSelect={() => store.requestUpdate(mods)}
 							>{t("common.update")}</ContextMenu.Item
+						>
+						<ContextMenu.Item disabled={mods.length !== 1} onSelect={() => store.togglePin(mods[0])}
+							>{store.modsMap.get(mods[0])?.pinned ? t("installed.unpin") : t("installed.pin")}</ContextMenu.Item
 						>
 						<ContextMenu.Separator />
 						<ContextMenu.Item disabled={ids.length > 1 || !store.byId.has(ids[0])} onSelect={() => thunderstore(ids[0])}
@@ -301,7 +310,7 @@
 				<SelectionBar count={selectedMods.length} onclear={() => (selection = { ...selection, ids: new Set(), anchor: null })} hint={t("installed.hint")}>
 					<Button size="sm" variant="ghost" onclick={() => store.setEnabledMany(selectedMods, true)}>{t("common.enable")}</Button>
 					<Button size="sm" variant="ghost" onclick={() => store.setEnabledMany(selectedMods, false)}>{t("common.disable")}</Button>
-					<Button size="sm" variant="ghost" disabled={!selectedMods.some((id) => id in store.state.updates)} onclick={() => store.updateMods(selectedMods)}
+					<Button size="sm" variant="ghost" disabled={!selectedMods.some((id) => id in store.state.updates)} onclick={() => store.requestUpdate(selectedMods)}
 						>{t("common.update")}</Button
 					>
 					<Button size="sm" variant="destructive" onclick={() => store.removeMods(selectedMods)}>{t("common.remove")}</Button>

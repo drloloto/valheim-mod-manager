@@ -116,10 +116,10 @@ pub fn plan(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>, installed: &Insta
     Plan { resolved: r.resolved, to_install, to_remove, errors }
 }
 
-/// Explicit Thunderstore mods for which the index knows a newer version.
+/// Explicit, unpinned Thunderstore mods for which the index knows a newer version.
 pub fn updates(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>) -> BTreeMap<String, String> {
     mods.iter()
-        .filter(|m| m.source == Source::Thunderstore)
+        .filter(|m| m.source == Source::Thunderstore && !m.pinned)
         .filter_map(|m| {
             let latest = by_id.get(&m.id())?.versions.first()?;
             (cmp_version(&m.version, &latest.v) == Ordering::Less).then(|| (m.id(), latest.v.clone()))
@@ -158,6 +158,15 @@ mod tests {
     fn empty_profile_needs_nothing() {
         let p = plan(&[], &index(vec![]), &Installed::new());
         assert!(p.resolved.is_empty());
+    }
+
+    #[test]
+    fn pinned_mods_report_no_update() {
+        let idx = index(vec![test_pkg("a-A", &[("2.0.0", &[]), ("1.0.0", &[])])]);
+        let old = m("a-A", "1.0.0");
+        assert_eq!(updates(std::slice::from_ref(&old), &idx).get("a-A").map(String::as_str), Some("2.0.0"));
+        let pinned = ProfileMod { pinned: true, ..old };
+        assert!(updates(&[pinned], &idx).is_empty());
     }
 
     #[test]
@@ -218,6 +227,7 @@ mod tests {
             version: "0.1.0".into(),
             enabled: true,
             source: Source::Local,
+            pinned: false,
             deps: vec!["b-B-1.0.0".into()],
         };
         let p = plan(&[local], &idx, &Installed::new());

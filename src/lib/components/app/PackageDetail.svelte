@@ -65,7 +65,7 @@
 
 	function primary() {
 		if (!id) return;
-		if (status === "update") return store.toggleMod(id, update);
+		if (status === "update") return store.requestUpdate([id]);
 		if (mod) return store.removeMod(id);
 		return store.toggleMod(id);
 	}

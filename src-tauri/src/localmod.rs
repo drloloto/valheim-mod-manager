@@ -50,7 +50,7 @@ pub fn import_local(paths: &Paths, profile: &str, src: &Path) -> Result<ProfileM
         "dll" => (clean_name(&stem), "0.0.0".into(), vec![]),
         _ => return Err(AppError::Invalid("Only .zip or .dll files are supported.".into())),
     };
-    let m = ProfileMod { namespace: "local".into(), name, version, enabled: true, source: Source::Local, deps };
+    let m = ProfileMod { namespace: "local".into(), name, version, enabled: true, source: Source::Local, pinned: false, deps };
     let dest_dir = paths.local_dir(profile).join(m.id());
     if dest_dir.exists() {
         std::fs::remove_dir_all(&dest_dir)?;

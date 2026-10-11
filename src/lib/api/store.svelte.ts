@@ -201,6 +201,8 @@ class ModManagerStore {
 	staged = $state.raw<StageResponse | null>(null);
 	/** Set by "adopt and start": launch once the sync that follows has finished. */
 	private launchAfterSync = false;
+	/** Mods waiting in the "what changed" dialog; the update runs only after confirmation. */
+	updateDialog = $state<string[] | null>(null);
 	updateCount = $derived(Object.keys(this.state.updates).length);
 	otherProfiles = $derived(this.state.profiles.filter((p) => p !== this.state.active));
 	/** Mod ID → other profiles that contain it. */
@@ -579,7 +581,9 @@ class ModManagerStore {
 		if (m && !update && !version) return this.removeMod(id);
 		if (m) {
 			const to = version ?? update ?? m.version;
-			return this.setMods(this.state.mods.map((x) => (modId(x) === id ? { ...x, version: to } : x)));
+			// Picking anything but the newest version is a deliberate choice: pin it so "Update all" keeps it.
+			const pinned = version ? version !== p?.ver : false;
+			return this.setMods(this.state.mods.map((x) => (modId(x) === id ? { ...x, version: to, pinned } : x)));
 		}
 		if (!p) return;
 		await this.setMods([...this.state.mods, { namespace: p.ns, name: p.name, version: version || p.ver, enabled: true, source: "thunderstore" }]);
@@ -589,8 +593,28 @@ class ModManagerStore {
 		return this.setMods(this.state.mods.filter((x) => modId(x) !== id));
 	}
 
+	/** Every update goes through the "what changed" dialog first. */
+	requestUpdate(ids: string[]) {
+		const withUpdate = ids.filter((id) => id in this.state.updates);
+		if (withUpdate.length) this.updateDialog = withUpdate;
+	}
+
+	cancelUpdate() {
+		this.updateDialog = null;
+	}
+
+	async confirmUpdate() {
+		const ids = this.updateDialog;
+		this.updateDialog = null;
+		if (ids) await this.updateMods(ids);
+	}
+
 	updateAll() {
-		return this.setMods(this.state.mods.map((m) => ({ ...m, version: this.state.updates[modId(m)] ?? m.version })));
+		this.requestUpdate(Object.keys(this.state.updates));
+	}
+
+	togglePin(id: string) {
+		return this.setMods(this.state.mods.map((x) => (modId(x) === id ? { ...x, pinned: !x.pinned } : x)));
 	}
 
 	/** Multi-select: add missing packages in their latest version. */

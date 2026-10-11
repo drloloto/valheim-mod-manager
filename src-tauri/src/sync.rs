@@ -337,7 +337,15 @@ mod tests {
         std::fs::write(src.join("Mine.dll"), "m").unwrap();
         set_mods(
             &paths,
-            vec![ProfileMod { namespace: "local".into(), name: "Mine".into(), version: "0.0.0".into(), enabled: true, source: Source::Local, deps: vec![] }],
+            vec![ProfileMod {
+                namespace: "local".into(),
+                name: "Mine".into(),
+                version: "0.0.0".into(),
+                enabled: true,
+                source: Source::Local,
+                pinned: false,
+                deps: vec![],
+            }],
         );
         let r = run_sync(job(&paths, Some(idx), false), noop()).await.unwrap();
         assert!(r.errors.is_empty(), "{:?}", r.errors);

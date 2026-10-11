@@ -214,7 +214,15 @@ mod tests {
     const R2MODMAN_YAML: &str = "profileName: Friends\nmods:\n  - name: denikson-BepInExPack_Valheim\n    version:\n      major: 5\n      minor: 4\n      patch: 2351\n    enabled: true\n  - name: ValheimModding-Jotunn\n    version: {major: 2, minor: 20, patch: 1}\n    enabled: false\n    icon: whatever\n";
 
     fn local() -> ProfileMod {
-        ProfileMod { namespace: "local".into(), name: "Mine".into(), version: "0.0.0".into(), enabled: true, source: Source::Local, deps: vec![] }
+        ProfileMod {
+            namespace: "local".into(),
+            name: "Mine".into(),
+            version: "0.0.0".into(),
+            enabled: true,
+            source: Source::Local,
+            pinned: false,
+            deps: vec![],
+        }
     }
 
     #[test]

@@ -51,6 +51,10 @@ pub struct ProfileMod {
     pub enabled: bool,
     #[serde(default)]
     pub source: Source,
+    /// Pinned: "Update all" and update detection leave this version alone (set by picking an older
+    /// version, or by hand). Server adoption still overrides it; the flag survives.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pinned: bool,
     /// Local mods only: dependencies from their manifest.json.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deps: Vec<String>,
@@ -62,7 +66,15 @@ impl ProfileMod {
     }
 
     pub fn thunderstore(ns: &str, name: &str, version: &str) -> Self {
-        ProfileMod { namespace: ns.into(), name: name.into(), version: version.into(), enabled: true, source: Source::Thunderstore, deps: vec![] }
+        ProfileMod {
+            namespace: ns.into(),
+            name: name.into(),
+            version: version.into(),
+            enabled: true,
+            source: Source::Thunderstore,
+            pinned: false,
+            deps: vec![],
+        }
     }
 }
 
