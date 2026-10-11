@@ -1,11 +1,13 @@
 {
 	"name": "valheim-companion",
-	"version": "0.1.0",
+	"version": "0.3.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
 		"start": "bun run src/server.ts",
-		"test": "bun test"
+		"test": "bun test src",
+		"build:ui": "cd ui && bun install && bun run build",
+		"check:ui": "cd ui && bun run check"
 	},
 	"dependencies": {
 		"fflate": "^0.8.2",

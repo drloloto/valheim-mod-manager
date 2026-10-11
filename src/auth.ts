@@ -13,16 +13,16 @@ function timingSafeEqual(a: string, b: string): boolean {
 export function isAuthed(c: Context): boolean {
 	const token = getToken();
 	if (!token) return false;
+	// Header only: a token in a URL ends up in logs and history. The page reads the log stream with fetch.
 	const header = c.req.header("authorization") ?? "";
-	// EventSource cannot set headers, so the log stream may carry the token as a query parameter.
-	const given = header.startsWith("Bearer ") ? header.slice(7).trim() : (c.req.query("token") ?? "").trim();
+	const given = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 	return !!given && timingSafeEqual(given, token);
 }
 
 const isRead = (c: Context) => ["GET", "HEAD", "OPTIONS"].includes(c.req.method);
 
 /** Always-public paths: the landing page needs them to explain itself. */
-const OPEN = new Set(["/api/status", "/api/auth/check"]);
+const OPEN = new Set(["/api/health", "/api/status", "/api/auth/check"]);
 
 export async function requireToken(c: Context, next: Next) {
 	if (OPEN.has(c.req.path)) return next();

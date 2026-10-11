@@ -3,7 +3,7 @@ import { mkdtemp, readFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { strToU8, zipSync } from "fflate";
-import { detectLayout, extractZip, mapTarget, planChanges, removeFiles, zipEntryParts } from "./install";
+import { detectLayout, extractZip, mapTarget, moveAside, planChanges, removeFiles, untrackedFiles, zipEntryParts } from "./install";
 
 const zip = (files: Record<string, string>) => zipSync(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, strToU8(v)])));
 
@@ -30,21 +30,45 @@ describe("layout detection", () => {
 describe("extractZip", () => {
 	it("writes plugin files, keeps existing configs, removes cleanly", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "companion-"));
-		await Bun.write(join(dir, "config", "a.cfg"), "user = 1");
+		// The image's layout: the config folder is the BepInEx folder itself.
+		await Bun.write(join(dir, "a.cfg"), "user = 1");
 		const bytes = zip({
 			"plugins/A.dll": "dll",
 			"config/a.cfg": "default = 0",
 			"config/new.cfg": "n",
+			"config/plugins/evil.dll": "e",
 			"manifest.json": "{}",
 			"README.md": "r",
 		});
-		const files = await extractZip(bytes, dir, "a-A");
+		const files = await extractZip(bytes, dir, "a-A", dir);
 		expect(files).toEqual(["plugins/A.dll"]);
-		expect(await readFile(join(dir, "config", "a.cfg"), "utf-8")).toBe("user = 1");
-		expect(await Bun.file(join(dir, "config", "new.cfg")).exists()).toBe(true);
+		expect(await readFile(join(dir, "a.cfg"), "utf-8")).toBe("user = 1");
+		expect(await Bun.file(join(dir, "new.cfg")).exists()).toBe(true);
+		expect(await Bun.file(join(dir, "plugins", "evil.dll")).exists()).toBe(false);
 		expect(await Bun.file(join(dir, "plugins", "manifest.json")).exists()).toBe(false);
 		await removeFiles(files, dir);
 		expect(await Bun.file(join(dir, "plugins", "A.dll")).exists()).toBe(false);
+	});
+});
+
+describe("hand-installed server takeover", () => {
+	it("finds untracked plugin files and moves them aside instead of deleting them", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "companion-"));
+		const aside = await mkdtemp(join(tmpdir(), "companion-aside-"));
+		await Bun.write(join(dir, "plugins", "Hand.dll"), "hand");
+		await Bun.write(join(dir, "plugins", "Folder", "x.dll"), "x");
+		await Bun.write(join(dir, "plugins", "a-A", "A.dll"), "tracked");
+		await Bun.write(join(dir, "patchers", "P.dll"), "p");
+		await Bun.write(join(dir, "config", "keep.cfg"), "cfg");
+		const installed = { "a-A": { version: "1.0.0", files: ["plugins/a-A/A.dll"] } };
+		const untracked = await untrackedFiles(installed, dir);
+		expect(untracked).toEqual(["patchers/P.dll", "plugins/Folder/x.dll", "plugins/Hand.dll"]);
+		await moveAside(untracked, aside, dir);
+		expect(await readFile(join(aside, "plugins", "Hand.dll"), "utf-8")).toBe("hand");
+		expect(await readFile(join(aside, "plugins", "Folder", "x.dll"), "utf-8")).toBe("x");
+		expect(await Bun.file(join(dir, "plugins", "Hand.dll")).exists()).toBe(false);
+		expect(await Bun.file(join(dir, "plugins", "a-A", "A.dll")).exists()).toBe(true);
+		expect(await Bun.file(join(dir, "config", "keep.cfg")).exists()).toBe(true);
 	});
 });
 

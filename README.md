@@ -2,27 +2,54 @@
 
 A small service next to the `valheim` container (image `ghcr.io/community-valheim-tools/valheim-server`).
 It publishes the server's mod lock so the Valheim Mod Manager can match it with one click, shows the mod
-configs read-only, and manages the game container, worlds, backups, player lists, logs and `valheim.env`.
+configs, and manages the game container, worlds, backups, player lists, logs and `valheim.env`.
 It replaces `webapp`. Everything is optional; see the switches below. Where this is heading: [ROADMAP.md](ROADMAP.md).
 
 Design: `modmanager-client/docs/superpowers/specs/2026-10-10-server-companion-design.md`.
 
-## Onboarding in three steps
+## Install
 
-1. Add the service next to `valheim` (below) and run `docker compose up -d --build companion`.
-2. Read the admin token: `docker compose logs companion` prints it on first start (it is also stored in
-   `config/modmanager/companion-token`). Or set `COMPANION_TOKEN` yourself.
-3. Open `http://<server>:9002`. Players click **Open in Mod Manager**; you paste the address under
-   _Profile menu → Link server…_ in the Mod Manager, with the token if you want to publish.
+Copy this `companion` folder next to the server's `docker-compose.yaml`, then in that folder:
 
-A server that was managed by the old webapp gets its `installed.json` converted into a manifest on the first
-start. A hand-installed server starts with an empty manifest and is filled by the first publish.
+```bash
+bash companion/install.sh            # check only: shows what would happen, changes nothing
+bash companion/install.sh install    # add it; the game keeps running, players stay connected
+```
+
+The script needs nothing but Docker. It checks Docker and Compose, finds the game service and its `/config`
+and env file, picks the LAN address (loopback/private only, never a public one) and a free port, builds the
+image, and shows the planned changes. It never edits your compose file: the companion goes into
+`compose.companion.yaml`, and four marked lines in `.env` load it through `COMPOSE_FILE` (an existing
+`docker-compose.override.yaml` stays loaded). After the start it confirms that the game container was not
+touched and that the companion reads the same world the game runs. A failure in any step after the first write
+restores `.env` and removes the companion, so the server is as before. It prints the URL and the admin token
+at the end.
+
+| Command                               | What it does                                                                  |
+| ------------------------------------- | ----------------------------------------------------------------------------- |
+| `bash companion/install.sh update`    | after copying a new version: rebuild and restart only the companion           |
+| `bash companion/install.sh status`    | re-run the checks against the running companion                               |
+| `bash companion/install.sh uninstall` | remove container, file and `.env` lines; `config/modmanager`, `backups/` stay |
+
+Options: `--bind <ip>`, `--port <n>`, `--service <game service>`, `--dir <compose dir>`, `--yes`.
+
+Then open the URL. Players click **Open in Mod Manager**; you paste the address under _Profile menu → Link
+server…_ in the Mod Manager, with the token if you want to publish. A hand-installed server starts with an empty
+mod lock; the first publish fills it and moves the hand-installed files to `config/modmanager/untracked/`. A
+server managed by the old webapp gets its `installed.json` converted on the first start (remove the old
+`modmanager` service first; the script refuses while it exists).
+
+### Manual setup
+
+The same by hand: add this block to the compose file the server already runs from and run
+`docker compose up -d --build companion`. The token is printed by `docker compose logs companion` and stored in
+`config/modmanager/companion-token`.
 
 ```yaml
 services:
   valheim:
     image: ghcr.io/community-valheim-tools/valheim-server
-    # … as before …
+    # … unchanged …
 
   companion:
     build: ./companion
@@ -30,32 +57,69 @@ services:
       - ./config:/config
       - ./backups:/backups
       - ./valheim.env:/env/valheim.env
-      - /var/run/docker.sock:/var/run/docker.sock # only needed for control, logs and players-online
+      - /var/run/docker.sock:/var/run/docker.sock # control, logs, players online, safe restores
     environment:
       - VALHEIM_SERVICE=valheim
-      - PUBLIC_URL=http://10.10.10.123:9002 # what the deep link on the landing page points to
+      # - PUBLIC_URL=http://192.168.1.10:9002 # what the deep link on the landing page points to
       # - COMPANION_TOKEN=change-me          # optional: your own token; "none" = read-only companion
     ports:
-      - "9002:9002"
+      - "127.0.0.1:9002:9002" # or "<LAN-IP>:9002:9002"; never on a public interface or a tunnel
     restart: unless-stopped
 ```
 
+Add only this block to the compose file the server already runs from (same project: the companion finds the
+game container by its compose labels). `docker compose up -d --build companion` starts it without recreating
+`valheim`; players stay connected.
+
+### What the companion does to an existing server
+
+- **Never touched:** `./data` (`/opt/valheim`), the `valheim` service definition, the image's own backups in
+  `config/backups`.
+- **First start:** creates `config/modmanager/` (token, manifest, download cache), `./backups`, and the
+  BepInEx folders if missing. Nothing existing is changed.
+- **Every change to game files** (apply a release, `PUT /api/manifest`, restore) runs the same sequence: stop
+  the game and confirm with Docker that it is down → back up the active world + the BepInEx configs (`config/bepinex` without `plugins/`/`patchers/`) + manifest →
+  change → start again (only if it was running). A failed stop or backup aborts with nothing changed. A
+  restore additionally refuses when it cannot confirm the server is stopped.
+- **Stop timeout:** the companion waits at least 120 s for the world save before Docker may kill the game,
+  longer if `stop_grace_period` says so. Keep `stop_grace_period: 2m` on `valheim`.
+- **Restore** extracts into `config/modmanager/restore-tmp/`, checks the archive (no `..`, no symlinks), then
+  swaps world (and configs) in by rename; a failure moves the previous files back. Restored files get the owner
+  of the files they replace.
+- **First publish on a hand-installed server:** files in `bepinex/plugins` and `bepinex/patchers` that the
+  companion did not install are moved to `config/modmanager/untracked/<time>/` (kept, not deleted), so old and
+  new copies of a mod do not both load. The release plan lists them before you apply. The image removes them
+  from `/opt/valheim` on the next start (`.synced_from_config`). Mods placed directly in `data/` are not seen.
+- **`valheim.env`:** only changed lines are rewritten, quoted so Compose reads back the exact value (`$` is
+  not expanded), a copy of the previous file goes to `config/modmanager/env-history/`. Compose reads the file
+  when it creates the container: apply with `docker compose up -d valheim`; a restart keeps the old values.
+- **Atomic writes:** manifest, `installed.json`, player lists, config edits and backups are written to a temp
+  file and renamed, so a crash never leaves a half-written file.
+
+### Security
+
+The Docker socket gives whoever controls the companion root on the host, and the token travels over plain
+HTTP. Bind the port to `127.0.0.1` or a LAN address, do not forward it through a router or a tunnel (playit,
+Cloudflare, …), and reach it from outside through a VPN or an SSH tunnel. With public reads on (default),
+anyone who reaches the page can read the mod configs; set `COMPANION_PUBLIC_READ=false` if a config holds a
+secret (webhook URLs, API keys).
+
 ## Switches
 
-| Variable                      | Default   | Effect                                                                                                              |
-| ----------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------- |
-| `COMPANION_TOKEN`             | generated | Admin token. Unset → generated once and stored in `config/modmanager/companion-token`. `none` → no writes at all.   |
-| `COMPANION_PUBLIC_READ`       | `true`    | Manifest, `.r2z`, configs and worlds readable without a token. `false` → token for everything except `/api/status`. |
-| `COMPANION_MOD_MANAGER`       | `true`    | Deep link and `.r2z` export for the Mod Manager.                                                                    |
-| `COMPANION_ALLOW_PUBLISH`     | `true`    | Clients may stage releases (`POST /api/releases`) and apply them; also `PUT /api/manifest` for scripts.             |
-| `COMPANION_ALLOW_CONTROL`     | `true`    | Start / stop / restart via the Docker socket. Off → publish and restore do not restart.                             |
-| `COMPANION_ALLOW_BACKUPS`     | `true`    | Backups: create, import, restore, delete.                                                                           |
-| `COMPANION_ALLOW_ENV`         | `true`    | `valheim.env` editing.                                                                                              |
-| `COMPANION_ALLOW_CONFIG_EDIT` | `true`    | In-place edits of `.cfg` values (viewing stays available).                                                          |
-| `COMPANION_ALLOW_PLAYERS`     | `true`    | Admin / permitted / banned lists, online players from the log.                                                      |
-| `COMPANION_ALLOW_LOGS`        | `true`    | Log tail and live follow (token required even with public reads).                                                   |
-| `PUBLIC_URL`                  | –         | Address the landing page uses for the deep link; defaults to the page's own origin.                                 |
-| `VALHEIM_SERVICE`             | `valheim` | Compose service name of the game container.                                                                         |
+| Variable                      | Default   | Effect                                                                                                                  |
+| ----------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `COMPANION_TOKEN`             | generated | Admin token. Unset → generated once and stored in `config/modmanager/companion-token`. `none` → no writes at all.       |
+| `COMPANION_PUBLIC_READ`       | `true`    | Manifest, `.r2z`, configs and worlds readable without a token. `false` → token for everything except `/api/status`.     |
+| `COMPANION_MOD_MANAGER`       | `true`    | Deep link and `.r2z` export for the Mod Manager.                                                                        |
+| `COMPANION_ALLOW_PUBLISH`     | `true`    | Clients may stage releases (`POST /api/releases`) and apply them; also `PUT /api/manifest` for scripts.                 |
+| `COMPANION_ALLOW_CONTROL`     | `true`    | Start / stop / restart via the Docker socket. Off → publish does not restart; restore needs the server stopped by hand. |
+| `COMPANION_ALLOW_BACKUPS`     | `true`    | Backups: create, import, restore, delete.                                                                               |
+| `COMPANION_ALLOW_ENV`         | `true`    | `valheim.env` editing.                                                                                                  |
+| `COMPANION_ALLOW_CONFIG_EDIT` | `true`    | In-place edits of `.cfg` values (viewing stays available).                                                              |
+| `COMPANION_ALLOW_PLAYERS`     | `true`    | Admin / permitted / banned lists, online players from the log.                                                          |
+| `COMPANION_ALLOW_LOGS`        | `true`    | Log tail and live follow (token required even with public reads).                                                       |
+| `PUBLIC_URL`                  | –         | Address the landing page uses for the deep link; defaults to the page's own origin.                                     |
+| `VALHEIM_SERVICE`             | `valheim` | Compose service name of the game container.                                                                             |
 
 `/api/status` reports the switches so the page and the Mod Manager hide what is off.
 
@@ -82,6 +146,24 @@ services:
   between the backup's manifest and the running one), `GET /api/backups/<id>`, `DELETE`, `POST /api/backups/<id>/restore`
   (stop, safety backup, replace world, optionally configs and mod versions, start).
 
-Local development: `bun install`, then
-`COMPANION_TOKEN=x CONFIG_DIR=./dev/config BACKUP_DIR=./dev/backups ENV_FILE=./dev/valheim.env bun run src/server.ts`;
-tests with `bun test`.
+## Web UI
+
+`ui/` is a SvelteKit 3 / Svelte 5 SPA with shadcn-svelte and the Mod Manager's "Werkbank" design system, built to
+static files and served by the companion itself (no second server). Public: overview with the one-click profile and
+the mod list, mod configs. With the admin token: server (pending release, start/stop, `valheim.env`), players,
+backups, log; config values become editable. German or English from the browser language.
+
+- **Same look as the client:** `bun run sync` in `ui/` copies the tokens (`theme.css`), the shadcn "vega" style, the
+  shadcn primitives and the kit components unchanged from `../modmanager-client`. Never edit those copies; change
+  the client and sync.
+- **Security:** strict CSP per page (scripts only from the server, hashed bootstrap, no `data:` fonts, no
+  framing), `nosniff`, `no-referrer`, COOP/CORP; no `{@html}`; the token is sent only as an `Authorization` header
+  (the log stream is read with `fetch`, not `EventSource`) and kept in `sessionStorage` unless "remember on this
+  device" is ticked; static files are resolved strictly inside `ui/build`.
+
+## Local development
+
+`bun install && bun run build:ui`, then
+`COMPANION_TOKEN=x CONFIG_DIR=./dev/config BACKUP_DIR=./dev/backups ENV_FILE=./dev/valheim.env bun run src/server.ts`.
+For UI work run `bun run dev` in `ui/` next to it (proxies `/api` to port 9002). Tests: `bun test` (server),
+`bun run check:ui` (svelte-check).

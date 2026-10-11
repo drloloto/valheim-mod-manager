@@ -1,6 +1,7 @@
 // Everything optional is switched here. Defaults are "on" for an admin's own LAN box; every write path can
 // be turned off, and the whole API can be made token-only with COMPANION_PUBLIC_READ=false.
 import { join } from "path";
+import { writeAtomic } from "./fsutil";
 import { MM_DIR } from "./paths";
 
 const flag = (name: string, def: boolean): boolean => {
@@ -32,7 +33,7 @@ export const FEATURES = {
 export type Feature = keyof typeof FEATURES;
 
 export const PUBLIC_URL = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
 const TOKEN_FILE = join(MM_DIR, "companion-token");
 let token = process.env.COMPANION_TOKEN?.trim() || "";
@@ -59,7 +60,7 @@ export async function resolveToken(): Promise<void> {
 	const bytes = new Uint8Array(24);
 	crypto.getRandomValues(bytes);
 	token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-	await Bun.write(TOKEN_FILE, token + "\n");
+	await writeAtomic(TOKEN_FILE, token + "\n");
 	tokenSource = "generated";
 	console.log(`\n==> Companion admin token (also in ${TOKEN_FILE}):\n==> ${token}\n==> Set COMPANION_TOKEN in docker-compose.yaml to choose your own.\n`);
 }

@@ -8,10 +8,13 @@ import { createBackup, deleteBackup, importBackup, inspectBackup, listBackups, r
 import { listConfigFiles, parseConfigFile, saveConfigChanges } from "./bepinexconfig";
 import { FEATURES, PUBLIC_URL, VERSION, getTokenSource, resolveToken, tokenConfigured } from "./config";
 import { containerAction, containerState, type ContainerAction } from "./docker";
-import { envValue, readEnv, writeEnv } from "./env";
+import { activeWorld, envValue, readEnv, writeEnv } from "./env";
+import { writeAtomic } from "./fsutil";
+import { withServerStopped } from "./maintenance";
 import { applyManifest, loadInstalled } from "./install";
 import { streamLog, tailLog } from "./logs";
 import { configHashes, loadManifest, migrateLegacy, normalizeManifest, saveManifest, type Manifest, type ServerInfo } from "./manifest";
+import { configRel } from "./configdir";
 import { BEPINEX_CONFIG_DIR, ensureDirs } from "./paths";
 import { LIST_FILES, onlineFrom, readAllLists, sessionsFromLog, writeList, type ListName } from "./players";
 import { buildR2z } from "./r2z";
@@ -26,6 +29,7 @@ import {
 	summary,
 	type StageBody,
 } from "./releases";
+import { securityHeaders, serveUi } from "./web";
 import { listWorlds } from "./worlds";
 
 await ensureDirs();
@@ -34,7 +38,7 @@ await resolveToken();
 async function serverInfo(): Promise<ServerInfo> {
 	return {
 		name: (await envValue("SERVER_NAME")) || "Valheim",
-		world: (await envValue("WORLD_NAME")) || "",
+		world: await activeWorld(),
 		gameVersion: null,
 		bepinex: null,
 	};
@@ -64,6 +68,9 @@ const api = new Hono();
 api.use("*", requireToken);
 
 // ---- Always public: enough for the landing page and the client to know what this companion offers ----
+
+/** Docker's HEALTHCHECK and install.sh: the process serves requests. Cheap, no disk or Docker access. */
+api.get("/health", (c) => c.json({ ok: true, version: VERSION }));
 
 api.get("/status", async (c) => {
 	const authed = isAuthed(c);
@@ -173,21 +180,31 @@ api.put("/manifest", requireFeature("publish"), async (c) => {
 		} catch (e) {
 			return c.json({ error: (e as Error).message }, 400);
 		}
-		const written: string[] = [];
-		for (const f of Array.isArray(body.configs) ? body.configs : []) {
-			if (typeof f?.path !== "string" || typeof f?.contentBase64 !== "string") continue;
-			const rel = f.path.replace(/\\/g, "/");
-			if (rel.startsWith("/") || rel.split("/").some((p) => p === "..")) continue;
-			await Bun.write(join(BEPINEX_CONFIG_DIR, rel), Buffer.from(f.contentBase64, "base64"));
-			written.push(rel);
-		}
 		const log: string[] = [];
-		const result = await applyManifest(m, (l) => log.push(l));
-		m.configs = await configHashes();
-		await saveManifest(m);
-		const changed = result.installed.length + result.removed.length + written.length > 0;
-		const restart = body.restart !== false && changed && FEATURES.control ? await containerAction("restart") : null;
-		return c.json({ manifest: m, ...result, configsWritten: written, restart, log });
+		try {
+			// Same safety as a release: verified stop, backup first, start again. `restart: false` leaves the
+			// container alone (the admin restarts it); the backup is taken either way.
+			const { value, ...report } = await withServerStopped(
+				{ world: info.world, label: "pre-manifest", control: body.restart !== false, requireStopped: false, log: (l) => log.push(l) },
+				async () => {
+					const written: string[] = [];
+					for (const f of Array.isArray(body.configs) ? body.configs : []) {
+						if (typeof f?.path !== "string" || typeof f?.contentBase64 !== "string") continue;
+						const rel = configRel(f.path);
+						if (!rel) continue;
+						await writeAtomic(join(BEPINEX_CONFIG_DIR, rel), new Uint8Array(Buffer.from(f.contentBase64, "base64")));
+						written.push(rel);
+					}
+					const result = await applyManifest(m, (l) => log.push(l));
+					m.configs = await configHashes();
+					await saveManifest(m);
+					return { ...result, configsWritten: written };
+				},
+			);
+			return c.json({ manifest: m, ...value, ...report, restart: report.started, log });
+		} catch (e) {
+			return c.json({ error: (e as Error).message, log }, 500);
+		}
 	});
 });
 
@@ -204,10 +221,17 @@ api.get("/configs/:file{.+}", async (c) => {
 	}
 });
 api.put("/configs/:file{.+}", requireFeature("configEdit"), async (c) => {
-	const { changes } = (await c.req.json()) as {
-		changes: { section: string; key: string; value: string }[];
+	const { changes } = ((await c.req.json().catch(() => ({}))) ?? {}) as {
+		changes?: { section: string; key: string; value: string }[];
 	};
-	await saveConfigChanges(c.req.param("file") ?? "", changes);
+	// One value per line: a line break would inject further keys or sections into the .cfg.
+	if (!Array.isArray(changes) || changes.some((x) => [x?.section, x?.key, x?.value].some((v) => typeof v !== "string" || /[\r\n\0]/.test(v))))
+		return c.json({ error: "changes must be single-line strings" }, 400);
+	try {
+		await saveConfigChanges(c.req.param("file") ?? "", changes);
+	} catch (e) {
+		return c.json({ error: (e as Error).message }, 400);
+	}
 	const m = await currentManifest();
 	m.configs = await configHashes();
 	await saveManifest(m);
@@ -220,7 +244,9 @@ api.get("/env", requireFeature("env"), async (c) => c.json({ entries: await read
 api.put("/env", requireFeature("env"), async (c) => {
 	const changes = (await c.req.json()) as Record<string, string>;
 	try {
-		return c.json({ entries: await writeEnv(changes), restartRequired: true });
+		const w = await writeEnv(changes);
+		// Compose reads env_file when it creates the container; a restart keeps the old values.
+		return c.json({ ...w, recreateRequired: w.changed, applyWith: `docker compose up -d ${process.env.VALHEIM_SERVICE || "valheim"}` });
 	} catch (e) {
 		return c.json({ error: (e as Error).message }, 400);
 	}
@@ -286,7 +312,7 @@ api.get("/worlds", async (c) => c.json({ worlds: await listWorlds() }));
 api.get("/backups", requireFeature("backups"), async (c) => c.json({ backups: await listBackups() }));
 api.post("/backups", requireFeature("backups"), async (c) => {
 	const { world, label } = (await c.req.json().catch(() => ({}))) as { world?: string; label?: string };
-	const name = world || (await envValue("WORLD_NAME")) || "";
+	const name = world || (await activeWorld());
 	try {
 		return c.json(await exclusive(() => createBackup(name, label)));
 	} catch (e) {
@@ -319,37 +345,32 @@ api.post("/backups/:id/restore", requireFeature("backups"), async (c) => {
 		const contents = await inspectBackup(id);
 		const world = opts.world || contents.worlds[0];
 		if (!world) return c.json({ error: "backup contains no world" }, 400);
-		const stopped = FEATURES.control ? await containerAction("stop") : null;
 		try {
-			const r = await restoreFiles(id, { world, configs: !!opts.configs });
-			let install = null;
-			if (opts.mods && contents.manifest && FEATURES.publish) {
-				const m = normalizeManifest(contents.manifest, await serverInfo(), {});
-				install = await applyManifest(m);
-				m.configs = await configHashes();
-				await saveManifest(m);
-			}
-			return c.json({ ...r, install, stopped, started: FEATURES.control ? await containerAction("start") : null });
+			// A running server would save over the restored world: the restore refuses unless it is down.
+			const { value, backup, ...report } = await withServerStopped({ world, label: "pre-restore", control: true, requireStopped: true }, async () => {
+				const r = await restoreFiles(id, { world, configs: !!opts.configs });
+				let install = null;
+				if (opts.mods && contents.manifest && FEATURES.publish) {
+					const m = normalizeManifest(contents.manifest, await serverInfo(), {});
+					install = await applyManifest(m);
+					m.configs = await configHashes();
+					await saveManifest(m);
+				}
+				return { ...r, install };
+			});
+			return c.json({ ...value, safety: backup, ...report });
 		} catch (e) {
-			if (FEATURES.control) await containerAction("start");
 			return c.json({ error: (e as Error).message }, 500);
 		}
 	});
 });
 
 const app = new Hono();
+app.use("*", securityHeaders);
 app.route("/api", api);
 
-const PUBLIC_DIR = join(import.meta.dir, "..", "public");
-const page = (file: string) => async (c: import("hono").Context) =>
-	c.body(await Bun.file(join(PUBLIC_DIR, file)).text(), 200, { "Content-Type": "text/html; charset=utf-8" });
-app.get("/", page("index.html"));
-app.get("/configs", page("configs.html"));
-app.get("/public/:file", async (c) => {
-	const f = Bun.file(join(PUBLIC_DIR, c.req.param("file").replace(/[^\w.-]/g, "")));
-	return (await f.exists()) ? new Response(f) : c.notFound();
-});
-
+// Everything else is the UI. Only GET/HEAD reach it.
+app.on(["GET", "HEAD"], "*", (c) => serveUi(c));
 const port = Number(process.env.PORT || 9002);
 export default { port, fetch: app.fetch, idleTimeout: 255 };
 const off = Object.entries(FEATURES)

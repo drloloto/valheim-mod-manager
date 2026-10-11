@@ -1,10 +1,13 @@
 // The lock that server and client agree on. The client resolves and publishes it; the companion installs it.
-import { readFile, readdir } from "fs/promises";
+import { readFile } from "fs/promises";
 import { join } from "path";
+import { walkConfigs } from "./configdir";
+import { writeAtomic } from "./fsutil";
 import { BEPINEX_CONFIG_DIR, INSTALLED_FILE, MANIFEST_FILE, MM_DIR } from "./paths";
 
 export const BEPINEX_PACK_ID = "denikson-BepInExPack_Valheim";
 export const CONFIG_EXTS = ["cfg", "txt", "json", "yml", "yaml", "ini"];
+export const isConfigFile = (name: string) => CONFIG_EXTS.includes(name.split(".").pop()?.toLowerCase() ?? "");
 
 export interface ManifestMod {
 	/** "Namespace-Name" */
@@ -121,23 +124,13 @@ export async function loadManifest(): Promise<Manifest | null> {
 }
 
 export async function saveManifest(m: Manifest): Promise<void> {
-	await Bun.write(MANIFEST_FILE, JSON.stringify(m, null, 2));
+	await writeAtomic(MANIFEST_FILE, JSON.stringify(m, null, 2));
 }
 
 /** sha256 per config file (relative path → hash), so the client can tell "same mods, other configs". */
 export async function configHashes(dir = BEPINEX_CONFIG_DIR): Promise<Record<string, string>> {
 	const out: Record<string, string> = {};
-	async function walk(sub: string) {
-		const items = await readdir(join(dir, sub), { withFileTypes: true }).catch(() => []);
-		for (const it of items) {
-			const rel = sub ? `${sub}/${it.name}` : it.name;
-			if (it.isDirectory()) await walk(rel);
-			else if (CONFIG_EXTS.includes(it.name.split(".").pop()?.toLowerCase() ?? "")) {
-				out[rel] = `sha256:${sha256(new Uint8Array(await readFile(join(dir, rel))))}`;
-			}
-		}
-	}
-	await walk("");
+	for (const rel of await walkConfigs(isConfigFile, dir)) out[rel] = `sha256:${sha256(new Uint8Array(await readFile(join(dir, rel))))}`;
 	return out;
 }
 

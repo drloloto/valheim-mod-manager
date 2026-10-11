@@ -1,8 +1,10 @@
-// Backups are tar.gz archives made with the container's tar: worlds_local/<world…>, bepinex/config and
-// modmanager/manifest.json. The manifest inside lets an import show which mod versions the save expects.
-import { readdir, rm, stat } from "fs/promises";
-import { join } from "path";
-import { BACKUP_DIR, CONFIG_DIR } from "./paths";
+// Backups are tar.gz archives made with the container's tar: worlds_local/<world…>, the BepInEx configs
+// (bepinex/* without plugins/ and patchers/, see configdir.ts) and modmanager/manifest.json. The manifest inside lets an import show which mod versions the save expects.
+import { mkdir, readdir, rename, rm, stat } from "fs/promises";
+import { dirname, join } from "path";
+import { assertNoSymlinks, chownTreeLike } from "./fsutil";
+import { CONFIG_MEMBER, configEntries, isConfigEntry } from "./configdir";
+import { BACKUP_DIR, BEPINEX_CONFIG_DIR, CONFIG_DIR, RESTORE_TMP_DIR, WORLDS_DIR } from "./paths";
 import { diffMods, loadManifest, normalizeManifest, type Manifest, type ModDiff } from "./manifest";
 import { worldEntries } from "./worlds";
 
@@ -50,10 +52,17 @@ export async function createBackup(world: string, label?: string): Promise<Backu
 	const entries = await worldEntries(world);
 	if (!entries.length) throw new Error(`world "${world}" not found`);
 	const members = entries.map((e) => `worlds_local/${e}`);
-	for (const extra of ["bepinex/config", "modmanager/manifest.json"]) if (await stat(join(CONFIG_DIR, extra)).catch(() => null)) members.push(extra);
+	for (const e of await configEntries()) members.push(`${CONFIG_MEMBER}/${e}`);
+	if (await stat(join(CONFIG_DIR, "modmanager/manifest.json")).catch(() => null)) members.push("modmanager/manifest.json");
 	const id = `${world}-${stamp()}${label ? `-${label.replace(/[^a-z0-9-]/gi, "").toLowerCase()}` : ""}.tar.gz`;
-	const r = await tar(["-czf", join(BACKUP_DIR, id), "-C", CONFIG_DIR, ...members]);
-	if (!r.ok) throw new Error(`tar failed: ${r.err.trim()}`);
+	// Written under a temporary name: a half-written archive never shows up as a backup.
+	const partial = join(BACKUP_DIR, `${id}.partial`);
+	const r = await tar(["-czf", partial, "-C", CONFIG_DIR, ...members]);
+	if (!r.ok) {
+		await rm(partial, { force: true });
+		throw new Error(`tar failed: ${r.err.trim()}`);
+	}
+	await rename(partial, join(BACKUP_DIR, id));
 	const s = await stat(join(BACKUP_DIR, id));
 	return { id, world, size: s.size, createdAt: s.mtimeMs, imported: false };
 }
@@ -93,7 +102,7 @@ export async function inspectBackup(id: string): Promise<BackupContents> {
 				.filter(Boolean),
 		),
 	];
-	const hasConfigs = names.some((n) => n.startsWith("bepinex/config/"));
+	const hasConfigs = configTops(names).length > 0;
 	let manifest: Manifest | null = null;
 	if (names.includes("modmanager/manifest.json")) {
 		const m = await tar(["-xzOf", file, "modmanager/manifest.json"]);
@@ -131,45 +140,105 @@ export interface RestoreOptions {
 	configs: boolean;
 }
 
-/** Replaces the world (and optionally the configs) from the archive. The caller stops/starts the game container. */
-export async function restoreFiles(id: string, opts: RestoreOptions): Promise<{ safety: Backup | null; restored: string[] }> {
+const worldOfMember = (n: string) =>
+	n
+		.split("/")[1]
+		?.split(".")[0]
+		.replace(/_backup_.*$/, "")
+		.replace(/_main$/, "");
+
+/** the config folder's top-level entries in an archive, as member names */
+const configTops = (names: string[]) => [
+	...new Set(
+		names
+			.filter((n) => n.startsWith(`${CONFIG_MEMBER}/`))
+			.map((n) => n.slice(CONFIG_MEMBER.length + 1).split("/")[0])
+			.filter((top) => top && isConfigEntry(top))
+			.map((top) => `${CONFIG_MEMBER}/${top}`),
+	),
+];
+
+/** Archive member names that could land outside the extraction directory. */
+const unsafeMember = (n: string) => n.startsWith("/") || n.includes("\\") || n.split("/").some((p) => p === ".." || p.includes(":"));
+
+/**
+ * Replaces the world (and optionally the configs) from the archive. Nothing live is touched until the
+ * archive is fully extracted and checked in a staging directory; then the old files are moved aside and the
+ * new ones moved in by rename (same filesystem), and a failure moves the old ones back. The caller stops
+ * the game and takes the safety backup (maintenance.ts).
+ */
+export async function restoreFiles(id: string, opts: RestoreOptions): Promise<{ restored: string[] }> {
 	const file = join(BACKUP_DIR, safeId(id));
 	const contents = await inspectBackup(id);
 	if (!contents.worlds.includes(opts.world)) throw new Error(`world "${opts.world}" is not in this backup`);
-	const existing = await worldEntries(opts.world);
-	const safety = existing.length ? await createBackup(opts.world, "pre-restore") : null;
-	for (const e of existing)
-		await rm(join(CONFIG_DIR, "worlds_local", e), {
-			recursive: true,
-			force: true,
-		});
-	const members = (await tar(["-tzf", file])).out
+	const names = (await tar(["-tzf", file])).out
 		.split("\n")
 		.map((l) => l.trim())
-		.filter(
-			(n) =>
-				n.startsWith("worlds_local/") &&
-				n
-					.split("/")[1]
-					?.split(".")[0]
-					.replace(/_backup_.*$/, "")
-					.replace(/_main$/, "") === opts.world,
-		)
-		.filter((n) => !n.endsWith("/") || n.split("/").length === 3);
-	const restored: string[] = [];
-	const r = await tar(["-xzf", file, "-C", CONFIG_DIR, ...new Set(members.map((m) => m.split("/").slice(0, 2).join("/")))]);
-	if (!r.ok) throw new Error(`tar failed: ${r.err.trim()}`);
-	restored.push(`worlds_local/${opts.world}`);
-	if (opts.configs && contents.hasConfigs) {
-		const c = await tar(["-xzf", file, "-C", CONFIG_DIR, "bepinex/config"]);
-		if (!c.ok) throw new Error(`tar failed: ${c.err.trim()}`);
-		restored.push("bepinex/config");
-	}
-	// The game runs as root inside its container; restored files must be writable for it.
+		.filter(Boolean);
+	const bad = names.find(unsafeMember);
+	if (bad) throw new Error(`unsafe path in the archive: ${bad}`);
+	const worldTops = [
+		...new Set(
+			names
+				.filter((n) => n.startsWith("worlds_local/") && worldOfMember(n) === opts.world)
+				.filter((n) => !n.endsWith("/") || n.split("/").length === 3)
+				.map((m) => m.split("/").slice(0, 2).join("/")),
+		),
+	];
+	const withConfigs = opts.configs && contents.hasConfigs;
+
+	const run = `${stamp()}-${Math.random().toString(36).slice(2, 6)}`;
+	const stage = join(RESTORE_TMP_DIR, `${run}-new`);
+	const old = join(RESTORE_TMP_DIR, `${run}-old`);
+	await mkdir(stage, { recursive: true });
+	let keepOld = false;
 	try {
-		Bun.spawnSync(["chown", "-R", "0:0", join(CONFIG_DIR, "worlds_local")]);
-	} catch {
-		/* no chown outside the container (local development) */
+		const r = await tar(["-xzf", file, "-C", stage, ...worldTops]);
+		if (!r.ok) throw new Error(`tar failed: ${r.err.trim()}`);
+		if (withConfigs) {
+			const c = await tar(["-xzf", file, "-C", stage, ...configTops(names)]);
+			if (!c.ok) throw new Error(`tar failed: ${c.err.trim()}`);
+		}
+		await assertNoSymlinks(stage);
+		const staged = await readdir(join(stage, "worlds_local")).catch(() => [] as string[]);
+		const stagedConfigs = withConfigs ? await configEntries(join(stage, CONFIG_MEMBER)) : [];
+		if (!staged.length) throw new Error(`world "${opts.world}" could not be extracted from ${id}`);
+
+		// Swap. Every move is recorded so a failure halfway can be undone.
+		const done: { from: string; to: string }[] = [];
+		const move = async (from: string, to: string) => {
+			await mkdir(dirname(to), { recursive: true });
+			await rename(from, to);
+			done.push({ from, to });
+		};
+		const existing = await worldEntries(opts.world);
+		const ownerRef = existing.length ? join(WORLDS_DIR, existing[0]) : WORLDS_DIR;
+		try {
+			for (const e of existing) await move(join(WORLDS_DIR, e), join(old, "worlds_local", e));
+			for (const e of staged) await move(join(stage, "worlds_local", e), join(WORLDS_DIR, e));
+			if (withConfigs) {
+				// Entry by entry: plugins/ and patchers/ share the folder and stay where they are.
+				for (const e of await configEntries()) await move(join(BEPINEX_CONFIG_DIR, e), join(old, "config", e));
+				for (const e of stagedConfigs) await move(join(stage, CONFIG_MEMBER, e), join(BEPINEX_CONFIG_DIR, e));
+			}
+		} catch (e) {
+			let rolledBack = true;
+			for (const m of done.reverse()) await rename(m.to, m.from).catch(() => (rolledBack = false));
+			if (!rolledBack) {
+				keepOld = true;
+				throw new Error(`restore failed and could not be fully undone; the previous files are in ${old}: ${(e as Error).message}`);
+			}
+			throw new Error(`restore failed, the previous files are back in place: ${(e as Error).message}`);
+		}
+		// The game must be able to write what was restored: give it the owner the replaced files had.
+		for (const e of staged) await chownTreeLike(join(WORLDS_DIR, e), ownerRef);
+		for (const e of stagedConfigs) await chownTreeLike(join(BEPINEX_CONFIG_DIR, e), BEPINEX_CONFIG_DIR);
+		const restored = [`worlds_local/${opts.world}`];
+		if (withConfigs) restored.push("configs");
+		return { restored };
+	} finally {
+		await rm(stage, { recursive: true, force: true });
+		// After a clean swap or rollback the old files are redundant (they are also in the safety backup).
+		if (!keepOld) await rm(old, { recursive: true, force: true });
 	}
-	return { safety, restored };
 }

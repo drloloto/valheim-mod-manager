@@ -14,7 +14,8 @@ export interface World {
 }
 
 export function worldOfEntry(entry: string, isDir: boolean): string {
-	if (isDir) return entry;
+	// chunked worlds: `<name>/` plus the game's own `<name>_backup_auto-<stamp>/` copies
+	if (isDir) return entry.replace(/_backup_.*$/, "");
 	return entry
 		.split(".")[0]
 		.replace(/_backup_.*$/, "")

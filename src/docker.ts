@@ -3,10 +3,18 @@
 const SOCKET_PATH = "/var/run/docker.sock";
 const SERVICE_NAME = process.env.VALHEIM_SERVICE || "valheim";
 
+/**
+ * Lower bound for the stop timeout. The image sends SIGINT and Valheim saves the world before it exits; on
+ * a big world that takes longer than Docker's default 10 s. A longer stop_grace_period in compose wins.
+ */
+export const MIN_STOP_SECONDS = 120;
+
 export async function dockerFetch(path: string, init?: RequestInit): Promise<Response> {
 	return fetch(`http://localhost${path}`, {
 		...init,
 		unix: SOCKET_PATH,
+		// A stop waits for the world save; Bun's default request timeout must not cut it short.
+		timeout: false,
 	} as RequestInit);
 }
 
@@ -15,6 +23,11 @@ interface Container {
 	Names?: string[];
 	State?: string;
 	Status?: string;
+}
+
+interface Inspect {
+	State?: { Running?: boolean; Status?: string; StartedAt?: string };
+	Config?: { StopTimeout?: number };
 }
 
 async function gameContainers(): Promise<Container[]> {
@@ -36,6 +49,12 @@ async function gameContainers(): Promise<Container[]> {
 	return containers;
 }
 
+async function inspect(id: string): Promise<Inspect> {
+	const res = await dockerFetch(`/containers/${id}/json`);
+	if (!res.ok) throw new Error(`inspect failed (${res.status})`);
+	return (await res.json()) as Inspect;
+}
+
 export async function gameContainerId(): Promise<string> {
 	return (await gameContainers())[0].Id;
 }
@@ -51,8 +70,7 @@ export interface ContainerState {
 export async function containerState(): Promise<ContainerState | null> {
 	try {
 		const c = (await gameContainers())[0];
-		const inspect = await dockerFetch(`/containers/${c.Id}/json`);
-		const startedAt = inspect.ok ? (((await inspect.json()) as { State?: { StartedAt?: string } }).State?.StartedAt ?? null) : null;
+		const startedAt = (await inspect(c.Id).catch(() => null))?.State?.StartedAt ?? null;
 		return {
 			id: c.Id.slice(0, 12),
 			name: c.Names?.[0]?.replace(/^\//, "") ?? c.Id,
@@ -65,20 +83,32 @@ export async function containerState(): Promise<ContainerState | null> {
 	}
 }
 
+/** true / false from Docker, null when the socket is unavailable. */
+export async function gameRunning(): Promise<boolean | null> {
+	try {
+		for (const c of await gameContainers()) if ((await inspect(c.Id)).State?.Running) return true;
+		return false;
+	} catch {
+		return null;
+	}
+}
+
 export type ContainerAction = "restart" | "stop" | "start";
+
+/** Seconds Docker waits before SIGKILL: the container's own stop_grace_period, but never below the minimum. */
+export const stopSeconds = (configured: number | undefined) => Math.max(configured ?? 0, MIN_STOP_SECONDS);
 
 export async function containerAction(action: ContainerAction): Promise<{ ok: boolean; message: string }> {
 	try {
 		for (const c of await gameContainers()) {
-			const t = action === "start" ? "" : "?t=60";
+			const name = c.Names?.[0] ?? c.Id;
+			const t = action === "start" ? "" : `?t=${stopSeconds((await inspect(c.Id)).Config?.StopTimeout)}`;
 			const res = await dockerFetch(`/containers/${c.Id}/${action}${t}`, {
 				method: "POST",
 			});
-			if (!res.ok && res.status !== 204 && res.status !== 304)
-				return {
-					ok: false,
-					message: `${action} failed (${res.status}) for ${c.Names?.[0] ?? c.Id}`,
-				};
+			if (!res.ok && res.status !== 204 && res.status !== 304) return { ok: false, message: `${action} failed (${res.status}) for ${name}` };
+			// A stop is only done when Docker says the container is no longer running.
+			if (action === "stop" && (await inspect(c.Id)).State?.Running) return { ok: false, message: `${name} is still running after stop` };
 		}
 		return { ok: true, message: `${SERVICE_NAME}: ${action} done` };
 	} catch (e) {

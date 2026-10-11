@@ -13,6 +13,21 @@ describe("release summary", () => {
 			schedule: { when: "idle", setAt: 2 },
 			lastError: null,
 		};
-		expect(summary(r)).toEqual({ id: "r1", createdAt: 1, install: 1, remove: 1, configs: 2, problems: r.problems, schedule: r.schedule, lastError: null });
+		expect(summary(r)).toEqual({
+			id: "r1",
+			createdAt: 1,
+			install: 1,
+			remove: 1,
+			configs: 2,
+			untracked: 0,
+			problems: r.problems,
+			schedule: r.schedule,
+			lastError: null,
+		});
+	});
+	it("counts hand-installed files the first apply moves aside", () => {
+		const plan = { install: [], remove: [], configsChanged: [], configsNew: [], untracked: ["plugins/A.dll", "plugins/B/b.dll"] };
+		const r = { id: "r2", createdAt: 1, configs: [], plan, problems: [], schedule: null, lastError: null } as unknown as Release;
+		expect(summary(r).untracked).toBe(2);
 	});
 });

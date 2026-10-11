@@ -3,13 +3,14 @@
 // Nobody gets kicked by accident.
 import { mkdir, readFile, rm } from "fs/promises";
 import { join } from "path";
-import { createBackup } from "./backups";
 import { FEATURES } from "./config";
-import { containerAction } from "./docker";
-import { envValue } from "./env";
-import { applyManifest, loadInstalled, planChanges, prefetch, type ApplyResult } from "./install";
+import { activeWorld } from "./env";
+import { writeAtomic } from "./fsutil";
+import { applyManifest, firstTakeover, loadInstalled, planChanges, prefetch, untrackedFiles, type ApplyResult } from "./install";
+import { withServerStopped } from "./maintenance";
 import { tailLog } from "./logs";
 import { configHashes, hashMods, isPack, normalizeManifest, saveManifest, type Manifest, type ServerInfo } from "./manifest";
+import { configRel } from "./configdir";
 import { BEPINEX_CONFIG_DIR, MM_DIR } from "./paths";
 import { onlineFrom, sessionsFromLog } from "./players";
 
@@ -21,6 +22,8 @@ export interface ReleasePlan {
 	remove: string[];
 	configsChanged: string[];
 	configsNew: string[];
+	/** first apply on a hand-installed server: these plugin files are moved aside (kept, not deleted) */
+	untracked?: string[];
 }
 
 export type Schedule = { when: "idle"; setAt: number } | { when: "at"; at: number; setAt: number };
@@ -44,6 +47,8 @@ export interface ReleaseSummary {
 	install: number;
 	remove: number;
 	configs: number;
+	/** hand-installed files that the first apply moves aside */
+	untracked: number;
 	problems: string[];
 	schedule: Schedule | null;
 	lastError: string | null;
@@ -55,6 +60,7 @@ export const summary = (r: Release): ReleaseSummary => ({
 	install: r.plan.install.length,
 	remove: r.plan.remove.length,
 	configs: r.plan.configsChanged.length + r.plan.configsNew.length,
+	untracked: r.plan.untracked?.length ?? 0,
 	problems: r.problems,
 	schedule: r.schedule,
 	lastError: r.lastError,
@@ -69,7 +75,7 @@ export async function pendingRelease(): Promise<Release | null> {
 }
 
 async function save(r: Release | null): Promise<void> {
-	if (r) await Bun.write(PENDING_FILE, JSON.stringify(r, null, 2));
+	if (r) await writeAtomic(PENDING_FILE, JSON.stringify(r, null, 2));
 	else await rm(PENDING_FILE, { force: true });
 }
 
@@ -81,10 +87,6 @@ export async function discardRelease(id?: string): Promise<boolean> {
 	return true;
 }
 
-const safeRel = (p: string): string | null => {
-	const rel = p.replace(/\\/g, "/");
-	return rel.startsWith("/") || rel.split("/").some((x) => x === "..") ? null : rel;
-};
 
 export interface StageBody {
 	mods?: unknown;
@@ -105,7 +107,7 @@ export async function stageRelease(body: StageBody, info: ServerInfo, log: (l: s
 	const configsNew: string[] = [];
 	for (const f of Array.isArray(body.configs) ? body.configs : []) {
 		if (typeof f?.path !== "string" || typeof f?.contentBase64 !== "string") continue;
-		const rel = safeRel(f.path);
+		const rel = configRel(f.path);
 		if (!rel) continue;
 		const bytes = Buffer.from(f.contentBase64, "base64");
 		await Bun.write(join(dir, rel), bytes);
@@ -130,6 +132,7 @@ export async function stageRelease(body: StageBody, info: ServerInfo, log: (l: s
 			remove: toRemove,
 			configsChanged,
 			configsNew,
+			untracked: (await firstTakeover()) ? await untrackedFiles(installed) : [],
 		},
 		problems,
 		schedule: null,
@@ -160,44 +163,40 @@ export interface ApplyReport {
 	restartRequired: boolean;
 }
 
-/** stop → backup → install lock → write configs → save manifest → start. The caller serializes. */
+/**
+ * stop (verified) → backup (required when the world exists) → install lock → write configs → save manifest
+ * → start. A failed stop or backup aborts before anything changes. The caller serializes.
+ */
 export async function applyRelease(id: string, log: (l: string) => void = () => {}): Promise<ApplyReport> {
 	const r = await pendingRelease();
 	if (!r || r.id !== id) throw new Error("no such pending release");
-	const stopped = FEATURES.control ? await containerAction("stop") : null;
 	try {
-		let backup: ApplyReport["backup"] = null;
-		if (FEATURES.backups) {
-			const world = (await envValue("WORLD_NAME")) || "";
-			try {
-				const b = await createBackup(world, "pre-release");
-				backup = { id: b.id, size: b.size };
-				log(`backup ${b.id}`);
-			} catch (e) {
-				log(`backup skipped: ${(e as Error).message}`);
-			}
-		}
-		const result = await applyManifest(r.manifest, log);
-		const configsWritten: string[] = [];
-		for (const rel of r.configs) {
-			await Bun.write(join(BEPINEX_CONFIG_DIR, rel), Bun.file(join(RELEASES_DIR, r.id, "config", rel)));
-			configsWritten.push(rel);
-		}
-		// The saved manifest describes what is really installed: a mod whose download failed stays out, so
-		// clients keep seeing it as missing on the server instead of "in sync".
-		const m = r.manifest;
-		const inst = await loadInstalled();
-		m.mods = m.mods.filter((x) => isPack(x.id) || inst[x.id]?.version === x.version);
-		m.hash = hashMods(m.mods);
-		m.configs = await configHashes();
-		await saveManifest(m);
-		await discardRelease(r.id);
-		const started = FEATURES.control ? await containerAction("start") : null;
-		return { backup, stopped, result, configsWritten, started, restartRequired: !FEATURES.control };
+		const { value, ...report } = await withServerStopped(
+			{ world: await activeWorld(), label: "pre-release", control: true, requireStopped: false, log },
+			async () => {
+				const result = await applyManifest(r.manifest, log);
+				const configsWritten: string[] = [];
+				for (const rel of r.configs) {
+					await writeAtomic(join(BEPINEX_CONFIG_DIR, rel), new Uint8Array(await readFile(join(RELEASES_DIR, r.id, "config", rel))));
+					configsWritten.push(rel);
+				}
+				// The saved manifest describes what is really installed: a mod whose download failed stays out, so
+				// clients keep seeing it as missing on the server instead of "in sync".
+				const m = r.manifest;
+				const inst = await loadInstalled();
+				m.mods = m.mods.filter((x) => isPack(x.id) || inst[x.id]?.version === x.version);
+				m.hash = hashMods(m.mods);
+				m.configs = await configHashes();
+				await saveManifest(m);
+				await discardRelease(r.id);
+				return { result, configsWritten };
+			},
+		);
+		return { ...report, ...value };
 	} catch (e) {
-		if (FEATURES.control) await containerAction("start");
 		r.lastError = (e as Error).message;
-		await save(r);
+		// the release is still pending unless the apply got as far as discarding it
+		if ((await pendingRelease())?.id === r.id) await save(r);
 		throw e;
 	}
 }

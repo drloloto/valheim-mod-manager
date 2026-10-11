@@ -1,12 +1,14 @@
-import { readdir, readFile, writeFile } from "fs/promises";
-import { join, normalize, sep } from "path";
-
-function safePath(rel: string) {
-	const abs = normalize(join(BEPINEX_CONFIG_DIR, rel));
-	if (!abs.startsWith(BEPINEX_CONFIG_DIR + sep)) throw new Error("Ungültiger Pfad");
-	return abs;
-}
+import { readFile } from "fs/promises";
+import { join } from "path";
+import { configRel, walkConfigs } from "./configdir";
+import { writeAtomic } from "./fsutil";
 import { BEPINEX_CONFIG_DIR } from "./paths";
+
+function safePath(p: string) {
+	const rel = configRel(p);
+	if (!rel) throw new Error("invalid config path");
+	return join(BEPINEX_CONFIG_DIR, rel);
+}
 
 export interface ConfigSetting {
 	section: string;
@@ -23,24 +25,7 @@ export interface ParsedConfig {
 	settings: ConfigSetting[];
 }
 
-export async function listConfigFiles(): Promise<string[]> {
-	const files: string[] = [];
-	async function walk(dir: string, prefix: string) {
-		const items = await readdir(join(BEPINEX_CONFIG_DIR, dir), {
-			withFileTypes: true,
-		}).catch(() => []);
-		for (const item of items) {
-			const rel = prefix ? `${prefix}/${item.name}` : item.name;
-			if (item.isDirectory()) {
-				await walk(rel, rel);
-			} else if (item.name.endsWith(".cfg")) {
-				files.push(rel);
-			}
-		}
-	}
-	await walk("", "");
-	return files.sort();
-}
+export const listConfigFiles = () => walkConfigs((name) => name.endsWith(".cfg"));
 
 export async function parseConfigFile(relPath: string): Promise<ParsedConfig> {
 	const abs = safePath(relPath);
@@ -126,5 +111,5 @@ export async function saveConfigChanges(relPath: string, changes: { section: str
 		return line;
 	});
 
-	await writeFile(abs, newLines.join(raw.includes("\r\n") ? "\r\n" : "\n"));
+	await writeAtomic(abs, newLines.join(raw.includes("\r\n") ? "\r\n" : "\n"));
 }

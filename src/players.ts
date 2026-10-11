@@ -1,6 +1,7 @@
 // Valheim's player lists next to worlds_local: adminlist.txt, permittedlist.txt, bannedlist.txt.
 // One id per line (Steam64 or PlayFab id), `//` comments; we keep a trailing `# name` note per line.
 import { join } from "path";
+import { writeAtomic } from "./fsutil";
 import { CONFIG_DIR } from "./paths";
 
 export type ListName = "admin" | "permitted" | "banned";
@@ -44,7 +45,7 @@ export async function writeList(name: ListName, entries: PlayerEntry[]): Promise
 	const clean = entries
 		.filter((e) => e && typeof e.id === "string" && ID_RE.test(e.id) && !seen.has(e.id) && seen.add(e.id))
 		.map((e) => ({ id: e.id, note: String(e.note ?? "").trim() }));
-	await Bun.write(join(CONFIG_DIR, LIST_FILES[name]), formatList(clean, `${LIST_FILES[name]} managed by the companion`));
+	await writeAtomic(join(CONFIG_DIR, LIST_FILES[name]), formatList(clean, `${LIST_FILES[name]} managed by the companion`));
 	return clean;
 }
 

@@ -1,0 +1,87 @@
+/*
+ * Desktop overrides for shadcn-svelte (style vega). Same specificity as style-vega.css,
+ * so this file wins by being imported later. Generated components stay untouched.
+ */
+.style-vega {
+	/* Buttons: dense, no press-down effect, arrow cursor */
+	.cn-button {
+		@apply cursor-default text-[13px] shadow-none active:not-aria-[haspopup]:translate-y-0;
+	}
+	.cn-button-variant-default {
+		@apply hover:bg-primary-hover font-bold;
+	}
+	.cn-button-variant-outline {
+		@apply border-line-strong hover:bg-muted dark:border-line-strong dark:hover:bg-muted bg-transparent shadow-none dark:bg-transparent;
+	}
+	.cn-button-variant-ghost {
+		@apply text-foreground-soft hover:bg-muted hover:text-foreground dark:hover:bg-muted;
+	}
+	.cn-button-variant-secondary {
+		@apply bg-muted hover:bg-line-strong;
+	}
+	.cn-button-size-default {
+		@apply h-control rounded-md px-3;
+	}
+	.cn-button-size-sm {
+		@apply h-control-sm rounded-[5px] px-2.5;
+	}
+	.cn-button-size-lg {
+		@apply h-9 rounded-md px-4.5 text-sm;
+	}
+	.cn-button-size-icon {
+		@apply size-control rounded-md;
+	}
+	.cn-button-size-icon-sm {
+		@apply size-control-sm rounded-[5px];
+	}
+
+	/* Inputs */
+	.cn-input {
+		@apply h-control bg-field dark:bg-field border-input rounded-md text-sm shadow-none md:text-sm;
+	}
+	.cn-checkbox {
+		@apply border-checkbox-line dark:data-checked:bg-primary size-3.5 rounded-[3px] shadow-none dark:bg-transparent;
+	}
+	.cn-switch {
+		@apply shadow-none;
+	}
+	.cn-select-trigger {
+		@apply h-control bg-field dark:bg-field dark:hover:bg-field border-input text-sm shadow-none;
+	}
+
+	/* Menus and popovers */
+	.cn-context-menu-content,
+	.cn-dropdown-menu-content,
+	.cn-select-content {
+		@apply border-line-strong bg-raised rounded-lg border p-[5px] shadow-(--shadow-menu) ring-0;
+	}
+	.cn-context-menu-item,
+	.cn-dropdown-menu-item,
+	.cn-dropdown-menu-radio-item,
+	.cn-select-item {
+		@apply focus:bg-primary-soft h-[30px] cursor-default rounded-[5px] py-0 text-[13px];
+	}
+	.cn-context-menu-label,
+	.cn-dropdown-menu-label {
+		@apply label-caps px-2.5 pt-1.5 pb-2;
+	}
+	.cn-context-menu-shortcut,
+	.cn-dropdown-menu-shortcut {
+		@apply text-subtle-foreground text-meta font-mono tracking-normal;
+	}
+	.cn-context-menu-separator,
+	.cn-dropdown-menu-separator {
+		@apply bg-border mx-1.5 my-1;
+	}
+	.cn-tooltip-content {
+		@apply bg-raised text-foreground border-line-strong border text-xs;
+	}
+
+	/* Dialogs */
+	.cn-dialog-content {
+		@apply bg-panel ring-line-strong rounded-lg;
+	}
+	.cn-dialog-overlay {
+		@apply bg-black/50;
+	}
+}

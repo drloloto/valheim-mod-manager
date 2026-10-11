@@ -1,9 +1,11 @@
 // Installs a manifest (lock) into /config/bepinex. Layout rules are a port of the client's install.rs so a
 // profile looks the same on both sides. The BepInEx pack is skipped: the server image ships BepInEx.
-import { mkdir, readFile, readdir, rm, stat } from "fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat } from "fs/promises";
 import { dirname, join, normalize, sep } from "path";
 import { unzipSync } from "fflate";
-import { BEPINEX_DIR, DOWNLOAD_CACHE_DIR, INSTALLED_FILE } from "./paths";
+import { writeAtomic } from "./fsutil";
+import { configRel } from "./configdir";
+import { BEPINEX_CONFIG_DIR, BEPINEX_DIR, DOWNLOAD_CACHE_DIR, INSTALLED_FILE, UNTRACKED_DIR } from "./paths";
 import { isPack, type Manifest, type ManifestMod } from "./manifest";
 
 const EXCLUDED_ROOT_FILES = new Set(["icon.png", "manifest.json", "readme.md", "changelog.md"]);
@@ -58,8 +60,11 @@ function safeJoin(base: string, rel: string): string {
 	return abs;
 }
 
-/** Extracts one zip into `bepinexDir`; returns the written files (relative, configs excluded). */
-export async function extractZip(zipBytes: Uint8Array, bepinexDir: string, id: string): Promise<string[]> {
+/**
+ * Extracts one zip into `bepinexDir`; returns the written files (relative, configs excluded). A package's
+ * `config/` goes to the config folder (in the image that is /config/bepinex itself) and never overwrites.
+ */
+export async function extractZip(zipBytes: Uint8Array, bepinexDir: string, id: string, configDir = BEPINEX_CONFIG_DIR): Promise<string[]> {
 	const files = unzipSync(zipBytes);
 	const entries: { name: string; parts: string[]; isDir: boolean }[] = [];
 	for (const name of Object.keys(files)) {
@@ -74,8 +79,10 @@ export async function extractZip(zipBytes: Uint8Array, bepinexDir: string, id: s
 		const target = mapTarget(layout, e.parts, id);
 		if (!target) continue;
 		const rel = target.join("/");
-		const dest = safeJoin(bepinexDir, rel);
-		const isConfig = rel.startsWith("config/");
+		const isConfig = target[0] === "config";
+		const configPath = isConfig ? configRel(target.slice(1).join("/")) : null;
+		if (isConfig && !configPath) continue;
+		const dest = configPath ? join(configDir, configPath) : safeJoin(bepinexDir, rel);
 		if (isConfig && (await Bun.file(dest).exists())) continue; // never overwrite server configs
 		await mkdir(dirname(dest), { recursive: true });
 		await Bun.write(dest, files[e.name]);
@@ -93,7 +100,7 @@ export async function loadInstalled(): Promise<Installed> {
 }
 
 async function saveInstalled(map: Installed): Promise<void> {
-	await Bun.write(INSTALLED_FILE, JSON.stringify(map, null, 2));
+	await writeAtomic(INSTALLED_FILE, JSON.stringify(map, null, 2));
 }
 
 async function pruneEmptyDir(dir: string, base: string): Promise<void> {
@@ -132,6 +139,44 @@ export interface ApplyResult {
 	installed: string[];
 	removed: string[];
 	errors: string[];
+	/** hand-installed files moved aside on the first apply (relative to BepInEx) */
+	movedAside: string[];
+	/** where they went, null when nothing was moved */
+	movedAsideTo: string | null;
+}
+
+/** No installed.json yet: the companion has never installed anything here, whatever is in plugins/ was put there by hand. */
+export const firstTakeover = async () => !(await Bun.file(INSTALLED_FILE).exists());
+
+/** Files under plugins/ and patchers/ that installed.json does not know (relative to the BepInEx folder). */
+export async function untrackedFiles(installed: Installed, bepinexDir = BEPINEX_DIR): Promise<string[]> {
+	const tracked = new Set(Object.values(installed).flatMap((e) => e.files));
+	const out: string[] = [];
+	const walk = async (rel: string) => {
+		for (const it of await readdir(join(bepinexDir, rel), { withFileTypes: true }).catch(() => [])) {
+			const r = `${rel}/${it.name}`;
+			if (it.isDirectory()) await walk(r);
+			else if (!tracked.has(r)) out.push(r);
+		}
+	};
+	for (const top of ["plugins", "patchers"]) await walk(top);
+	return out.sort();
+}
+
+/**
+ * Moves files out of the BepInEx folder into `targetDir`, keeping their relative paths. Nothing is deleted:
+ * the image prunes them from /opt/valheim on the next start because they left /config/bepinex.
+ */
+export async function moveAside(files: string[], targetDir: string, bepinexDir = BEPINEX_DIR): Promise<void> {
+	const dirs = new Set<string>();
+	for (const rel of files) {
+		const from = safeJoin(bepinexDir, rel);
+		const to = join(targetDir, ...rel.split("/"));
+		await mkdir(dirname(to), { recursive: true });
+		await rename(from, to);
+		dirs.add(dirname(from));
+	}
+	for (const d of [...dirs].sort((a, b) => b.length - a.length)) await pruneEmptyDir(d, bepinexDir);
 }
 
 /** What the manifest wants that installed.json does not have, and the other way round. */
@@ -174,8 +219,7 @@ export async function prefetch(mods: ManifestMod[], log: (line: string) => void 
 					});
 					if (!res.ok) throw new Error(`HTTP ${res.status}`);
 					await Bun.write(`${zip}.part`, res);
-					await Bun.write(zip, Bun.file(`${zip}.part`));
-					await rm(`${zip}.part`, { force: true });
+					await rename(`${zip}.part`, zip);
 					log(`downloaded ${mod.id} ${mod.version}`);
 				}
 				const files = unzipSync(new Uint8Array(await readFile(zip)));
@@ -192,9 +236,23 @@ export async function prefetch(mods: ManifestMod[], log: (line: string) => void 
 }
 
 export async function applyManifest(m: Manifest, log: (line: string) => void = () => {}): Promise<ApplyResult> {
+	const takeover = await firstTakeover();
 	const installed = await loadInstalled();
 	const { toInstall, toRemove } = planChanges(m.mods, installed);
-	const result: ApplyResult = { installed: [], removed: [], errors: await prefetch(toInstall, log) };
+	const result: ApplyResult = { installed: [], removed: [], errors: await prefetch(toInstall, log), movedAside: [], movedAsideTo: null };
+
+	// A hand-installed server: the lock replaces whatever is in plugins/, otherwise old and new copies of the
+	// same mod would both load. The old files are kept, not deleted.
+	if (takeover) {
+		const untracked = await untrackedFiles(installed);
+		if (untracked.length) {
+			const target = join(UNTRACKED_DIR, new Date().toISOString().replace(/[:.]/g, "-"));
+			await moveAside(untracked, target);
+			result.movedAside = untracked;
+			result.movedAsideTo = target;
+			log(`moved ${untracked.length} hand-installed files to ${target}`);
+		}
+	}
 
 	for (const id of toRemove) {
 		try {

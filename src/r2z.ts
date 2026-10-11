@@ -1,10 +1,11 @@
 // The server's profile as an r2modman-compatible zip: export.r2x (YAML mod list) + BepInEx/config/*.
 // The client imports it with its existing .r2z code path, so every manifest entry becomes a pinned mod.
-import { readFile, readdir } from "fs/promises";
+import { readFile } from "fs/promises";
 import { join } from "path";
 import { strToU8, zipSync } from "fflate";
+import { walkConfigs } from "./configdir";
 import { BEPINEX_CONFIG_DIR } from "./paths";
-import { CONFIG_EXTS, type Manifest } from "./manifest";
+import { isConfigFile, type Manifest } from "./manifest";
 
 const yamlStr = (s: string) => JSON.stringify(s);
 
@@ -19,16 +20,7 @@ export function buildR2x(profileName: string, mods: { id: string; version: strin
 
 async function configFiles(dir: string): Promise<Record<string, Uint8Array>> {
 	const out: Record<string, Uint8Array> = {};
-	async function walk(sub: string) {
-		const items = await readdir(join(dir, sub), { withFileTypes: true }).catch(() => []);
-		for (const it of items) {
-			const rel = sub ? `${sub}/${it.name}` : it.name;
-			if (it.isDirectory()) await walk(rel);
-			else if (CONFIG_EXTS.includes(it.name.split(".").pop()?.toLowerCase() ?? ""))
-				out[`BepInEx/config/${rel}`] = new Uint8Array(await readFile(join(dir, rel)));
-		}
-	}
-	await walk("");
+	for (const rel of await walkConfigs(isConfigFile, dir)) out[`BepInEx/config/${rel}`] = new Uint8Array(await readFile(join(dir, rel)));
 	return out;
 }
 
