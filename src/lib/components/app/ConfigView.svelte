@@ -5,6 +5,8 @@
 	import type { ConfigSetting } from "#lib/api/types.js";
 	import { t } from "#lib/i18n/index.svelte.js";
 	import { cn } from "#lib/utils.js";
+	import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
+	import { parseRange } from "#lib/config-range.js";
 
 	let files = $state<string[]>([]);
 	let fileFilter = $state("");
@@ -66,6 +68,15 @@
 			.split(",")
 			.map((x) => x.trim())
 			.filter(Boolean);
+	}
+
+	/** BepInEx writes comments only for entries the mod still binds; a bare key = value is a leftover. */
+	function isOrphan(s: ConfigSetting) {
+		return !s.type && s.defaultValue == null && !s.description;
+	}
+
+	function current(i: number) {
+		return dirty.get(i) ?? settings[i].value;
 	}
 
 	function setValue(i: number, value: string) {
@@ -146,6 +157,7 @@
 				</Toolbar>
 				<div class="flex-1 overflow-y-auto px-6">
 					{#each visible as { s, i }, n (i)}
+						{@const range = parseRange(s.acceptableValues, s.type)}
 						{#if n === 0 || visible[n - 1].s.section !== s.section}
 							<SectionLabel class="border-b pt-5 pb-2.5">{s.section}</SectionLabel>
 						{/if}
@@ -155,6 +167,7 @@
 									{s.key}{#if dirty.has(i)}<span class="bg-primary size-1.5 rounded-full"></span>{/if}
 								</span>
 								{#if s.description}<p class="text-muted-foreground selectable text-xs leading-snug">{s.description}</p>{/if}
+								{#if isOrphan(s)}<p class="text-subtle-foreground text-xs">{t("config.orphan")}</p>{/if}
 								<p class="text-subtle-foreground text-meta font-mono">
 									{[
 										s.type,
@@ -165,18 +178,48 @@
 										.join(" · ")}
 								</p>
 							</div>
-							<div>
-								{#if isBool(s.type)}
-									<Switch checked={(dirty.get(i) ?? s.value) === "true"} onCheckedChange={(v) => setValue(i, String(v))} aria-label={s.key} />
-								{:else if enumOptions(s).length}
-									<Choice value={dirty.get(i) ?? s.value} options={enumOptions(s)} onchange={(v) => setValue(i, v)} />
-								{:else}
-									<Input
-										class="font-mono text-[12.5px]"
-										spellcheck={false}
-										value={dirty.get(i) ?? s.value}
-										oninput={(e) => setValue(i, e.currentTarget.value)}
-									/>
+							<div class="flex items-center gap-1.5">
+								<div class="min-w-0 flex-1">
+									{#if isBool(s.type)}
+										<Switch checked={current(i) === "true"} onCheckedChange={(v) => setValue(i, String(v))} aria-label={s.key} />
+									{:else if enumOptions(s).length}
+										<Choice value={current(i)} options={enumOptions(s)} onchange={(v) => setValue(i, v)} />
+									{:else if range}
+										<div class="flex items-center gap-2">
+											<input
+												type="range"
+												class="accent-primary min-w-0 flex-1"
+												min={range.min}
+												max={range.max}
+												step={range.step}
+												value={Number(current(i)) || range.min}
+												oninput={(e) => setValue(i, e.currentTarget.value)}
+												aria-label={s.key}
+											/>
+											<Input
+												class="w-[5.5rem] font-mono text-[12.5px]"
+												type="number"
+												min={range.min}
+												max={range.max}
+												step={range.step}
+												value={current(i)}
+												oninput={(e) => setValue(i, e.currentTarget.value)}
+											/>
+										</div>
+									{:else}
+										<Input class="font-mono text-[12.5px]" spellcheck={false} value={current(i)} oninput={(e) => setValue(i, e.currentTarget.value)} />
+									{/if}
+								</div>
+								{#if s.defaultValue != null && current(i) !== s.defaultValue}
+									<Button
+										size="sm"
+										variant="ghost"
+										class="h-7 w-7 shrink-0 p-0"
+										title={t("config.reset", { v: s.defaultValue })}
+										onclick={() => setValue(i, s.defaultValue!)}
+									>
+										<RotateCcw class="size-3.5" />
+									</Button>
 								{/if}
 							</div>
 						</div>

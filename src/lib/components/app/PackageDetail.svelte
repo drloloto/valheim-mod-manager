@@ -123,10 +123,11 @@
 		{#if activeTab !== "details"}
 			<ModDocs {pkg} tab={activeTab} {wiki} />
 		{:else}
-			<div class="grid grid-cols-3 border-b px-5 py-3">
+			<div class="grid grid-cols-4 border-b px-5 py-3">
 				<Stat label={t("detail.downloads")} value={formatNumber(pkg.dl)} />
 				<Stat label={t("detail.rating")} value={`★ ${formatNumber(pkg.rating)}`} />
 				<Stat label={t("detail.size")} value={latest ? formatBytes(latest.size) : "—"} />
+				<Stat label={t("detail.usedBy")} value={formatNumber(store.byId.get(id)?.ndependants ?? 0)} />
 			</div>
 
 			{#if pkg.cats.length}
@@ -180,7 +181,7 @@
 					<Dialog.Description class="sr-only">{pkg.desc}</Dialog.Description>
 					<Segmented options={docTabs} bind:value={() => expandedTab, (v) => (expandedTab = v as DocTab)} size="sm" />
 				</Dialog.Header>
-				<ModDocs {pkg} tab={expandedTab} {wiki} wide />
+				<ModDocs {pkg} tab={expandedTab} {wiki} wide onnavigate={() => (expanded = false)} />
 			</Dialog.Content>
 		</Dialog.Root>
 	{/if}

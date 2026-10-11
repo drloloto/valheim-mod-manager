@@ -40,7 +40,19 @@ pub struct SyncJob {
     pub repair: bool,
 }
 
+/// One retry after a short pause: Thunderstore's CDN has documented blips, and a sync that drops a mod
+/// over a single failed request is worse than a two-second wait.
 async fn download(client: &reqwest::Client, url: &str, dest: &Path) -> Result<()> {
+    match download_once(client, url, dest).await {
+        Err(AppError::Network(first)) => {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            download_once(client, url, dest).await.map_err(|e| AppError::Network(format!("{e} (first attempt: {first})")))
+        }
+        other => other,
+    }
+}
+
+async fn download_once(client: &reqwest::Client, url: &str, dest: &Path) -> Result<()> {
     let res = client.get(url).send().await?;
     if !res.status().is_success() {
         return Err(AppError::Network(format!("HTTP {}", res.status())));

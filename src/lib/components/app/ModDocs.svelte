@@ -1,12 +1,26 @@
 <script lang="ts">
 	// Readme, changelog or wiki of a package, rendered in place. Content is fetched lazily per tab and
 	// cached in the store; the wiki tab lists its pages first.
+	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import { Button, Markdown } from "#lib/components/kit/index.js";
+	import { packageIdFromUrl } from "#lib/thunderstore-links.js";
 	import { store } from "#lib/api/store.svelte.js";
 	import type { DocTab, Pkg, WikiIndex } from "#lib/api/types.js";
 	import { t } from "#lib/i18n/index.svelte.js";
 
-	let { pkg, tab, wiki, wide = false }: { pkg: Pkg; tab: DocTab; wiki: WikiIndex | null; wide?: boolean } = $props();
+	let { pkg, tab, wiki, wide = false, onnavigate }: { pkg: Pkg; tab: DocTab; wiki: WikiIndex | null; wide?: boolean; onnavigate?: () => void } = $props();
+
+	// Links to other Valheim packages stay in the app; everything else opens the system browser.
+	function link(href: string) {
+		const id = packageIdFromUrl(href);
+		if (id && store.focusPackage(id)) {
+			onnavigate?.();
+			goto(resolve("/"));
+			return;
+		}
+		store.openExternal(href);
+	}
 
 	const version = $derived(pkg.versions[0]?.v ?? "");
 	let page = $state<string | null>(null);
@@ -57,7 +71,7 @@
 		{:else if !md.trim()}
 			<p class="text-muted-foreground text-sm">{t(tab === "changelog" ? "detail.noChangelog" : "detail.noReadme")}</p>
 		{:else}
-			<Markdown source={md} onlink={(href) => store.openExternal(href)} class={wide ? "md-wide" : ""} />
+			<Markdown source={md} onlink={link} class={wide ? "md-wide" : ""} />
 		{/if}
 	</div>
 </div>

@@ -21,6 +21,7 @@ export const pkg = (o: Partial<SlimPkg>): SlimPkg => ({
 	nsfw: false,
 	pinned: false,
 	ndeps: 0,
+	ndependants: 0,
 	nver: 1,
 	size: 0,
 	deps: [],

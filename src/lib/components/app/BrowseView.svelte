@@ -51,6 +51,7 @@
 		{ key: "created", label: t("col.created"), width: "88px", align: "right", sortable: true, hidden: true },
 		{ key: "size", label: t("col.size"), width: "76px", align: "right", sortable: true, hidden: true },
 		{ key: "ndeps", label: t("col.ndeps"), width: "56px", align: "right", sortable: true, hidden: true },
+		{ key: "ndependants", label: t("col.ndependants"), width: "76px", align: "right", sortable: true, hidden: true },
 		{ key: "nver", label: t("col.nver"), width: "80px", align: "right", sortable: true, hidden: true },
 		{ key: "cats", label: t("col.cats"), width: "180px", hidden: true },
 		{ key: "status", label: t("col.profile"), width: "132px", align: "right" },
@@ -231,6 +232,8 @@
 						<span class="cell-mono">{formatBytes(p.size)}</span>
 					{:else if key === "ndeps"}
 						<span class="cell-mono">{p.ndeps}</span>
+					{:else if key === "ndependants"}
+						<span class="cell-mono">{p.ndependants ? formatCompact(p.ndependants) : "—"}</span>
 					{:else if key === "nver"}
 						<span class="cell-mono">{p.nver}</span>
 					{:else if key === "cats"}

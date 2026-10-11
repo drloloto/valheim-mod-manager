@@ -20,8 +20,9 @@ export const BIT: Record<ListKey | DateKey | NumKey | "query", number> = {
 	size: 1 << 10,
 	ndeps: 1 << 11,
 	query: 1 << 12,
+	ndependants: 1 << 13,
 };
-export const ALL = (1 << 13) - 1;
+export const ALL = (1 << 14) - 1;
 
 /** Search key of a package; compute once per index, not per keystroke. */
 export function searchKey(p: SlimPkg): string {

@@ -260,9 +260,15 @@ pub async fn get_package_doc(ctx: State<'_, AppCtx>, id: String, version: String
     if version.is_empty() || !version.chars().all(|c| c.is_ascii_alphanumeric() || c == '.') {
         return Err(AppError::Invalid(format!("Invalid version \"{version}\".")));
     }
+    // Authors can edit readme and changelog on Thunderstore after the upload, so a cached copy is
+    // trusted for a week, not forever.
+    const DOC_TTL: Duration = Duration::from_secs(7 * 24 * 3600);
     let cache = ctx.paths.doc_cache(&id, &version, kind.as_str());
-    if let Ok(md) = std::fs::read_to_string(&cache) {
-        return Ok(md);
+    let fresh = std::fs::metadata(&cache).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age < DOC_TTL);
+    if fresh {
+        if let Ok(md) = std::fs::read_to_string(&cache) {
+            return Ok(md);
+        }
     }
     let pkg = get_package(ctx.clone(), id).await?;
     let md = thunderstore::fetch_doc(&ctx.client, &pkg.ns, &pkg.name, &version, kind).await?;

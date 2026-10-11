@@ -68,6 +68,7 @@
 		rating: logBuckets(maxOf("rating"), String),
 		size: logBuckets(maxOf("size"), formatBytes),
 		ndeps: linearBuckets(8),
+		ndependants: logBuckets(maxOf("ndependants")),
 	});
 	const dateCounts = (key: DateKey) =>
 		countBuckets(
@@ -276,6 +277,21 @@
 
 		<FilterSection id="filter-ndeps" title={fieldLabel("ndeps")} summary={numSummary("ndeps")} open={open("ndeps")} ontoggle={() => f.toggleSection("ndeps")}>
 			<NumRangeFilter value={c.nums.ndeps} onchange={(r) => f.setNum("ndeps", r)} buckets={numBuckets.ndeps} counts={numCounts("ndeps")} />
+		</FilterSection>
+
+		<FilterSection
+			id="filter-ndependants"
+			title={fieldLabel("ndependants")}
+			summary={numSummary("ndependants")}
+			open={open("ndependants")}
+			ontoggle={() => f.toggleSection("ndependants")}
+		>
+			<NumRangeFilter
+				value={c.nums.ndependants}
+				onchange={(r) => f.setNum("ndependants", r)}
+				buckets={numBuckets.ndependants}
+				counts={numCounts("ndependants")}
+			/>
 		</FilterSection>
 	</div>
 </div>

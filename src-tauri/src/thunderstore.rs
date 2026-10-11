@@ -209,6 +209,8 @@ struct SlimPkg<'a> {
     nver: usize,
     /// Dependency IDs of the latest version, without version, BepInExPack canonicalized.
     deps: Vec<String>,
+    /// How many packages list this one as a dependency (latest versions only).
+    ndependants: usize,
 }
 
 fn dep_ids(deps: &[String]) -> Vec<String> {
@@ -240,11 +242,19 @@ pub struct Index {
 }
 
 pub fn build(fetched_at: i64, pkgs: Vec<Pkg>) -> Index {
+    let mut dependants: HashMap<&str, usize> = HashMap::new();
+    let dep_lists: Vec<Vec<String>> = pkgs.iter().map(|p| p.versions.first().map(|v| dep_ids(&v.deps)).unwrap_or_default()).collect();
+    for ids in &dep_lists {
+        for id in ids {
+            *dependants.entry(id.as_str()).or_default() += 1;
+        }
+    }
     let slim = SlimPayload {
         fetched_at,
         packages: pkgs
             .iter()
-            .map(|p| {
+            .zip(dep_lists.iter())
+            .map(|(p, deps)| {
                 let latest = p.versions.first();
                 SlimPkg {
                     id: &p.id,
@@ -264,7 +274,8 @@ pub fn build(fetched_at: i64, pkgs: Vec<Pkg>) -> Index {
                     size: latest.map(|v| v.size).unwrap_or(0),
                     created: p.created,
                     nver: p.versions.len(),
-                    deps: latest.map(|v| dep_ids(&v.deps)).unwrap_or_default(),
+                    deps: deps.clone(),
+                    ndependants: dependants.get(p.id.as_str()).copied().unwrap_or(0),
                 }
             })
             .collect(),
@@ -510,6 +521,20 @@ pub async fn refresh(store: &IndexStore, client: &reqwest::Client, cache: &Path,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slim_index_counts_dependants() {
+        let pkgs = vec![
+            crate::models::test_pkg("a-Lib", &[("1.0.0", &[])]),
+            crate::models::test_pkg("b-One", &[("1.0.0", &["a-Lib-1.0.0"])]),
+            crate::models::test_pkg("c-Two", &[("2.0.0", &["a-Lib-0.9.0", "b-One-1.0.0"]), ("1.0.0", &["a-Lib-0.9.0"])]),
+        ];
+        let idx = build(1, pkgs);
+        let slim: serde_json::Value = serde_json::from_slice(&idx.slim_json).unwrap();
+        let by: std::collections::HashMap<&str, u64> =
+            slim["packages"].as_array().unwrap().iter().map(|p| (p["id"].as_str().unwrap(), p["ndependants"].as_u64().unwrap())).collect();
+        assert_eq!((by["a-Lib"], by["b-One"], by["c-Two"]), (2, 1, 0));
+    }
 
     #[test]
     fn gunzip_is_transparent_and_chunks_merge_in_order() {

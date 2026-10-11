@@ -6,7 +6,7 @@ import { DATE_KEYS, LIST_KEYS, NUM_KEYS, type Criteria, type DateKey, type ListK
 import { collator } from "#lib/format.js";
 import { dateActive, matchesDate, matchesNum, numActive } from "./ranges";
 
-export const SORT_KEYS = ["dl", "rating", "upd", "created", "mod", "author", "size", "ndeps", "nver"] as const;
+export const SORT_KEYS = ["dl", "rating", "upd", "created", "mod", "author", "size", "ndeps", "ndependants", "nver"] as const;
 
 /** Facts from the active profile that the index does not know. */
 export interface ProfileFacts {
@@ -105,6 +105,7 @@ const COMPARE: Record<string, (a: SlimPkg, b: SlimPkg) => number> = {
 	rating: (a, b) => a.rating - b.rating,
 	size: (a, b) => a.size - b.size,
 	ndeps: (a, b) => a.ndeps - b.ndeps,
+	ndependants: (a, b) => a.ndependants - b.ndependants,
 	nver: (a, b) => a.nver - b.nver,
 };
 

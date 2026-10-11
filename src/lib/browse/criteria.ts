@@ -12,7 +12,7 @@ export type ListKey = (typeof LIST_KEYS)[number];
 export const DATE_KEYS = ["upd", "created"] as const;
 export type DateKey = (typeof DATE_KEYS)[number];
 
-export const NUM_KEYS = ["dl", "rating", "size", "ndeps"] as const;
+export const NUM_KEYS = ["dl", "rating", "size", "ndeps", "ndependants"] as const;
 export type NumKey = (typeof NUM_KEYS)[number];
 
 export type RangeKey = DateKey | NumKey;
@@ -67,7 +67,7 @@ export function defaultCriteria(opts: { showNsfw?: boolean } = {}): Criteria {
 		lists: { status: {}, cats: {}, owners: {}, profiles: {}, deps: {}, flags },
 		catMode: "any",
 		dates: { upd: null, created: null },
-		nums: { dl: null, rating: null, size: null, ndeps: null },
+		nums: { dl: null, rating: null, size: null, ndeps: null, ndependants: null },
 	};
 }
 

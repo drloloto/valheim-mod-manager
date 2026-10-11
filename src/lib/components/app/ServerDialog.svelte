@@ -46,6 +46,13 @@
 	}
 	/** The admin switched publishing off on the companion (COMPANION_ALLOW_PUBLISH=false). */
 	const publishOff = $derived(check?.reachable === true && check.features?.publish === false);
+	/** Thunderstore's "Server-side" / "Client-side" categories: a server-side mod missing on the server cannot work. */
+	function side(id: string): "server" | "client" | null {
+		const cats = store.byId.get(id)?.cats ?? [];
+		if (cats.includes("Server-side") && !cats.includes("Client-side")) return "server";
+		if (cats.includes("Client-side") && !cats.includes("Server-side")) return "client";
+		return null;
+	}
 	const nameOf = (id: string) => store.byId.get(id)?.name ?? id;
 
 	function close() {
@@ -184,8 +191,18 @@
 			</Dialog.Header>
 			<ul class="text-foreground-soft grid gap-1 text-xs">
 				{#each check.diff.changed as c (c.id)}<li>{t("server.changed", { id: nameOf(c.id), local: c.local, server: c.server })}</li>{/each}
-				{#each check.diff.onlyServer as m (m.id)}<li>{t("server.onlyServer", { id: nameOf(m.id), version: m.version })}</li>{/each}
-				{#each check.diff.onlyLocal as m (m.id)}<li>{t("server.onlyLocal", { id: nameOf(m.id), version: m.version })}</li>{/each}
+				{#each check.diff.onlyServer as m (m.id)}
+					<li>
+						{t("server.onlyServer", { id: nameOf(m.id), version: m.version })}
+						{#if side(m.id) === "client"}<span class="text-muted-foreground">· {t("server.clientSideHint")}</span>{/if}
+					</li>
+				{/each}
+				{#each check.diff.onlyLocal as m (m.id)}
+					<li class={side(m.id) === "server" ? "text-primary" : ""}>
+						{t("server.onlyLocal", { id: nameOf(m.id), version: m.version })}
+						{#if side(m.id) === "server"}· {t("server.serverSideHint")}{/if}
+					</li>
+				{/each}
 			</ul>
 			<label class="flex items-center gap-2 text-sm">
 				<Checkbox bind:checked={adoptConfigs} />

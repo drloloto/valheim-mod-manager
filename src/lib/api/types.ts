@@ -21,6 +21,8 @@ export interface SlimPkg {
 	nver: number;
 	/** Dependency IDs of the latest version (without version) */
 	deps: string[];
+	/** How many packages depend on this one (latest versions) */
+	ndependants: number;
 }
 
 export interface IndexPayload {

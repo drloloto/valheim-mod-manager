@@ -913,6 +913,13 @@ class ModManagerStore {
 		return this.cached(`wikipage:${page}`, () => api.getWikiPage(page));
 	}
 
+	/** From a readme link: select this package so the Browse detail panel shows it (the caller navigates). */
+	focusPackage(id: string): boolean {
+		if (!this.byId.has(id)) return false;
+		this.browse.selection = { ids: new Set([id]), anchor: id, focus: id };
+		return true;
+	}
+
 	/** From the detail panel: include a category or author (again: off). */
 	filterCategory(cat: string) {
 		this.browse.setTri("cats", cat, this.browse.criteria.lists.cats[cat] === 1 ? 0 : 1);
