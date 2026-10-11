@@ -25,6 +25,8 @@ markdown and are what the app uses since commit `c0c2172`.
 
 ## Decided: do next
 
+_Status, same evening: 1 to 9 are implemented (see CHANGELOG, Unreleased)._
+
 1. **Index on `package-listing-index`, v1 as fallback** (B#1, Must, M). v1 is deprecated in Swagger today.
    Chunked gzip JSON over the CDN, `Last-Modified` conditional GET, and a retry on the CDN outages the
    Thunderstore wiki documents. Adapter in `thunderstore.rs`, same `Pkg` output, no UI change.

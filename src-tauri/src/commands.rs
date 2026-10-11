@@ -10,6 +10,7 @@ use crate::migrate::{self, ForeignProfile};
 use crate::models::{Pkg, Plan, ProfileMod, ServerLink, Source};
 use crate::paths::Paths;
 use crate::profiles;
+use crate::publish;
 use crate::resolver;
 use crate::server::{self, ApplyResponse, ReleaseSummary, ServerDiff, StageResponse};
 use crate::settings::{self, Settings};
@@ -274,6 +275,80 @@ pub async fn get_package_doc(ctx: State<'_, AppCtx>, id: String, version: String
     let md = thunderstore::fetch_doc(&ctx.client, &pkg.ns, &pkg.name, &version, kind).await?;
     let _ = crate::util::write_atomic(&cache, md.as_bytes());
     Ok(md)
+}
+
+// ---- Publish as a Thunderstore modpack ----
+
+#[tauri::command]
+pub async fn thunderstore_categories(ctx: State<'_, AppCtx>) -> Result<Vec<publish::Category>> {
+    publish::fetch_categories(&ctx.client).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackPreview {
+    /// `Namespace-Name-1.2.3` for every resolved package, what the manifest will list.
+    dependencies: Vec<String>,
+    readme: String,
+    configs: usize,
+    has_token: bool,
+}
+
+#[tauri::command]
+pub async fn modpack_preview(ctx: State<'_, AppCtx>, profile: String, name: String, description: String) -> Result<ModpackPreview> {
+    let index = ctx.ensure_index().await?;
+    let p = profiles::load(&ctx.paths, &profile)?;
+    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    if !plan.errors.is_empty() {
+        return Err(AppError::Invalid(format!("The profile has unresolved mods: {}", plan.errors.join(", "))));
+    }
+    let mods: Vec<(String, String, String)> = plan
+        .resolved
+        .iter()
+        .map(|(id, r)| {
+            let pkg = index.by_id.get(id);
+            (pkg.map(|p| p.ns.clone()).unwrap_or_default(), pkg.map(|p| p.name.clone()).unwrap_or_else(|| id.clone()), r.version.clone())
+        })
+        .collect();
+    let title = if name.trim().is_empty() { p.name.clone() } else { name };
+    Ok(ModpackPreview {
+        dependencies: publish::dependency_strings(&plan),
+        readme: publish::default_readme(&title, &description, &mods),
+        configs: config::list_files_with_ext(&ctx.paths.config_dir(&profile), &share::CONFIG_EXTS).len(),
+        has_token: ctx.settings.read().unwrap().thunderstore_token.as_deref().is_some_and(|t| !t.trim().is_empty()),
+    })
+}
+
+#[tauri::command]
+pub async fn publish_modpack(ctx: State<'_, AppCtx>, profile: String, meta: publish::PublishMeta) -> Result<publish::PublishResult> {
+    let token = ctx
+        .settings
+        .read()
+        .unwrap()
+        .thunderstore_token
+        .clone()
+        .filter(|t| !t.trim().is_empty())
+        .ok_or_else(|| AppError::Invalid("Set a Thunderstore service-account token in the settings first.".into()))?;
+    let index = ctx.ensure_index().await?;
+    let p = profiles::load(&ctx.paths, &profile)?;
+    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    if !plan.errors.is_empty() {
+        return Err(AppError::Invalid(format!("The profile has unresolved mods: {}", plan.errors.join(", "))));
+    }
+    let icon = match &meta.icon_path {
+        Some(path) if !path.trim().is_empty() => std::fs::read(path)?,
+        _ => publish::DEFAULT_ICON.to_vec(),
+    };
+    let configs = if meta.include_configs {
+        let dir = ctx.paths.config_dir(&profile);
+        config::list_files_with_ext(&dir, &share::CONFIG_EXTS)
+            .into_iter()
+            .filter_map(|rel| crate::util::safe_join(&dir, &rel).ok().and_then(|p| std::fs::read(p).ok()).map(|b| (rel, b)))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    publish::publish(&ctx.client, token.trim(), &meta, &plan, icon, configs).await
 }
 
 #[tauri::command]

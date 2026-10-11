@@ -11,11 +11,13 @@ pub struct Settings {
     pub download_concurrency: usize,
     pub index_ttl_minutes: u64,
     pub show_nsfw: bool,
+    /// Thunderstore team service-account token (`tss_…`) for publishing modpacks; stored locally only.
+    pub thunderstore_token: Option<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { valheim_dir: None, steam_exe: None, download_concurrency: 4, index_ttl_minutes: 30, show_nsfw: false }
+        Settings { valheim_dir: None, steam_exe: None, download_concurrency: 4, index_ttl_minutes: 30, show_nsfw: false, thunderstore_token: None }
     }
 }
 
@@ -32,6 +34,7 @@ pub fn save(paths: &Paths, s: &Settings) -> Result<Settings> {
         download_concurrency: s.download_concurrency.clamp(1, 16),
         index_ttl_minutes: s.index_ttl_minutes.max(5),
         show_nsfw: s.show_nsfw,
+        thunderstore_token: blank(&s.thunderstore_token),
     };
     write_json(&paths.settings_file(), &clean)?;
     Ok(clean)

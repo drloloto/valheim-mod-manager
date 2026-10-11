@@ -19,6 +19,10 @@ import type {
 	ServerDiscovery,
 	StageResponse,
 	WikiIndex,
+	PublishCategory,
+	ModpackPreview,
+	PublishMeta,
+	PublishResult,
 	ServerLink,
 	Settings,
 } from "./types";
@@ -58,6 +62,9 @@ export const api = {
 	getPackageDoc: (id: string, version: string, kind: "readme" | "changelog") => call<string>("get_package_doc", { id, version, kind }),
 	getPackageWiki: (id: string) => call<WikiIndex | null>("get_package_wiki", { id }),
 	getWikiPage: (page: string) => call<string>("get_wiki_page", { page }),
+	thunderstoreCategories: () => call<PublishCategory[]>("thunderstore_categories"),
+	modpackPreview: (profile: string, name: string, description: string) => call<ModpackPreview>("modpack_preview", { profile, name, description }),
+	publishModpack: (profile: string, meta: PublishMeta) => call<PublishResult>("publish_modpack", { profile, meta }),
 
 	createProfile: (name: string) => call<AppState>("create_profile", { name }),
 	deleteProfile: (name: string) => call<AppState>("delete_profile", { name }),

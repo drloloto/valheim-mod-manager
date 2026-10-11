@@ -27,6 +27,7 @@ SvelteKit single-page app rendered by WebView2 that owns the interaction. They t
 │ logs          tail BepInEx/LogOutput.log incrementally                                            │
 │ migrate       import profiles of r2modman / Thunderstore Mod Manager (mods.yml + configs)         │
 │ health        duplicate DLLs, deprecated mods, mods older than the last game update              │
+│ publish       profile → Thunderstore modpack: manifest, readme, icon, configs, validate, upload   │
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -53,8 +54,12 @@ profile, so switching profiles does not move files. Doorstop v3 and v4 argument 
 
 ## Core flows
 
-**Index.** `index_worker` loads `cache/index.json` at startup and refreshes from the Thunderstore API when
-older than the configured TTL (default 30 minutes), with a 5-minute backoff after failures. `build()` keeps
+**Index.** `index_worker` loads `cache/index.json` at startup and refreshes from Thunderstore when older
+than the configured TTL (default 30 minutes), with a 5-minute backoff after failures. The source is the
+`package-listing-index`: a redirect to a gzip blob of chunk URLs on the CDN, chunks fetched four at a time
+with one retry, the same package shape as the deprecated `/api/v1/package/`, which stays as the fallback.
+The blob URL carries the content hash and is saved with the cache, so a refresh that lands on the same
+blob skips the download. `build()` also counts dependants per package for "Used by". `build()` keeps
 the full packages in a `HashMap` for lookups and pre-serializes a slim JSON (one entry per package: latest
 version, counts, dependency ids) that `get_index` hands to the UI unchanged. The UI sends `since` and gets an
 empty body when nothing changed.
@@ -78,6 +83,13 @@ launches pass `--doorstop-enabled false`.
 and cached under `cache/docs/`; the wiki is fetched per request. The UI renders with `marked`, sanitizes
 with DOMPurify (`lib/markdown.ts`) and routes every link through `openExternal`. Spec:
 `docs/superpowers/specs/2026-10-11-mod-docs-and-import-install.md`.
+
+**Publish as modpack.** `publish.rs` turns a profile into a Thunderstore package: `manifest.json` with every
+resolved package as a versioned dependency, the README the author edited in the dialog, a 256×256 icon (the
+app icon as placeholder), an optional CHANGELOG and the profile's config files under `config/`. Thunderstore
+validates manifest, readme and icon first, then the zip goes through `usermedia/initiate-upload` (presigned
+parts), `finish-upload` and `submission/submit`, authenticated with the team service-account token from the
+settings. Nothing is uploaded before the validators pass.
 
 **Linked server.** A profile can carry a `server` block (companion URL, name, token). `check_server`
 fetches `/api/manifest` (2 s timeout) and diffs the local resolved plan against it; the UI shows the result

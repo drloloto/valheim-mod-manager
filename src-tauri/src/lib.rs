@@ -10,6 +10,7 @@ mod migrate;
 mod models;
 mod paths;
 mod profiles;
+mod publish;
 mod resolver;
 mod server;
 mod settings;
@@ -84,6 +85,9 @@ pub fn run() {
             commands::refresh_index,
             commands::get_package,
             commands::get_package_doc,
+            commands::thunderstore_categories,
+            commands::modpack_preview,
+            commands::publish_modpack,
             commands::get_package_wiki,
             commands::get_wiki_page,
             commands::create_profile,

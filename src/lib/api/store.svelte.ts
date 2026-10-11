@@ -38,7 +38,7 @@ import { modStatus, type ModStatus } from "./status";
 import { computeReadiness } from "#lib/readiness.js";
 import { parseDeepLink } from "#lib/deeplink.js";
 import { getCurrent as getCurrentDeepLink, onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import type { ApplyWhen, ServerCheck, ServerDiscovery, StageResponse, WikiIndex } from "./types";
+import type { ApplyWhen, ModpackPreview, PublishCategory, PublishMeta, PublishResult, ServerCheck, ServerDiscovery, StageResponse, WikiIndex } from "./types";
 import { formatDateTime } from "#lib/format.js";
 import type { AppState, ExportResult, FolderKind, ImportResult, Pkg, ProfileMod, Settings, SlimPkg, SyncDone, SyncProgress } from "./types";
 
@@ -203,6 +203,8 @@ class ModManagerStore {
 	private launchAfterSync = false;
 	/** Mods waiting in the "what changed" dialog; the update runs only after confirmation. */
 	updateDialog = $state<string[] | null>(null);
+	/** "Publish as modpack…" for the active profile. */
+	publishDialog = $state(false);
 	updateCount = $derived(Object.keys(this.state.updates).length);
 	otherProfiles = $derived(this.state.profiles.filter((p) => p !== this.state.active));
 	/** Mod ID → other profiles that contain it. */
@@ -911,6 +913,23 @@ class ModManagerStore {
 	}
 	getWikiPage(page: string): Promise<string> {
 		return this.cached(`wikipage:${page}`, () => api.getWikiPage(page));
+	}
+
+	publishCategories(): Promise<PublishCategory[]> {
+		return this.cached("publish:categories", () => api.thunderstoreCategories());
+	}
+
+	modpackPreview(name: string, description: string): Promise<ModpackPreview> {
+		if (!this.state.active) return Promise.reject(new Error(t("installed.noProfile")));
+		return api.modpackPreview(this.state.active, name, description);
+	}
+
+	/** Builds, validates, uploads and submits; the caller shows the error text, success is toasted too. */
+	async publishModpack(meta: PublishMeta): Promise<PublishResult> {
+		if (!this.state.active) throw new Error(t("installed.noProfile"));
+		const r = await api.publishModpack(this.state.active, meta);
+		this.toast(t("toast.published", { name: r.fullName }), "ok");
+		return r;
 	}
 
 	/** From a readme link: select this package so the Browse detail panel shows it (the caller navigates). */

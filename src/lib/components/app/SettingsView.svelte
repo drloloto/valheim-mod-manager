@@ -2,7 +2,7 @@
 	import { onMount } from "svelte";
 	import { getVersion } from "@tauri-apps/api/app";
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
-	import { Button, PathField, SectionLabel, Segmented, SettingRow, Stepper, Switch } from "#lib/components/kit/index.js";
+	import { Button, Input, PathField, SectionLabel, Segmented, SettingRow, Stepper, Switch } from "#lib/components/kit/index.js";
 	import { api } from "#lib/api/client.js";
 	import { store } from "#lib/api/store.svelte.js";
 	import type { GameInfo, Settings } from "#lib/api/types.js";
@@ -15,6 +15,7 @@
 		{ id: "game", label: t("settings.game") },
 		{ id: "downloads", label: t("settings.downloads") },
 		{ id: "appearance", label: t("settings.appearance") },
+		{ id: "thunderstore", label: t("settings.thunderstore") },
 		{ id: "updates", label: t("update.section") },
 		{ id: "storage", label: t("settings.storage") },
 		{ id: "about", label: t("settings.about") },
@@ -190,6 +191,25 @@
 								{ value: "en", label: t("settings.lang.en") },
 							]}
 						/>
+					</SettingRow>
+				</section>
+
+				<section id="settings-thunderstore">
+					<SectionLabel class="border-b pb-2.5">{t("settings.thunderstore")}</SectionLabel>
+					<SettingRow label={t("settings.tsToken")} hint={t("settings.tsTokenHint")} for="ts-token">
+						<div class="grid gap-1.5">
+							<Input
+								id="ts-token"
+								type="password"
+								autocomplete="off"
+								placeholder="tss_…"
+								value={form.thunderstoreToken ?? ""}
+								oninput={(e) => (form!.thunderstoreToken = e.currentTarget.value || null)}
+							/>
+							<button class="text-primary-text w-max text-xs hover:underline" onclick={() => store.openExternal("https://thunderstore.io/settings/teams/")}>
+								{t("settings.tsTokenWhere")}
+							</button>
+						</div>
 					</SettingRow>
 				</section>
 

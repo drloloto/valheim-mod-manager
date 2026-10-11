@@ -255,6 +255,39 @@ export interface Settings {
 	downloadConcurrency: number;
 	indexTtlMinutes: number;
 	showNsfw: boolean;
+	/** Thunderstore team service-account token for publishing modpacks (local only). */
+	thunderstoreToken: string | null;
+}
+
+export interface PublishCategory {
+	name: string;
+	slug: string;
+}
+
+export interface ModpackPreview {
+	dependencies: string[];
+	readme: string;
+	configs: number;
+	hasToken: boolean;
+}
+
+export interface PublishMeta {
+	team: string;
+	name: string;
+	version: string;
+	description: string;
+	websiteUrl: string;
+	readme: string;
+	changelog: string;
+	categories: string[];
+	nsfw: boolean;
+	iconPath: string | null;
+	includeConfigs: boolean;
+}
+
+export interface PublishResult {
+	fullName: string;
+	url: string;
 }
 
 export interface GameInfo {

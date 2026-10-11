@@ -7,6 +7,7 @@
 	import MigrateDialog from "#lib/components/app/MigrateDialog.svelte";
 	import ExportCodeDialog from "#lib/components/app/ExportCodeDialog.svelte";
 	import ServerDialog from "#lib/components/app/ServerDialog.svelte";
+	import PublishDialog from "#lib/components/app/PublishDialog.svelte";
 	import { store } from "#lib/api/store.svelte.js";
 	import { initials } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
@@ -74,6 +75,7 @@
 		{#if active}
 			<DropdownMenu.Item disabled={!store.state.mods.length} onSelect={share}>{t("profile.share")}</DropdownMenu.Item>
 			<DropdownMenu.Item onSelect={exportFile}>{t("profile.export")}</DropdownMenu.Item>
+			<DropdownMenu.Item disabled={!store.state.mods.length} onSelect={() => (store.publishDialog = true)}>{t("profile.publishModpack")}</DropdownMenu.Item>
 			<DropdownMenu.Separator />
 			<DropdownMenu.Item onSelect={() => (renameOpen = true)}>{t("profile.rename")}</DropdownMenu.Item>
 			<DropdownMenu.Item onSelect={() => (cloneOpen = true)}>{t("profile.clone")}</DropdownMenu.Item>
@@ -119,6 +121,7 @@
 <MigrateDialog bind:open={migrateOpen} />
 <ExportCodeDialog bind:code={exportCode} />
 <ServerDialog />
+<PublishDialog />
 <ConfirmDialog
 	bind:open={deleteOpen}
 	title={t("profile.deleteTitle", { name: active ?? "" })}

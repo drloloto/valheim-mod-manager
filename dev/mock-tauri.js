@@ -132,7 +132,7 @@
 		dep: rnd() < 0.06,
 		nsfw: rnd() < 0.02,
 		ndeps: p.deps.length,
-		ndependants: p.deps.length ? 0 : (i * 37) % 900,
+		ndependants: p.deps.length ? 0 : (p.id.length * 37) % 900,
 		nver: 1 + Math.floor(rnd() * 25),
 		size: Math.floor(10 ** (3 + rnd() * 4.5)),
 	}));
@@ -167,7 +167,7 @@
 		],
 		app: { version: "0.1.0", portable: false, dataDir: "C:\\Users\\you\\AppData\\Roaming\\io.github.drloloto.valheim-mod-manager" },
 	};
-	const settings = { valheimDir: null, steamExe: null, downloadConcurrency: 4, indexTtlMinutes: 30, showNsfw: false };
+	const settings = { valheimDir: null, steamExe: null, downloadConcurrency: 4, indexTtlMinutes: 30, showNsfw: false, thunderstoreToken: "tss_mock" };
 
 	const mockRelease = (schedule) => ({ id: "r1", createdAt: NOW - 60000, install: 1, remove: 1, configs: 1, problems: [], schedule, lastError: null });
 	const handlers = {
@@ -220,6 +220,29 @@
 		get_wiki_page: ({ page }) =>
 			`## Page ${page}\n\nWiki text with an image:\n\n![](https://picsum.photos/seed/wiki${page}/480/160)\n\n1. Step one\n2. Step two`,
 		get_settings: () => settings,
+		thunderstore_categories: () => [
+			{ name: "Modpacks", slug: "modpacks" },
+			{ name: "Gear", slug: "gear" },
+			{ name: "Tweaks", slug: "tweaks" },
+			{ name: "Server-side", slug: "server-side" },
+			{ name: "Client-side", slug: "client-side" },
+		],
+		modpack_preview: ({ name, description }) => ({
+			dependencies: [BEP + "-5.4.2351", JOT + "-" + byId.get(JOT).ver, ...inProfile.slice(0, 6).map((id) => id + "-" + byId.get(id).ver)],
+			readme: `# ${name || "Hardcore"}\n\n${description}\n\n## Mods\n\n| Mod | Author | Version |\n| --- | --- | --- |\n${inProfile
+				.slice(0, 6)
+				.map((id) => `| ${byId.get(id).name} | ${byId.get(id).ns} | ${byId.get(id).ver} |`)
+				.join("\n")}\n`,
+			configs: 3,
+			hasToken: !!settings.thunderstoreToken,
+		}),
+		publish_modpack: ({ meta }) =>
+			new Promise((r) =>
+				setTimeout(
+					() => r({ fullName: `${meta.team}-${meta.name}-${meta.version}`, url: `https://thunderstore.io/c/valheim/p/${meta.team}/${meta.name}/` }),
+					1200,
+				),
+			),
 		list_foreign_profiles: () => [
 			{ manager: "r2modman", name: "Friends", path: "C:\\r2modman\\Friends", mods: 42 },
 			{ manager: "tmm", name: "Default", path: "C:\\tmm\\Default", mods: 7 },

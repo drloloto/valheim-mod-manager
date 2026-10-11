@@ -157,7 +157,6 @@
 				</Toolbar>
 				<div class="flex-1 overflow-y-auto px-6">
 					{#each visible as { s, i }, n (i)}
-						{@const range = parseRange(s.acceptableValues, s.type)}
 						{#if n === 0 || visible[n - 1].s.section !== s.section}
 							<SectionLabel class="border-b pt-5 pb-2.5">{s.section}</SectionLabel>
 						{/if}
@@ -184,7 +183,8 @@
 										<Switch checked={current(i) === "true"} onCheckedChange={(v) => setValue(i, String(v))} aria-label={s.key} />
 									{:else if enumOptions(s).length}
 										<Choice value={current(i)} options={enumOptions(s)} onchange={(v) => setValue(i, v)} />
-									{:else if range}
+									{:else if parseRange(s.acceptableValues, s.type)}
+										{@const range = parseRange(s.acceptableValues, s.type)!}
 										<div class="flex items-center gap-2">
 											<input
 												type="range"

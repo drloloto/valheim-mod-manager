@@ -23,8 +23,28 @@ All notable changes to this project are documented here. The format follows
 - Every import (code, `.r2z`, server, r2modman migration) asks whether all mods and dependencies should be
   downloaded, installed and enabled right away (on by default). Off creates the profile as exported, nothing
   is downloaded until "Install now" on the Installed page.
+- "What changed" before every mod update: the changelog slice between the installed and the new version,
+  for one mod or for "Update all"; the update runs only after confirmation.
+- Pinned versions: picking an older version pins the mod, update detection and "Update all" skip it, the
+  list shows a pin and the context menu toggles it.
+- Dependants: "Used by" in the detail panel, as a hidden browse column, a filter and a sort key, computed
+  from the index without extra requests.
+- Config editor: slider plus number field for BepInEx value ranges, "Reset to default", leftover entries
+  the mod no longer binds are marked.
+- Server comparison marks server-side mods missing on the server (they cannot work) and client-side mods
+  that do not matter there.
+- Thunderstore package links inside a readme open the package in-app instead of the browser.
+- Publish a profile as a Thunderstore modpack: manifest, generated README, icon, changelog and optionally
+  the config files, validated by Thunderstore, uploaded and submitted with a team service-account token
+  (Settings → Thunderstore).
 
 ### Changed
+
+- The mod index comes from Thunderstore's `package-listing-index` (the deprecated `/api/v1/package/` stays
+  as fallback); an unchanged index is detected without downloading it, chunks retry once.
+- Mod downloads retry once before a mod is dropped from the sync.
+- Readme and changelog caches expire after a week (authors can edit them on Thunderstore).
+- A real Content Security Policy for the app window (scripts only from the app, no frames or objects).
 
 - Dependencies resolve to the newest version in the index; a manifest's dependency version is a minimum.
   Explicit profile entries stay pinned.
