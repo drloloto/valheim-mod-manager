@@ -2,6 +2,7 @@
 use crate::config::{self, ConfigChange, ParsedConfig};
 use crate::error::{AppError, Result};
 use crate::game::{self, GameInfo};
+use crate::gistsync;
 use crate::health::{self, HealthIssue};
 use crate::install;
 use crate::localmod;
@@ -34,6 +35,7 @@ pub struct AppCtx {
     pub client: reqwest::Client,
     pub log_tail: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     pub portable: bool,
+    pub gist_cache: gistsync::EtagCache,
 }
 
 impl AppCtx {
@@ -86,6 +88,9 @@ pub struct ServerLinkInfo {
     url: String,
     name: String,
     has_token: bool,
+    /// Linked through a sealed gist (sync code) instead of the companion's HTTP API.
+    gist: bool,
+    has_gist_token: bool,
 }
 
 #[derive(Serialize)]
@@ -112,7 +117,13 @@ fn build_state(ctx: &AppCtx) -> Result<AppState> {
     let (mods, server) = match &active {
         Some(n) => {
             let p = profiles::load(&ctx.paths, n)?;
-            let server = p.server.map(|s| ServerLinkInfo { has_token: s.token.as_deref().is_some_and(|t| !t.trim().is_empty()), url: s.url, name: s.name });
+            let server = p.server.map(|s| ServerLinkInfo {
+                has_token: s.token.as_deref().is_some_and(|t| !t.trim().is_empty()),
+                gist: s.sync_code.is_some(),
+                has_gist_token: s.gist_token.as_deref().is_some_and(|t| !t.trim().is_empty()),
+                url: s.url,
+                name: s.name,
+            });
             (p.mods, server)
         }
         None => (vec![], None),
@@ -519,7 +530,12 @@ pub async fn import_profile_url(
     let mut r = import_bytes(&app, &ctx, &bytes, &name, with_configs, install_all)?;
     if let Some(link) = link {
         let mut p = profiles::load(&ctx.paths, &r.imported.name)?;
-        p.server = Some(ServerLink { url: server::normalize_url(&link.url)?, name: link.name, token: link.token.filter(|t| !t.trim().is_empty()) });
+        p.server = Some(ServerLink {
+            url: server::normalize_url(&link.url)?,
+            name: link.name,
+            token: link.token.filter(|t| !t.trim().is_empty()),
+            ..Default::default()
+        });
         profiles::save(&ctx.paths, &p)?;
         r.state = build_state(&ctx)?;
     }
@@ -549,21 +565,117 @@ pub struct ServerCheck {
     release: Option<ReleaseSummary>,
     /// Players online according to the server log; None when unknown.
     online: Option<usize>,
+    /// Gist links: server config files that differ from the profile's (relative to BepInEx/config).
+    configs_changed: Vec<String>,
+    /// Gist links: what became of the last published release.
+    gist_release: Option<gistsync::ReleaseStatus>,
+}
+
+fn unreachable_check(link: &ServerLink, e: AppError) -> ServerCheck {
+    ServerCheck {
+        reachable: false,
+        error: Some(e.to_string()),
+        name: link.name.clone(),
+        world: String::new(),
+        in_sync: false,
+        diff: ServerDiff::default(),
+        server_mods: 0,
+        server_configs: 0,
+        hash: String::new(),
+        generated_at: 0,
+        features: BTreeMap::new(),
+        release: None,
+        online: None,
+        configs_changed: vec![],
+        gist_release: None,
+    }
+}
+
+/// The gist behind a link, when it has a sync code.
+fn gist_of(ctx: &AppCtx, link: &ServerLink) -> Result<Option<(gistsync::GistMailbox, gistsync::Key)>> {
+    let Some(code) = link.sync_code.as_deref() else { return Ok(None) };
+    let code = gistsync::parse_sync_code(code)?;
+    let key = gistsync::derive_key(&code.secret)?;
+    Ok(Some((gistsync::GistMailbox::new(ctx.client.clone(), &code.gist_id, link.gist_token.clone(), ctx.gist_cache.clone()), key)))
+}
+
+/// Config files in server.json whose content differs from the profile's copy (or is missing there).
+fn configs_changed(ctx: &AppCtx, profile: &str, configs: &[server::PublishConfig]) -> Vec<String> {
+    use base64::Engine;
+    let dir = ctx.paths.config_dir(profile);
+    configs
+        .iter()
+        .filter(|c| {
+            let Ok(remote) = base64::engine::general_purpose::STANDARD.decode(&c.content_base64) else { return true };
+            crate::util::safe_join(&dir, &c.path).ok().and_then(|p| std::fs::read(p).ok()).as_deref() != Some(remote.as_slice())
+        })
+        .map(|c| c.path.clone())
+        .collect()
+}
+
+/// Gist transport of check_link: server.json instead of /api/manifest + /api/status.
+async fn check_gist(ctx: &AppCtx, profile: &str, link: &ServerLink, m: &gistsync::GistMailbox, key: &gistsync::Key) -> ServerCheck {
+    let index = match ctx.ensure_index().await {
+        Ok(i) => i,
+        Err(e) => return unreachable_check(link, e),
+    };
+    let (p, installed) = match profiles::load(&ctx.paths, profile) {
+        Ok(p) => (p, profiles::load_installed(&ctx.paths, profile)),
+        Err(e) => return unreachable_check(link, e),
+    };
+    let plan = resolver::plan(&p.mods, &index.by_id, &installed);
+    let s = match gistsync::read_server(m, key).await {
+        Ok(Some(s)) => s,
+        Ok(None) => return unreachable_check(link, AppError::Network("The server has not written to the gist yet.".into())),
+        Err(e) => return unreachable_check(link, e),
+    };
+    let manifest = s.manifest.unwrap_or_default();
+    let diff = server::diff(&plan.resolved, &manifest.mods);
+    let changed = configs_changed(ctx, profile, &s.configs);
+    let adopted = format!("{}:{}", manifest.hash, gistsync::config_hash(&s.configs));
+    // Mods must match; differing configs only count until this exact server state was adopted once.
+    let in_sync = diff.is_empty() && (changed.is_empty() || link.last_adopted.as_deref() == Some(adopted.as_str()));
+    ServerCheck {
+        reachable: true,
+        error: None,
+        name: s.server.name,
+        world: s.server.world,
+        in_sync,
+        diff,
+        server_mods: manifest.mods.len(),
+        server_configs: s.configs.len(),
+        hash: manifest.hash,
+        generated_at: manifest.generated_at,
+        features: BTreeMap::from([("publish".to_string(), true)]),
+        release: None,
+        online: None,
+        configs_changed: changed,
+        gist_release: s.release,
+    }
 }
 
 fn link_of(ctx: &AppCtx, profile: &str) -> Result<ServerLink> {
     profiles::load(&ctx.paths, profile)?.server.ok_or_else(|| AppError::Invalid("This profile is not linked to a server.".into()))
 }
 
-/// `link = None` unlinks. The token is kept when the new link carries none.
+/// `link = None` unlinks. Tokens are kept when the new link carries none. A sync code (`vmm1.…`) links
+/// through the gist; the URL may then be empty.
 #[tauri::command]
 pub fn set_server_link(ctx: State<'_, AppCtx>, profile: String, link: Option<ServerLink>) -> Result<AppState> {
     let mut p = profiles::load(&ctx.paths, &profile)?;
     p.server = match link {
         None => None,
         Some(l) => {
-            let token = l.token.filter(|t| !t.trim().is_empty()).or_else(|| p.server.as_ref().and_then(|s| s.token.clone()));
-            Some(ServerLink { url: server::normalize_url(&l.url)?, name: l.name, token })
+            let keep = |new: Option<String>, old: Option<&String>| new.filter(|t| !t.trim().is_empty()).or_else(|| old.cloned());
+            let token = keep(l.token, p.server.as_ref().and_then(|s| s.token.as_ref()));
+            let gist_token = keep(l.gist_token, p.server.as_ref().and_then(|s| s.gist_token.as_ref()));
+            // A sync code pasted into the address field counts as one.
+            let (raw_url, raw_code) = if gistsync::is_sync_code(&l.url) { (String::new(), Some(l.url)) } else { (l.url, l.sync_code) };
+            let sync_code = raw_code.map(|c| gistsync::parse_sync_code(&c).map(|_| c.trim().to_string())).transpose()?;
+            let url = if raw_url.trim().is_empty() && sync_code.is_some() { String::new() } else { server::normalize_url(&raw_url)? };
+            let same_gist = p.server.as_ref().is_some_and(|s| s.sync_code == sync_code);
+            let last_adopted = if same_gist { p.server.as_ref().and_then(|s| s.last_adopted.clone()) } else { None };
+            Some(ServerLink { url, name: l.name, token, sync_code, gist_token, last_adopted })
         }
     };
     profiles::save(&ctx.paths, &p)?;
@@ -573,6 +685,9 @@ pub fn set_server_link(ctx: State<'_, AppCtx>, profile: String, link: Option<Ser
 /// Compares the local resolved plan with the server manifest. Unreachable servers are reported, not errors.
 async fn check_link(ctx: &AppCtx, profile: &str) -> Result<ServerCheck> {
     let link = link_of(ctx, profile)?;
+    if let Some((m, key)) = gist_of(ctx, &link)? {
+        return Ok(check_gist(ctx, profile, &link, &m, &key).await);
+    }
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, profile)?;
     let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, profile));
@@ -595,23 +710,11 @@ async fn check_link(ctx: &AppCtx, profile: &str) -> Result<ServerCheck> {
                 features: m.features,
                 release: status.release,
                 online: status.online,
+                configs_changed: vec![],
+                gist_release: None,
             })
         }
-        Err(e) => Ok(ServerCheck {
-            reachable: false,
-            error: Some(e.to_string()),
-            name: link.name,
-            world: String::new(),
-            in_sync: false,
-            diff: ServerDiff::default(),
-            server_mods: 0,
-            server_configs: 0,
-            hash: String::new(),
-            generated_at: 0,
-            features: BTreeMap::new(),
-            release: None,
-            online: None,
-        }),
+        Err(e) => Ok(unreachable_check(&link, e)),
     }
 }
 
@@ -647,13 +750,31 @@ pub async fn discover_server(_ctx: State<'_, AppCtx>, url: String) -> Result<ser
 /// pinned, optionally with the server's config files, then syncs. The clone becomes the active profile.
 #[tauri::command]
 pub async fn adopt_server(app: AppHandle, ctx: State<'_, AppCtx>, profile: String, with_configs: bool, into_new: Option<String>) -> Result<AppState> {
+    use base64::Engine;
     let link = link_of(&ctx, &profile)?;
-    let m = server::fetch_manifest(&ctx.client, &link).await?;
-    let configs = if with_configs {
-        let bytes = server::fetch_bytes(&ctx.client, &format!("{}/api/profile.r2z", server::normalize_url(&link.url)?)).await?;
-        share::read_r2z(&bytes)?.configs
-    } else {
-        vec![]
+    // (server info, mods, config files, what to remember as adopted)
+    let (info, mods, configs, adopted) = match gist_of(&ctx, &link)? {
+        Some((m, key)) => {
+            let s = gistsync::read_server(&m, &key).await?.ok_or_else(|| AppError::Network("The server has not written to the gist yet.".into()))?;
+            let manifest = s.manifest.unwrap_or_default();
+            let adopted = format!("{}:{}", manifest.hash, gistsync::config_hash(&s.configs));
+            let configs = if with_configs {
+                s.configs.iter().filter_map(|c| base64::engine::general_purpose::STANDARD.decode(&c.content_base64).ok().map(|b| (c.path.clone(), b))).collect()
+            } else {
+                vec![]
+            };
+            (s.server, manifest.mods, configs, Some(adopted))
+        }
+        None => {
+            let m = server::fetch_manifest(&ctx.client, &link).await?;
+            let configs = if with_configs {
+                let bytes = server::fetch_bytes(&ctx.client, &format!("{}/api/profile.r2z", server::normalize_url(&link.url)?)).await?;
+                share::read_r2z(&bytes)?.configs
+            } else {
+                vec![]
+            };
+            (m.server, m.mods, configs, None)
+        }
     };
     let guard = ctx.sync.lock.lock().await;
     let target = match into_new {
@@ -668,10 +789,13 @@ pub async fn adopt_server(app: AppHandle, ctx: State<'_, AppCtx>, profile: Strin
     // Undo path: the previous mod list and configs survive in <profile>/.snapshots/.
     profiles::snapshot(&ctx.paths, &target, "adopt-server")?;
     let mut p = profiles::load(&ctx.paths, &target)?;
-    server::adopt(&mut p, &m.mods);
+    server::adopt(&mut p, &mods);
     if let Some(s) = p.server.as_mut() {
-        if !m.server.name.is_empty() {
-            s.name = m.server.name.clone();
+        if !info.name.is_empty() {
+            s.name = info.name.clone();
+        }
+        if adopted.is_some() {
+            s.last_adopted = adopted;
         }
     }
     profiles::save(&ctx.paths, &p)?;
@@ -691,6 +815,9 @@ pub async fn adopt_server(app: AppHandle, ctx: State<'_, AppCtx>, profile: Strin
 #[tauri::command]
 pub async fn publish_profile(ctx: State<'_, AppCtx>, profile: String, with_configs: bool) -> Result<StageResponse> {
     let link = link_of(&ctx, &profile)?;
+    if link.sync_code.is_some() {
+        return Err(AppError::Invalid("This profile syncs through a gist; use publish_gist.".into()));
+    }
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, &profile)?;
     let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
@@ -709,6 +836,42 @@ pub async fn publish_profile(ctx: State<'_, AppCtx>, profile: String, with_confi
     let mut r = server::stage(&slow, &link, &server::StageBody { mods, configs }).await?;
     r.skipped_local = skipped_local;
     Ok(r)
+}
+
+/// Gist transport of publish + apply in one step: seals release.json (lock, configs, `when`) into the gist.
+/// The companion picks it up on its next poll and reports back through server.json (`gist_release`).
+#[tauri::command]
+pub async fn publish_gist(ctx: State<'_, AppCtx>, profile: String, with_configs: bool, when: String, at: Option<i64>) -> Result<String> {
+    let link = link_of(&ctx, &profile)?;
+    let (m, key) = gist_of(&ctx, &link)?.ok_or_else(|| AppError::Invalid("This profile is not linked through a sync code.".into()))?;
+    if !matches!(when.as_str(), "now" | "idle" | "at" | "none") || (when == "at" && at.is_none()) {
+        return Err(AppError::Invalid("apply must be now, idle, at (with a time) or none.".into()));
+    }
+    let index = ctx.ensure_index().await?;
+    let p = profiles::load(&ctx.paths, &profile)?;
+    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    if !plan.errors.is_empty() {
+        return Err(AppError::Invalid(format!("The profile cannot be resolved: {}", plan.errors.join("; "))));
+    }
+    let (mods, _skipped_local) = server::manifest_mods(&p, &plan.resolved);
+    let mut configs = vec![];
+    if with_configs {
+        let dir = ctx.paths.config_dir(&profile);
+        for rel in config::list_files_with_ext(&dir, &share::CONFIG_EXTS) {
+            configs.push(server::encode_config(&rel, &std::fs::read(crate::util::safe_join(&dir, &rel)?)?));
+        }
+    }
+    let rel = gistsync::ReleaseFile {
+        v: 1,
+        id: gistsync::new_release_id(),
+        created_at: crate::util::now_ms(),
+        message: Some(format!("Valheim Mod Manager: profile {profile}")),
+        mods,
+        configs,
+        apply: gistsync::Apply { when, at },
+    };
+    gistsync::publish_release(&m, &key, &rel).await?;
+    Ok(rel.id)
 }
 
 /// `when`: "now" (stop, backup, install, start), "idle" (when nobody is online), "at" (+ `at` ms), "none".

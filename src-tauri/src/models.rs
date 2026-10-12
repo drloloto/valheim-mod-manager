@@ -79,6 +79,8 @@ impl ProfileMod {
 }
 
 /// A companion server this profile mirrors (see server.rs). The token is needed for publishing only.
+/// With `sync_code` set the link goes through a sealed gist instead (gistsync.rs); `url` may then be
+/// empty, and `gist_token` (admin only) is what publishing needs.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct ServerLink {
     pub url: String,
@@ -86,6 +88,13 @@ pub struct ServerLink {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gist_token: Option<String>,
+    /// `<manifest hash>:<config hash>` of the server state last adopted, so an unchanged server does not prompt again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_adopted: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]

@@ -2,6 +2,7 @@ mod commands;
 mod config;
 mod error;
 mod game;
+mod gistsync;
 mod health;
 mod install;
 mod localmod;
@@ -65,6 +66,7 @@ pub fn run() {
                 sync: sync::SyncHandle::default(),
                 client,
                 log_tail: Mutex::new(None),
+                gist_cache: Default::default(),
                 portable: portable.is_some(),
                 paths,
             });
@@ -108,6 +110,7 @@ pub fn run() {
             commands::discover_server,
             commands::adopt_server,
             commands::publish_profile,
+            commands::publish_gist,
             commands::apply_release,
             commands::discard_release,
             commands::list_foreign_profiles,
