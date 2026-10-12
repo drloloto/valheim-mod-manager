@@ -158,7 +158,10 @@ export interface ServerCheck {
 
 /** What a pasted address resolved to (autoconfig). */
 export interface ServerDiscovery {
+	/** empty for a gist server */
 	url: string;
+	/** set when the pasted text held a sync code: the server is reached through its gist */
+	syncCode?: string | null;
 	name: string;
 	world: string;
 	mods: number;

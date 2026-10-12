@@ -38,8 +38,21 @@ pub struct SyncCode {
     pub secret: String,
 }
 
-pub fn is_sync_code(raw: &str) -> bool {
-    raw.trim().starts_with(&format!("{SYNC_CODE_PREFIX}."))
+/// The sync code inside whatever was pasted: alone, at the end of a URL (`http://host:9002/vmm1.…`), behind a
+/// label, with whitespace around it. Only a code that parses counts.
+pub fn find_sync_code(text: &str) -> Option<String> {
+    let prefix = format!("{SYNC_CODE_PREFIX}.");
+    let mut rest = text;
+    while let Some(i) = rest.find(&prefix) {
+        let tail = &rest[i..];
+        let end = tail.find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))).unwrap_or(tail.len());
+        let candidate = tail[..end].trim_end_matches('.');
+        if parse_sync_code(candidate).is_ok() {
+            return Some(candidate.to_string());
+        }
+        rest = &rest[i + prefix.len()..];
+    }
+    None
 }
 
 /// `vmm1.<gist id>.<secret>`; whitespace around it is ignored.
@@ -432,7 +445,13 @@ mod tests {
         let c = parse_sync_code("  vmm1.671708cb09dad340730fb73488dffd92.hfFxxz-YNqSSGnvFPdysxEi1aUHXD7KDQzFO9wSb238\n").unwrap();
         assert_eq!(c.gist_id, "671708cb09dad340730fb73488dffd92");
         assert_eq!(c.secret.len(), 43);
-        assert!(is_sync_code(" vmm1.x") && !is_sync_code("http://x"));
+        let code = std::fs::read_to_string("tests/fixtures/gist/sync-code.txt").unwrap().trim().to_string();
+        for text in [code.clone(), format!("http://127.0.0.1:9002/{code}"), format!("  {code}\n"), format!("Sync code: {code}."), format!("vmm1.broken {code}")]
+        {
+            assert_eq!(find_sync_code(&text).as_deref(), Some(code.as_str()), "{text}");
+        }
+        assert_eq!(find_sync_code("http://127.0.0.1:9002"), None);
+        assert_eq!(find_sync_code("vmm1.5f2964a03b693a8655578dfdcbd4b6b6.tooshort"), None);
         for bad in [
             "vmm2.671708cb09dad340730fb73488dffd92.hfFxxz-YNqSSGnvFPdysxEi1aUHXD7KDQzFO9wSb238",
             "vmm1.ZZZ.x",

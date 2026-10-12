@@ -8,7 +8,7 @@ use crate::install;
 use crate::localmod;
 use crate::logs;
 use crate::migrate::{self, ForeignProfile};
-use crate::models::{Pkg, Plan, ProfileMod, ServerLink, Source};
+use crate::models::{Pkg, Plan, Profile, ProfileMod, ServerLink, Source};
 use crate::paths::Paths;
 use crate::profiles;
 use crate::publish;
@@ -626,7 +626,7 @@ async fn check_gist(ctx: &AppCtx, profile: &str, link: &ServerLink, m: &gistsync
         Ok(p) => (p, profiles::load_installed(&ctx.paths, profile)),
         Err(e) => return unreachable_check(link, e),
     };
-    let plan = resolver::plan(&p.mods, &index.by_id, &installed);
+    let plan = resolver::plan(&server_mods(&p), &index.by_id, &installed);
     let s = match gistsync::read_server(m, key).await {
         Ok(Some(s)) => s,
         Ok(None) => return unreachable_check(link, AppError::Network("The server has not written to the gist yet.".into())),
@@ -671,20 +671,27 @@ pub fn set_server_link(ctx: State<'_, AppCtx>, profile: String, link: Option<Ser
     build_state(&ctx)
 }
 
-/// The new link over the old one. A sync code is recognised wherever it was pasted (address, token or
-/// sync-code field); with one, the URL may be empty. Tokens survive an edit that leaves them blank, and
-/// `last_adopted` survives as long as the gist stays the same.
+/// What the server should run: the profile without its disabled mods (and whatever only they pulled in).
+fn server_mods(p: &Profile) -> Vec<ProfileMod> {
+    p.mods.iter().filter(|m| m.enabled).cloned().collect()
+}
+
+/// The new link over the old one. A sync code is recognised wherever and however it was pasted (address,
+/// token or sync-code field, alone or inside a URL); with one, the URL is dropped. Tokens survive an edit
+/// that leaves them blank, and `last_adopted` survives as long as the gist stays the same.
 fn merge_link(old: Option<&ServerLink>, l: ServerLink) -> Result<ServerLink> {
     let blank = |s: &Option<String>| !s.as_deref().is_some_and(|t| !t.trim().is_empty());
-    let code_in = |s: &str| gistsync::is_sync_code(s);
-    let (raw_url, raw_code, raw_token) = if code_in(&l.url) {
-        (String::new(), Some(l.url), l.token)
-    } else if l.token.as_deref().is_some_and(code_in) && blank(&l.sync_code) {
-        (l.url, l.token, None)
+    let (raw_url, raw_code, raw_token) = if let Some(c) = gistsync::find_sync_code(&l.url) {
+        (String::new(), Some(c), l.token)
+    } else if let Some(c) = l.token.as_deref().and_then(gistsync::find_sync_code).filter(|_| blank(&l.sync_code)) {
+        (l.url, Some(c), None)
     } else {
         (l.url, l.sync_code, l.token)
     };
-    let sync_code = raw_code.filter(|c| !c.trim().is_empty()).map(|c| gistsync::parse_sync_code(&c).map(|_| c.trim().to_string())).transpose()?;
+    let sync_code = raw_code
+        .filter(|c| !c.trim().is_empty())
+        .map(|c| gistsync::find_sync_code(&c).ok_or_else(|| AppError::Invalid("That is not a sync code (vmm1.<gist id>.<secret>).".into())))
+        .transpose()?;
     // The admin's gist token may land in the token field as well; with a sync code it is the gist token.
     let (raw_token, raw_gist_token) = if sync_code.is_some() && blank(&l.gist_token) { (None, raw_token) } else { (raw_token, l.gist_token) };
     let keep = |new: Option<String>, old: Option<&String>| new.filter(|t| !t.trim().is_empty()).or_else(|| old.cloned());
@@ -705,7 +712,7 @@ async fn check_link(ctx: &AppCtx, profile: &str) -> Result<ServerCheck> {
     }
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, profile)?;
-    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, profile));
+    let plan = resolver::plan(&server_mods(&p), &index.by_id, &profiles::load_installed(&ctx.paths, profile));
     let quick = thunderstore::http_client(Duration::from_secs(2), Duration::from_secs(4))?;
     match server::fetch_manifest(&quick, &link).await {
         Ok(m) => {
@@ -756,7 +763,16 @@ pub async fn check_all_servers(ctx: State<'_, AppCtx>) -> Result<Vec<ProfileServ
 
 /// "Autoconfig": anything that points at a companion becomes a link candidate.
 #[tauri::command]
-pub async fn discover_server(_ctx: State<'_, AppCtx>, url: String) -> Result<server::Discovery> {
+pub async fn discover_server(ctx: State<'_, AppCtx>, url: String) -> Result<server::Discovery> {
+    // A sync code (alone or inside a URL) means a gist server: read server.json, no token needed.
+    if let Some(code) = gistsync::find_sync_code(&url) {
+        let link = ServerLink { sync_code: Some(code.clone()), ..Default::default() };
+        let (m, key) = gist_of(&ctx, &link)?.ok_or_else(|| AppError::Invalid("That is not a sync code.".into()))?;
+        let s = gistsync::read_server(&m, &key).await?.ok_or_else(|| AppError::Network("The server has not written to the gist yet.".into()))?;
+        let mods = s.manifest.as_ref().map_or(0, |m| m.mods.iter().filter(|x| !server::is_pack(&x.id)).count());
+        let features = BTreeMap::from([("publish".to_string(), true)]);
+        return Ok(server::Discovery { url: String::new(), sync_code: Some(code), name: s.server.name, world: s.server.world, mods, features });
+    }
     let quick = thunderstore::http_client(Duration::from_secs(3), Duration::from_secs(6))?;
     server::discover(&quick, &url).await
 }
@@ -835,7 +851,7 @@ pub async fn publish_profile(ctx: State<'_, AppCtx>, profile: String, with_confi
     }
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, &profile)?;
-    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    let plan = resolver::plan(&server_mods(&p), &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
     if !plan.errors.is_empty() {
         return Err(AppError::Invalid(format!("The profile cannot be resolved: {}", plan.errors.join("; "))));
     }
@@ -864,7 +880,7 @@ pub async fn publish_gist(ctx: State<'_, AppCtx>, profile: String, with_configs:
     }
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, &profile)?;
-    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    let plan = resolver::plan(&server_mods(&p), &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
     if !plan.errors.is_empty() {
         return Err(AppError::Invalid(format!("The profile cannot be resolved: {}", plan.errors.join("; "))));
     }
@@ -1081,10 +1097,22 @@ mod tests {
     }
 
     #[test]
+    fn disabled_mods_are_not_the_servers_business() {
+        let p = Profile {
+            mods: vec![ProfileMod::thunderstore("a", "A", "1.0.0"), ProfileMod { enabled: false, ..ProfileMod::thunderstore("b", "B", "1.0.0") }],
+            ..Default::default()
+        };
+        assert_eq!(server_mods(&p).iter().map(ProfileMod::id).collect::<Vec<_>>(), ["a-A"]);
+    }
+
+    #[test]
     fn a_sync_code_is_recognised_in_any_field() {
+        let in_url = format!("http://127.0.0.1:9002/{CODE}");
         for l in [
             link(CODE, Some("ghp_x"), None, None),
+            link(&in_url, Some("ghp_x"), None, None),
             link("", Some(CODE), None, Some("ghp_x")),
+            link("", Some(&in_url), None, Some("ghp_x")),
             link("", None, Some(CODE), Some("ghp_x")),
             link("http://127.0.0.1:9002", Some(CODE), None, Some("ghp_x")),
         ] {

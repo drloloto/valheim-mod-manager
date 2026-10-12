@@ -67,7 +67,8 @@ export const en = {
 
 	"server.menuAdd": "Add server…",
 	"server.addTitle": "Add a server",
-	"server.addDesc": "Paste the address your admin gave you, e.g. 10.10.10.123:9002. You get a profile with exactly the server's mods, versions and configs.",
+	"server.addDesc":
+		"Paste what your admin gave you: an address like 10.10.10.123:9002 or a sync code (vmm1.…). You get a profile with exactly the server's mods, versions and configs.",
 	"server.check": "Check",
 	"server.checking": "Checking…",
 	"server.discoveredMods": "{n} mods",

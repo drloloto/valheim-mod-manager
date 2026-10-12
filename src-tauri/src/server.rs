@@ -295,8 +295,11 @@ pub struct ApplyResponse {
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Discovery {
-    /// Normalized base URL to link.
+    /// Normalized base URL to link; empty for a gist server.
     pub url: String,
+    /// Set when the pasted text held a sync code: the server is reached through its gist.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_code: Option<String>,
     pub name: String,
     pub world: String,
     pub mods: usize,
@@ -325,7 +328,14 @@ pub async fn discover(client: &reqwest::Client, raw: &str) -> Result<Discovery> 
     let url = guess_base(raw)?;
     let link = ServerLink { url: url.clone(), ..Default::default() };
     let m = fetch_manifest(client, &link).await.map_err(|e| AppError::Network(format!("No companion found at {url}: {e}")))?;
-    Ok(Discovery { url, name: m.server.name, world: m.server.world, mods: m.mods.iter().filter(|x| !is_pack(&x.id)).count(), features: m.features })
+    Ok(Discovery {
+        url,
+        sync_code: None,
+        name: m.server.name,
+        world: m.server.world,
+        mods: m.mods.iter().filter(|x| !is_pack(&x.id)).count(),
+        features: m.features,
+    })
 }
 
 /// Subset of `GET /api/status` the client cares about.

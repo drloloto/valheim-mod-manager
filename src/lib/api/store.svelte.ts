@@ -79,6 +79,9 @@ const EMPTY_STATE: AppState = {
 	app: { version: "", portable: false, dev: false, dataDir: "" },
 };
 
+/** A sync code as the companion hands it out; it may sit at the end of a URL. */
+const SYNC_CODE = /vmm1\.[0-9a-f]{20,40}\.[A-Za-z0-9_-]{43}/;
+
 const DEFAULT_SECTIONS: Record<string, boolean> = { status: true, cats: true, owners: true, upd: true };
 
 const parseSections = (v: unknown): Record<string, boolean> | null =>
@@ -356,7 +359,9 @@ class ModManagerStore {
 		const active = this.state.active;
 		if (!active) return false;
 		const name = this.state.server?.name ?? "";
-		const link: ServerLink = url.startsWith("vmm1.") ? { url: "", name, syncCode: url, gistToken: token || null } : { url, name, token: token || null };
+		// A sync code anywhere in the address (alone or at the end of a URL) means a gist link; the token next to it is the gist token.
+		const code = SYNC_CODE.exec(url)?.[0];
+		const link: ServerLink = code ? { url: "", name, syncCode: code, gistToken: token || null } : { url, name, token: token || null };
 		const ok = await this.applyState(() => api.setServerLink(active, link), t("toast.serverLinkFailed"));
 		if (!ok) return false;
 		const c = await this.refreshServerStatus();
@@ -404,7 +409,21 @@ class ModManagerStore {
 
 	/** New profile straight from a companion: its mods, versions and configs, linked for later checks. */
 	async addServer(d: ServerDiscovery, installAll = true): Promise<boolean> {
+		if (d.syncCode) return this.addGistServer(d);
 		return this.importFromUrl(`${d.url}/api/profile.r2z`, d.name || d.world || "Server", d.url, installAll);
+	}
+
+	/** A gist server has no .r2z to fetch: a new profile, linked by its code, then adopted from server.json. */
+	private async addGistServer(d: ServerDiscovery): Promise<boolean> {
+		const fail = t("toast.importFailed");
+		if (!(await this.applyState(() => api.createProfile(d.name || d.world || "Server"), fail))) return false;
+		const name = this.state.active;
+		if (!name) return false;
+		if (!(await this.applyState(() => api.setServerLink(name, { url: "", name: d.name, syncCode: d.syncCode }), fail))) return false;
+		if (!(await this.applyState(() => api.adoptServer(name, true, null), fail))) return false;
+		this.toast(t("toast.adoptedInto", { name }), "ok");
+		this.refreshServerStatus();
+		return true;
 	}
 
 	/** App start: every linked profile vs its server; results feed the profile menu markers and one toast. */

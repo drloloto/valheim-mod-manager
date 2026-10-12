@@ -298,14 +298,14 @@
 					<Input
 						value={url}
 						oninput={(e) => (urlEdit = e.currentTarget.value)}
-						placeholder="10.10.10.123:9002"
+						placeholder="10.10.10.123:9002 / vmm1.…"
 						onkeydown={(e) => e.key === "Enter" && discover()}
 					/>
 					<Button variant="outline" disabled={busy || !url.trim()} onclick={discover}>{busy ? t("server.checking") : t("server.check")}</Button>
 				</div>
 				{#if discovery}
 					<p class="text-sm">
-						<span class="font-semibold">{discovery.name || discovery.url}</span>
+						<span class="font-semibold">{discovery.name || discovery.url || discovery.syncCode}</span>
 						{#if discovery.world}· {discovery.world}{/if}
 						· {t("server.discoveredMods", { n: discovery.mods })}
 					</p>

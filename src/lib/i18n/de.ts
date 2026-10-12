@@ -69,7 +69,7 @@ export const de: Record<MessageKey, string> = {
 	"server.menuAdd": "Server hinzufügen…",
 	"server.addTitle": "Server hinzufügen",
 	"server.addDesc":
-		"Adresse einfügen, die dein Admin dir gegeben hat, z. B. 10.10.10.123:9002. Du bekommst ein Profil mit genau den Mods, Versionen und Configs des Servers.",
+		"Einfügen, was dein Admin dir gegeben hat: eine Adresse wie 10.10.10.123:9002 oder einen Sync-Code (vmm1.…). Du bekommst ein Profil mit genau den Mods, Versionen und Configs des Servers.",
 	"server.check": "Prüfen",
 	"server.checking": "Prüfe…",
 	"server.discoveredMods": "{n} Mods",
