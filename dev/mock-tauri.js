@@ -143,7 +143,7 @@
 	const state = {
 		profiles: ["Hardcore", "Vanilla+", "Bauen"],
 		active: "Hardcore",
-		server: { url: "http://10.10.10.123:9002", name: "PetersWelte", hasToken: true },
+		server: { url: "http://10.10.10.123:9002", name: "PetersWelte", hasToken: true, gist: false, hasGistToken: false },
 		mods: inProfile.map((id, i) => ({
 			namespace: byId.get(id).ns,
 			name: byId.get(id).name,
@@ -253,7 +253,15 @@
 		// Linked companion server: the mock server runs one older version and one extra mod.
 		set_server_link: ({ link }) => ({
 			...state,
-			server: link ? { url: link.url, name: link.name || "PetersWelte", hasToken: !!link.token || state.server?.hasToken } : null,
+			server: link
+				? {
+						url: link.url,
+						name: link.name || "PetersWelte",
+						hasToken: !!link.token || state.server?.hasToken,
+						gist: !!link.syncCode,
+						hasGistToken: !!link.gistToken,
+					}
+				: null,
 		}),
 		check_server: () => ({
 			reachable: true,
@@ -267,6 +275,8 @@
 			features: { publish: true, modManager: true },
 			release: null,
 			online: 2,
+			configsChanged: [],
+			gistRelease: null,
 			diff: {
 				onlyServer: [{ id: slim[50].id, version: slim[50].ver, explicit: true, requiredBy: [] }],
 				onlyLocal: [],

@@ -38,7 +38,18 @@ import { modStatus, type ModStatus } from "./status";
 import { computeReadiness } from "#lib/readiness.js";
 import { parseDeepLink } from "#lib/deeplink.js";
 import { getCurrent as getCurrentDeepLink, onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import type { ApplyWhen, ModpackPreview, PublishCategory, PublishMeta, PublishResult, ServerCheck, ServerDiscovery, StageResponse, WikiIndex } from "./types";
+import type {
+	ApplyWhen,
+	ModpackPreview,
+	PublishCategory,
+	PublishMeta,
+	PublishResult,
+	ServerCheck,
+	ServerDiscovery,
+	ServerLink,
+	StageResponse,
+	WikiIndex,
+} from "./types";
 import { formatDateTime } from "#lib/format.js";
 import type { AppState, ExportResult, FolderKind, ImportResult, Pkg, ProfileMod, Settings, SlimPkg, SyncDone, SyncProgress } from "./types";
 
@@ -340,17 +351,17 @@ class ModManagerStore {
 		}
 	}
 
+	/** `url` may be a sync code (vmm1.…): then the profile syncs through the gist and the token is the gist token. */
 	async linkServer(url: string, token: string): Promise<boolean> {
 		const active = this.state.active;
 		if (!active) return false;
-		const ok = await this.applyState(
-			() => api.setServerLink(active, { url, name: this.state.server?.name ?? "", token: token || null }),
-			t("toast.serverLinkFailed"),
-		);
+		const name = this.state.server?.name ?? "";
+		const link: ServerLink = url.startsWith("vmm1.") ? { url: "", name, syncCode: url, gistToken: token || null } : { url, name, token: token || null };
+		const ok = await this.applyState(() => api.setServerLink(active, link), t("toast.serverLinkFailed"));
 		if (!ok) return false;
 		const c = await this.refreshServerStatus();
 		if (c?.reachable && c.name && c.name !== this.state.server?.name) {
-			await this.applyState(() => api.setServerLink(active, { url, name: c.name, token: null }), t("toast.serverLinkFailed"));
+			await this.applyState(() => api.setServerLink(active, { ...link, name: c.name, token: null, gistToken: null }), t("toast.serverLinkFailed"));
 		}
 		this.toast(
 			c?.reachable ? t("toast.serverLinked", { name: c.name || url }) : t("server.unreachable", { error: c?.error ?? "" }),
@@ -423,6 +434,21 @@ class ModManagerStore {
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.publishFailed")), "err");
 			return null;
+		}
+	}
+
+	/** Gist links: publish and schedule in one step; the companion reports back through the gist. */
+	async publishGist(withConfigs: boolean, when: ApplyWhen, at: number | null = null): Promise<boolean> {
+		const active = this.state.active;
+		if (!active) return false;
+		try {
+			const id = await api.publishGist(active, withConfigs, when, at);
+			this.toast(t("toast.gistPublished", { id }), "ok");
+			this.refreshServerStatus();
+			return true;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.publishFailed")), "err");
+			return false;
 		}
 	}
 
