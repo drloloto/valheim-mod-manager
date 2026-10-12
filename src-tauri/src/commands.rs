@@ -35,6 +35,8 @@ pub struct AppCtx {
     pub client: reqwest::Client,
     pub log_tail: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     pub portable: bool,
+    /// Built with `tauri.dev.conf.json`: own data dir, marked window, test hooks in the frontend.
+    pub dev: bool,
     pub gist_cache: gistsync::EtagCache,
 }
 
@@ -78,6 +80,7 @@ pub struct GameStatus {
 pub struct AppInfo {
     version: &'static str,
     portable: bool,
+    dev: bool,
     data_dir: String,
 }
 
@@ -154,7 +157,7 @@ fn build_state(ctx: &AppCtx) -> Result<AppState> {
         game: GameStatus { valheim_dir: game.valheim_dir, found, last_updated: manifest.as_ref().map(|m| m.0), build_id: manifest.map(|m| m.1) },
         profile_mods,
         health,
-        app: AppInfo { version: env!("CARGO_PKG_VERSION"), portable: ctx.portable, data_dir: ctx.paths.root.to_string_lossy().to_string() },
+        app: AppInfo { version: env!("CARGO_PKG_VERSION"), portable: ctx.portable, dev: ctx.dev, data_dir: ctx.paths.root.to_string_lossy().to_string() },
     })
 }
 
@@ -663,23 +666,35 @@ fn link_of(ctx: &AppCtx, profile: &str) -> Result<ServerLink> {
 #[tauri::command]
 pub fn set_server_link(ctx: State<'_, AppCtx>, profile: String, link: Option<ServerLink>) -> Result<AppState> {
     let mut p = profiles::load(&ctx.paths, &profile)?;
-    p.server = match link {
-        None => None,
-        Some(l) => {
-            let keep = |new: Option<String>, old: Option<&String>| new.filter(|t| !t.trim().is_empty()).or_else(|| old.cloned());
-            let token = keep(l.token, p.server.as_ref().and_then(|s| s.token.as_ref()));
-            let gist_token = keep(l.gist_token, p.server.as_ref().and_then(|s| s.gist_token.as_ref()));
-            // A sync code pasted into the address field counts as one.
-            let (raw_url, raw_code) = if gistsync::is_sync_code(&l.url) { (String::new(), Some(l.url)) } else { (l.url, l.sync_code) };
-            let sync_code = raw_code.map(|c| gistsync::parse_sync_code(&c).map(|_| c.trim().to_string())).transpose()?;
-            let url = if raw_url.trim().is_empty() && sync_code.is_some() { String::new() } else { server::normalize_url(&raw_url)? };
-            let same_gist = p.server.as_ref().is_some_and(|s| s.sync_code == sync_code);
-            let last_adopted = if same_gist { p.server.as_ref().and_then(|s| s.last_adopted.clone()) } else { None };
-            Some(ServerLink { url, name: l.name, token, sync_code, gist_token, last_adopted })
-        }
-    };
+    p.server = link.map(|l| merge_link(p.server.as_ref(), l)).transpose()?;
     profiles::save(&ctx.paths, &p)?;
     build_state(&ctx)
+}
+
+/// The new link over the old one. A sync code is recognised wherever it was pasted (address, token or
+/// sync-code field); with one, the URL may be empty. Tokens survive an edit that leaves them blank, and
+/// `last_adopted` survives as long as the gist stays the same.
+fn merge_link(old: Option<&ServerLink>, l: ServerLink) -> Result<ServerLink> {
+    let blank = |s: &Option<String>| !s.as_deref().is_some_and(|t| !t.trim().is_empty());
+    let code_in = |s: &str| gistsync::is_sync_code(s);
+    let (raw_url, raw_code, raw_token) = if code_in(&l.url) {
+        (String::new(), Some(l.url), l.token)
+    } else if l.token.as_deref().is_some_and(code_in) && blank(&l.sync_code) {
+        (l.url, l.token, None)
+    } else {
+        (l.url, l.sync_code, l.token)
+    };
+    let sync_code = raw_code.filter(|c| !c.trim().is_empty()).map(|c| gistsync::parse_sync_code(&c).map(|_| c.trim().to_string())).transpose()?;
+    // The admin's gist token may land in the token field as well; with a sync code it is the gist token.
+    let (raw_token, raw_gist_token) = if sync_code.is_some() && blank(&l.gist_token) { (None, raw_token) } else { (raw_token, l.gist_token) };
+    let keep = |new: Option<String>, old: Option<&String>| new.filter(|t| !t.trim().is_empty()).or_else(|| old.cloned());
+    let token = keep(raw_token, old.and_then(|s| s.token.as_ref()));
+    let gist_token = keep(raw_gist_token, old.and_then(|s| s.gist_token.as_ref()));
+    // One transport per link: with a sync code the gist is the server, a leftover URL would only confuse.
+    let url = if sync_code.is_some() { String::new() } else { server::normalize_url(&raw_url)? };
+    let same_gist = old.is_some_and(|s| s.sync_code == sync_code);
+    let last_adopted = if same_gist { old.and_then(|s| s.last_adopted.clone()) } else { None };
+    Ok(ServerLink { url, name: l.name, token, sync_code, gist_token, last_adopted })
 }
 
 /// Compares the local resolved plan with the server manifest. Unreachable servers are reported, not errors.
@@ -1046,4 +1061,51 @@ pub fn stop_log_tail(ctx: State<'_, AppCtx>) -> Result<()> {
         h.abort();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CODE: &str = "vmm1.5f2964a03b693a8655578dfdcbd4b6b6.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    fn link(url: &str, token: Option<&str>, code: Option<&str>, gist_token: Option<&str>) -> ServerLink {
+        ServerLink {
+            url: url.into(),
+            name: "n".into(),
+            token: token.map(String::from),
+            sync_code: code.map(String::from),
+            gist_token: gist_token.map(String::from),
+            last_adopted: None,
+        }
+    }
+
+    #[test]
+    fn a_sync_code_is_recognised_in_any_field() {
+        for l in [
+            link(CODE, Some("ghp_x"), None, None),
+            link("", Some(CODE), None, Some("ghp_x")),
+            link("", None, Some(CODE), Some("ghp_x")),
+            link("http://127.0.0.1:9002", Some(CODE), None, Some("ghp_x")),
+        ] {
+            let m = merge_link(None, l).unwrap();
+            assert_eq!(m.sync_code.as_deref(), Some(CODE));
+            assert_eq!(m.gist_token.as_deref(), Some("ghp_x"), "the token goes with the gist");
+            assert_eq!(m.url, "", "a gist link has no URL");
+            assert_eq!(m.token, None);
+        }
+    }
+
+    #[test]
+    fn http_links_still_need_a_url_and_keep_tokens_and_adoption() {
+        assert!(merge_link(None, link("nope", None, None, None)).is_err());
+        let old = ServerLink { last_adopted: Some("h:c".into()), ..link("http://h:1", Some("old"), None, None) };
+        let m = merge_link(Some(&old), link("http://h:1/", Some(" "), None, None)).unwrap();
+        assert_eq!((m.url.as_str(), m.token.as_deref(), m.sync_code), ("http://h:1", Some("old"), None));
+        let old = ServerLink { last_adopted: Some("h:c".into()), ..link("", None, Some(CODE), Some("g")) };
+        let same = merge_link(Some(&old), link("", None, Some(CODE), None)).unwrap();
+        assert_eq!((same.gist_token.as_deref(), same.last_adopted.as_deref()), (Some("g"), Some("h:c")));
+        let other = merge_link(Some(&old), link("http://h:1", None, None, None)).unwrap();
+        assert_eq!((other.sync_code, other.last_adopted), (None, None));
+    }
 }

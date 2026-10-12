@@ -237,6 +237,8 @@ export interface HealthIssue {
 export interface AppInfo {
 	version: string;
 	portable: boolean;
+	/** Built with tauri.dev.conf.json: own data dir, marked window, `window.vmm` test hook. */
+	dev: boolean;
 	dataDir: string;
 }
 

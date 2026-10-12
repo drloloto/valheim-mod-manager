@@ -13,7 +13,9 @@ and launches the game through Steam. Architecture: [docs/architecture.md](docs/a
 
 ```bash
 npm install
-npm run tauri dev                 # real app
+npm run tauri dev                 # real app, shares the installed app's data dir
+npm run dev:app                   # DEV app: own identifier and data dir (…valheim-mod-manager.dev), DEV badge, cyan accent
+npm run build:dev-app             # the same as a standalone debug exe (src-tauri/target/debug), no Vite needed
 VITE_MOCK_TAURI=1 npm run dev     # browser preview with mock backend at http://localhost:1420
 npm run check && npm test && npm run build && npm run lint
 cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test

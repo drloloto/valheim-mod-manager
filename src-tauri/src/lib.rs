@@ -56,6 +56,9 @@ pub fn run() {
                 Some(p) => p.clone(),
                 None => app.path().app_data_dir()?,
             };
+            // `tauri.dev.conf.json` switches the identifier, which already moves the data dir: the dev app
+            // never shares profiles with the installed one.
+            let dev = app.config().identifier.ends_with(".dev");
             let paths = paths::Paths::new(root);
             paths.ensure()?;
             let client = thunderstore::http_client(Duration::from_secs(15), Duration::from_secs(60))?;
@@ -68,12 +71,18 @@ pub fn run() {
                 log_tail: Mutex::new(None),
                 gist_cache: Default::default(),
                 portable: portable.is_some(),
+                dev,
                 paths,
             });
+            if dev {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.set_title("Valheim Mod Manager [DEV]");
+                }
+            }
             tauri::async_runtime::spawn(commands::index_worker(app.handle().clone()));
             // The installers register the scheme; this covers `npm run tauri dev` and the portable build.
             #[cfg(any(windows, target_os = "linux"))]
-            {
+            if !dev {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 if let Err(e) = app.deep_link().register_all() {
                     eprintln!("deep link registration failed: {e}");

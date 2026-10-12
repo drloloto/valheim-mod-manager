@@ -16,6 +16,14 @@
 	let { children } = $props();
 	let topBar = $state<ReturnType<typeof TopBar>>();
 
+	// Dev builds (tauri.dev.conf.json) look different (theme.css) and expose the store as `window.vmm`,
+	// which dev/spike-drive.mjs uses to steer the real app over CDP.
+	$effect(() => {
+		const dev = store.state.app.dev;
+		document.documentElement.classList.toggle("dev-build", dev);
+		if (dev) (window as unknown as { vmm?: unknown }).vmm = store;
+	});
+
 	function focusSearch() {
 		const el = document.querySelector<HTMLInputElement>("[data-search]");
 		el?.focus();

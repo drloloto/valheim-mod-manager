@@ -76,7 +76,7 @@ const EMPTY_STATE: AppState = {
 	game: { valheimDir: null, found: true, lastUpdated: null, buildId: null },
 	profileMods: {},
 	health: [],
-	app: { version: "", portable: false, dataDir: "" },
+	app: { version: "", portable: false, dev: false, dataDir: "" },
 };
 
 const DEFAULT_SECTIONS: Record<string, boolean> = { status: true, cats: true, owners: true, upd: true };
