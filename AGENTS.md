@@ -65,7 +65,8 @@ expected depth. Commit in meaningful slices with conventional commit messages.
 
 ## Verifying UI work without the Tauri window
 
-Start the mock preview, then `node dev/screenshot.mjs 1100 680 /installed out.png` drives headless Edge over
+Start the mock preview, then `node dev/screenshot.mjs 1100 680 /installed out.png` (from Git Bash with
+`MSYS_NO_PATHCONV=1`, or the route `/` turns into a Windows path) drives headless Edge over
 the Chrome DevTools Protocol, runs `dev/layout-audit.js` (overflow, stray scrollbars, overlapping text) and
 saves a screenshot; `PRESET` and `ACTION` (see the file header) set the locale or click a row first. Check
 every changed page at 1100 × 680 in German before claiming a UI change done. The mock lives in
