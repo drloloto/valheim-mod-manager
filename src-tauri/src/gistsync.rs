@@ -299,6 +299,19 @@ struct GistBody {
     files: BTreeMap<String, Option<GistFile>>,
 }
 
+/// GitHub's answer when a limit is used up: which bucket and when it resets. The gist write bucket
+/// (`gist_update`) is 100 per hour per user, shared by the companion and the admin's Mod Manager.
+fn rate_limited(res: &reqwest::Response) -> Option<String> {
+    let h = |n: &str| res.headers().get(n).and_then(|v| v.to_str().ok()).map(String::from);
+    if res.status() != reqwest::StatusCode::FORBIDDEN || h("x-ratelimit-remaining").as_deref() != Some("0") {
+        return None;
+    }
+    let resource = h("x-ratelimit-resource").unwrap_or_else(|| "api".into());
+    let limit = h("x-ratelimit-limit").unwrap_or_default();
+    let reset = h("x-ratelimit-reset").and_then(|r| r.parse::<i64>().ok()).map(|r| ((r - now_ms() / 1000).max(0) + 59) / 60).unwrap_or(0);
+    Some(format!("GitHub's {resource} limit ({limit} per hour per user) is used up; it resets in {reset} min."))
+}
+
 impl GistMailbox {
     pub fn new(client: reqwest::Client, gist_id: &str, token: Option<String>, cache: EtagCache) -> Self {
         let token = token.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
@@ -332,6 +345,9 @@ impl Mailbox for GistMailbox {
             if let Some((_, files)) = cached {
                 return Ok(files);
             }
+        }
+        if let Some(msg) = rate_limited(&res) {
+            return Err(AppError::Network(msg));
         }
         if !res.status().is_success() {
             let hint = if res.status() == reqwest::StatusCode::NOT_FOUND { " (wrong sync code, or a private gist without a token)" } else { "" };
@@ -368,6 +384,9 @@ impl Mailbox for GistMailbox {
         let url = format!("{}/gists/{}", self.api, self.gist_id);
         let body = serde_json::json!({ "files": { name: { "content": text } } });
         let res = self.request(reqwest::Method::PATCH, &url).json(&body).send().await?;
+        if let Some(msg) = rate_limited(&res) {
+            return Err(AppError::Network(msg));
+        }
         if !res.status().is_success() {
             return Err(AppError::Network(format!("gist {}: PATCH HTTP {}", self.gist_id, res.status())));
         }
