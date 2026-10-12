@@ -79,13 +79,23 @@ impl ProfileMod {
 }
 
 /// A companion server this profile mirrors (see server.rs). The token is needed for publishing only.
+/// With `sync_code` set the link goes through a sealed gist instead (gistsync.rs); `url` may then be
+/// empty, and `gist_token` (admin only) is what publishing needs.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ServerLink {
     pub url: String,
     #[serde(default)]
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gist_token: Option<String>,
+    /// `<manifest hash>:<config hash>` of the server state last adopted, so an unchanged server does not prompt again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_adopted: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -155,6 +165,16 @@ pub fn test_pkg(id: &str, versions: &[(&str, &[&str])]) -> Pkg {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn server_link_takes_the_frontend_field_names() {
+        // The link dialog sends camelCase; a gist link arrives with an empty URL and the code.
+        let l: ServerLink = serde_json::from_str(r#"{"url":"","name":"","syncCode":"vmm1.x.y","gistToken":"t"}"#).unwrap();
+        assert_eq!((l.sync_code.as_deref(), l.gist_token.as_deref()), (Some("vmm1.x.y"), Some("t")));
+        let old: ServerLink = serde_json::from_str(r#"{"url":"http://h:1","name":"n","token":"t"}"#).unwrap();
+        assert!(old.sync_code.is_none() && old.token.as_deref() == Some("t"));
+        assert!(serde_json::to_string(&l).unwrap().contains("\"syncCode\""));
+    }
 
     #[test]
     fn old_profile_json_gets_defaults() {

@@ -79,7 +79,8 @@ async function waitReady() {
 	}
 	return false;
 }
-await send("Page.navigate", { url });
+const nav = await send("Page.navigate", { url });
+if (nav.error) console.log("navigate failed:", nav.error.message);
 let ready = await waitReady();
 if (process.env.PRESET) {
 	await evaluate(process.env.PRESET);

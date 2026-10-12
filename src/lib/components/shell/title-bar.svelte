@@ -7,6 +7,7 @@
 	import X from "@lucide/svelte/icons/x";
 	import { t } from "#lib/i18n/index.svelte.js";
 	import { BrandMark } from "#lib/components/kit/index.js";
+	import { store } from "#lib/api/store.svelte.js";
 
 	const win = getCurrentWindow();
 	let maximized = $state(false);
@@ -32,6 +33,11 @@
 	<div data-tauri-drag-region class="flex items-center gap-2 pl-3.5">
 		<BrandMark class="text-primary size-4" />
 		<span data-tauri-drag-region>{t("app.name")}</span>
+		{#if store.state.app.dev}
+			<span class="bg-primary text-primary-foreground rounded-sm px-1.5 font-mono text-[10px] font-semibold tracking-wider" title={store.state.app.dataDir}
+				>DEV</span
+			>
+		{/if}
 	</div>
 	<div data-tauri-drag-region class="flex-1 self-stretch"></div>
 	<div class="flex self-stretch">

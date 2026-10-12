@@ -94,12 +94,30 @@ export interface ServerLink {
 	url: string;
 	name: string;
 	token?: string | null;
+	/** `vmm1.<gist id>.<secret>`: sync through a sealed gist instead of the companion's API (url may be empty). */
+	syncCode?: string | null;
+	/** Admin only: GitHub token with the gist scope, needed to publish. */
+	gistToken?: string | null;
 }
 
 export interface ServerLinkInfo {
 	url: string;
 	name: string;
 	hasToken: boolean;
+	gist: boolean;
+	hasGistToken: boolean;
+}
+
+/** What became of the last release published through the gist (server.json.release). */
+export interface GistRelease {
+	id: string;
+	companionId: string | null;
+	state: "staged" | "scheduled" | "applied" | "failed" | "rejected" | "discarded";
+	handledAt: number;
+	problems: string[];
+	error: string | null;
+	schedule: { when: string; at?: number; setAt: number } | null;
+	plan: { install: number; remove: number; configs: number } | null;
 }
 
 export interface ManifestMod {
@@ -132,11 +150,18 @@ export interface ServerCheck {
 	release: ReleaseSummary | null;
 	/** Players online per the server log; null when unknown. */
 	online: number | null;
+	/** Gist links: server config files that differ from the profile's. */
+	configsChanged: string[];
+	/** Gist links: status of the last published release. */
+	gistRelease: GistRelease | null;
 }
 
 /** What a pasted address resolved to (autoconfig). */
 export interface ServerDiscovery {
+	/** empty for a gist server */
 	url: string;
+	/** set when the pasted text held a sync code: the server is reached through its gist */
+	syncCode?: string | null;
 	name: string;
 	world: string;
 	mods: number;
@@ -215,6 +240,8 @@ export interface HealthIssue {
 export interface AppInfo {
 	version: string;
 	portable: boolean;
+	/** Built with tauri.dev.conf.json: own data dir, marked window, `window.vmm` test hook. */
+	dev: boolean;
 	dataDir: string;
 }
 

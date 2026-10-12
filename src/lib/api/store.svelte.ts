@@ -38,7 +38,18 @@ import { modStatus, type ModStatus } from "./status";
 import { computeReadiness } from "#lib/readiness.js";
 import { parseDeepLink } from "#lib/deeplink.js";
 import { getCurrent as getCurrentDeepLink, onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import type { ApplyWhen, ModpackPreview, PublishCategory, PublishMeta, PublishResult, ServerCheck, ServerDiscovery, StageResponse, WikiIndex } from "./types";
+import type {
+	ApplyWhen,
+	ModpackPreview,
+	PublishCategory,
+	PublishMeta,
+	PublishResult,
+	ServerCheck,
+	ServerDiscovery,
+	ServerLink,
+	StageResponse,
+	WikiIndex,
+} from "./types";
 import { formatDateTime } from "#lib/format.js";
 import type { AppState, ExportResult, FolderKind, ImportResult, Pkg, ProfileMod, Settings, SlimPkg, SyncDone, SyncProgress } from "./types";
 
@@ -65,8 +76,11 @@ const EMPTY_STATE: AppState = {
 	game: { valheimDir: null, found: true, lastUpdated: null, buildId: null },
 	profileMods: {},
 	health: [],
-	app: { version: "", portable: false, dataDir: "" },
+	app: { version: "", portable: false, dev: false, dataDir: "" },
 };
+
+/** A sync code as the companion hands it out; it may sit at the end of a URL. */
+const SYNC_CODE = /vmm1\.[0-9a-f]{20,40}\.[A-Za-z0-9_-]{43}/;
 
 const DEFAULT_SECTIONS: Record<string, boolean> = { status: true, cats: true, owners: true, upd: true };
 
@@ -193,6 +207,11 @@ class ModManagerStore {
 	/** Linked companion server of the active profile and the last comparison with it. */
 	server = $derived(this.state.server);
 	serverStatus = $state<ServerCheck | null>(null);
+	/** Publishing is possible: the gist token for a gist link, the companion token for an HTTP link. */
+	get serverAdmin(): boolean {
+		const s = this.state.server;
+		return !!s && (s.gist ? s.hasGistToken : s.hasToken);
+	}
 	serverChecking = $state(false);
 	serverDialog = $state<"link" | "publish" | "diff" | "add" | null>(null);
 	/** Linked profiles whose server runs other versions (from the start-up check). */
@@ -273,6 +292,8 @@ class ModManagerStore {
 		if (this.autoUpdate.value && !this.state.app.portable) this.checkUpdate();
 		this.refreshServerStatus();
 		this.checkAllServers();
+		// The linked server is re-checked every five minutes while the app is open (gist reads are ETag-cached).
+		const serverClock = setInterval(() => this.refreshServerStatus(), 300_000);
 		// `valheim-mod-manager://import?…` from a companion page, at startup or while running.
 		const handle = (urls: string[]) => {
 			for (const u of urls) {
@@ -288,7 +309,10 @@ class ModManagerStore {
 		} catch {
 			/* plugin unavailable (browser preview) */
 		}
-		return () => unlisten.forEach((u) => u());
+		return () => {
+			clearInterval(serverClock);
+			unlisten.forEach((u) => u());
+		};
 	}
 
 	private onSyncDone(r: SyncDone) {
@@ -340,17 +364,19 @@ class ModManagerStore {
 		}
 	}
 
+	/** `url` may be a sync code (vmm1.…): then the profile syncs through the gist and the token is the gist token. */
 	async linkServer(url: string, token: string): Promise<boolean> {
 		const active = this.state.active;
 		if (!active) return false;
-		const ok = await this.applyState(
-			() => api.setServerLink(active, { url, name: this.state.server?.name ?? "", token: token || null }),
-			t("toast.serverLinkFailed"),
-		);
+		const name = this.state.server?.name ?? "";
+		// A sync code anywhere in the address (alone or at the end of a URL) means a gist link; the token next to it is the gist token.
+		const code = SYNC_CODE.exec(url)?.[0];
+		const link: ServerLink = code ? { url: "", name, syncCode: code, gistToken: token || null } : { url, name, token: token || null };
+		const ok = await this.applyState(() => api.setServerLink(active, link), t("toast.serverLinkFailed"));
 		if (!ok) return false;
 		const c = await this.refreshServerStatus();
 		if (c?.reachable && c.name && c.name !== this.state.server?.name) {
-			await this.applyState(() => api.setServerLink(active, { url, name: c.name, token: null }), t("toast.serverLinkFailed"));
+			await this.applyState(() => api.setServerLink(active, { ...link, name: c.name, token: null, gistToken: null }), t("toast.serverLinkFailed"));
 		}
 		this.toast(
 			c?.reachable ? t("toast.serverLinked", { name: c.name || url }) : t("server.unreachable", { error: c?.error ?? "" }),
@@ -393,7 +419,21 @@ class ModManagerStore {
 
 	/** New profile straight from a companion: its mods, versions and configs, linked for later checks. */
 	async addServer(d: ServerDiscovery, installAll = true): Promise<boolean> {
+		if (d.syncCode) return this.addGistServer(d);
 		return this.importFromUrl(`${d.url}/api/profile.r2z`, d.name || d.world || "Server", d.url, installAll);
+	}
+
+	/** A gist server has no .r2z to fetch: a new profile, linked by its code, then adopted from server.json. */
+	private async addGistServer(d: ServerDiscovery): Promise<boolean> {
+		const fail = t("toast.importFailed");
+		if (!(await this.applyState(() => api.createProfile(d.name || d.world || "Server"), fail))) return false;
+		const name = this.state.active;
+		if (!name) return false;
+		if (!(await this.applyState(() => api.setServerLink(name, { url: "", name: d.name, syncCode: d.syncCode }), fail))) return false;
+		if (!(await this.applyState(() => api.adoptServer(name, true, null), fail))) return false;
+		this.toast(t("toast.adoptedInto", { name }), "ok");
+		this.refreshServerStatus();
+		return true;
 	}
 
 	/** App start: every linked profile vs its server; results feed the profile menu markers and one toast. */
@@ -423,6 +463,21 @@ class ModManagerStore {
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.publishFailed")), "err");
 			return null;
+		}
+	}
+
+	/** Gist links: publish and schedule in one step; the companion reports back through the gist. */
+	async publishGist(withConfigs: boolean, when: ApplyWhen, at: number | null = null): Promise<boolean> {
+		const active = this.state.active;
+		if (!active) return false;
+		try {
+			const id = await api.publishGist(active, withConfigs, when, at);
+			this.toast(t("toast.gistPublished", { id }), "ok");
+			this.refreshServerStatus();
+			return true;
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.publishFailed")), "err");
+			return false;
 		}
 	}
 

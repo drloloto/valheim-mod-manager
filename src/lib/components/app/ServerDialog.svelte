@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Button, Checkbox, Dialog, Input, Label } from "#lib/components/kit/index.js";
+	import { Button, Checkbox, Dialog, Input, Label, Select } from "#lib/components/kit/index.js";
 	import { store } from "#lib/api/store.svelte.js";
-	import type { ServerDiscovery } from "#lib/api/types.js";
+	import type { ApplyWhen, ServerDiscovery } from "#lib/api/types.js";
 	import { formatDateTime } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
 
@@ -15,6 +15,10 @@
 	let atValue = $state("");
 	let adoptConfigs = $state(true);
 	let discovery = $state.raw<ServerDiscovery | null>(null);
+	/** Gist links: when the server applies the published release. */
+	let gistWhen = $state<ApplyWhen>("idle");
+	const WHEN: ApplyWhen[] = ["now", "idle", "at", "none"];
+	const whenLabel = (w: ApplyWhen) => t(w === "now" ? "server.whenNow" : w === "idle" ? "server.whenIdle" : w === "at" ? "server.whenAt" : "server.whenNone");
 
 	const mode = $derived(store.serverDialog);
 	const open = $derived(mode !== null);
@@ -83,7 +87,7 @@
 			<div class="grid gap-4">
 				<div class="grid gap-2">
 					<Label for="server-url">{t("server.url")}</Label>
-					<Input id="server-url" value={url} oninput={(e) => (urlEdit = e.currentTarget.value)} placeholder="http://10.10.10.123:9002" />
+					<Input id="server-url" value={url} oninput={(e) => (urlEdit = e.currentTarget.value)} placeholder="http://10.10.10.123:9002 / vmm1.…" />
 				</div>
 				<div class="grid gap-2">
 					<Label for="server-token">{t("server.token")}</Label>
@@ -100,9 +104,76 @@
 		{:else if mode === "publish"}
 			<Dialog.Header>
 				<Dialog.Title>{t("server.publishTitle", { name: serverName })}</Dialog.Title>
-				<Dialog.Description>{pending ? t("server.stagedDesc") : t("server.publishDesc")}</Dialog.Description>
+				<Dialog.Description>{store.server?.gist ? t("server.gistDesc") : pending ? t("server.stagedDesc") : t("server.publishDesc")}</Dialog.Description>
 			</Dialog.Header>
-			{#if pending}
+			{#if store.server?.gist}
+				<!-- Gist transport: publish and schedule in one step; the companion answers through server.json. -->
+				<div class="grid gap-3 text-sm">
+					{#if check?.reachable}
+						{#if check.inSync}
+							<p class="text-muted-foreground">{t("server.identical")}</p>
+						{:else}
+							<ul class="text-foreground-soft grid gap-1 text-xs">
+								{#each check.diff.changed as c (c.id)}<li>{t("server.changed", { id: nameOf(c.id), local: c.local, server: c.server })}</li>{/each}
+								{#each check.diff.onlyLocal as m (m.id)}<li>{t("server.willInstall", { id: nameOf(m.id), version: m.version })}</li>{/each}
+								{#each check.diff.onlyServer as m (m.id)}<li>{t("server.willRemove", { id: nameOf(m.id), version: m.version })}</li>{/each}
+								{#if check.configsChanged.length}<li>{t("server.configsChanged", { n: check.configsChanged.length })}</li>{/if}
+							</ul>
+						{/if}
+					{:else if check}
+						<p class="text-destructive-text">{t("server.unreachable", { error: check.error ?? "" })}</p>
+					{/if}
+					{#if check?.gistRelease}
+						{@const r = check.gistRelease}
+						<p class="text-muted-foreground text-xs">
+							{t("server.gistStatus", { id: r.id, state: r.state })}
+							{#if r.plan}
+								· {t("server.planInstall", { n: r.plan.install })}, {t("server.planRemove", { n: r.plan.remove })}, {t("server.planConfigs", {
+									n: r.plan.configs,
+								})}
+							{/if}
+							{#if r.error}· {r.error}{/if}
+						</p>
+						{#if r.problems.length}
+							<div class="text-destructive-text text-xs">
+								<p class="font-semibold">{t("server.problems")}</p>
+								{#each r.problems as p (p)}<p>{p}</p>{/each}
+							</div>
+						{/if}
+					{:else if check?.reachable}
+						<p class="text-muted-foreground text-xs">{t("server.gistNone")}</p>
+					{/if}
+					{#if !store.server?.hasGistToken}
+						<p class="text-destructive-text">{t("server.noGistToken")}</p>
+					{/if}
+					<label class="flex items-center gap-2">
+						<Checkbox bind:checked={withConfigs} />
+						{t("server.withConfigs")}
+					</label>
+					<div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
+						<Label for="gist-when">{t("server.gistWhen")}</Label>
+						<Select.Root type="single" value={gistWhen} onValueChange={(v) => (gistWhen = v as ApplyWhen)}>
+							<Select.Trigger id="gist-when" class="w-full">{whenLabel(gistWhen)}</Select.Trigger>
+							<Select.Content>
+								{#each WHEN as w (w)}<Select.Item value={w} label={whenLabel(w)} />{/each}
+							</Select.Content>
+						</Select.Root>
+						{#if gistWhen === "at"}
+							<span></span>
+							<Input type="datetime-local" bind:value={atValue} />
+						{/if}
+					</div>
+				</div>
+				<Dialog.Footer>
+					<Button variant="ghost" disabled={busy || store.serverChecking} onclick={() => store.refreshServerStatus()}>{t("server.checkNow")}</Button>
+					<Button variant="outline" onclick={close}>{t("common.cancel")}</Button>
+					<Button
+						disabled={busy || !store.server?.hasGistToken || (gistWhen === "at" && !atValue)}
+						onclick={() => run(() => store.publishGist(withConfigs, gistWhen, gistWhen === "at" ? new Date(atValue).getTime() : null))}
+						>{t("server.publishGist")}</Button
+					>
+				</Dialog.Footer>
+			{:else if pending}
 				<!-- Step 2: the server pulled and checked everything; the admin decides when players get the restart. -->
 				<div class="grid gap-3 text-sm">
 					<ul class="text-foreground-soft grid gap-1 text-xs">
@@ -203,12 +274,16 @@
 						{#if side(m.id) === "server"}· {t("server.serverSideHint")}{/if}
 					</li>
 				{/each}
+				{#each check.configsChanged as p (p)}<li>{t("server.configChanged", { path: p })}</li>{/each}
 			</ul>
 			<label class="flex items-center gap-2 text-sm">
 				<Checkbox bind:checked={adoptConfigs} />
 				{t("server.adoptConfigs")}
 			</label>
 			<Dialog.Footer>
+				{#if store.serverAdmin}
+					<Button variant="ghost" disabled={busy} onclick={() => (store.serverDialog = "publish")}>{t("server.publishInstead")}</Button>
+				{/if}
 				<Button variant="ghost" disabled={busy} onclick={() => run(() => store.launch(true))}>{t("server.startAnyway")}</Button>
 				<Button variant="outline" disabled={busy} onclick={() => run(() => store.adoptServer(false, adoptConfigs, serverName || "Server"))}
 					>{t("server.adoptIntoNew")}</Button
@@ -226,14 +301,14 @@
 					<Input
 						value={url}
 						oninput={(e) => (urlEdit = e.currentTarget.value)}
-						placeholder="10.10.10.123:9002"
+						placeholder="10.10.10.123:9002 / vmm1.…"
 						onkeydown={(e) => e.key === "Enter" && discover()}
 					/>
 					<Button variant="outline" disabled={busy || !url.trim()} onclick={discover}>{busy ? t("server.checking") : t("server.check")}</Button>
 				</div>
 				{#if discovery}
 					<p class="text-sm">
-						<span class="font-semibold">{discovery.name || discovery.url}</span>
+						<span class="font-semibold">{discovery.name || discovery.url || discovery.syncCode}</span>
 						{#if discovery.world}· {discovery.world}{/if}
 						· {t("server.discoveredMods", { n: discovery.mods })}
 					</p>

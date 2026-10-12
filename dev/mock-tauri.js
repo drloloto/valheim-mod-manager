@@ -143,7 +143,7 @@
 	const state = {
 		profiles: ["Hardcore", "Vanilla+", "Bauen"],
 		active: "Hardcore",
-		server: { url: "http://10.10.10.123:9002", name: "PetersWelte", hasToken: true },
+		server: { url: "http://10.10.10.123:9002", name: "PetersWelte", hasToken: true, gist: false, hasGistToken: false },
 		mods: inProfile.map((id, i) => ({
 			namespace: byId.get(id).ns,
 			name: byId.get(id).name,
@@ -165,7 +165,7 @@
 			{ kind: "stale", ids: [inProfile[2]], detail: String(NOW - 200 * DAY) },
 			{ kind: "deprecated", ids: [inProfile[3]], detail: "" },
 		],
-		app: { version: "0.2.0", portable: false, dataDir: "C:\\Users\\you\\AppData\\Roaming\\io.github.drloloto.valheim-mod-manager" },
+		app: { version: "0.2.0", portable: false, dev: false, dataDir: "C:\\Users\\you\\AppData\\Roaming\\io.github.drloloto.valheim-mod-manager" },
 	};
 	const settings = { valheimDir: null, steamExe: null, downloadConcurrency: 4, indexTtlMinutes: 30, showNsfw: false, thunderstoreToken: "tss_mock" };
 
@@ -253,7 +253,15 @@
 		// Linked companion server: the mock server runs one older version and one extra mod.
 		set_server_link: ({ link }) => ({
 			...state,
-			server: link ? { url: link.url, name: link.name || "PetersWelte", hasToken: !!link.token || state.server?.hasToken } : null,
+			server: link
+				? {
+						url: link.url,
+						name: link.name || "PetersWelte",
+						hasToken: !!link.token || state.server?.hasToken,
+						gist: !!link.syncCode,
+						hasGistToken: !!link.gistToken,
+					}
+				: null,
 		}),
 		check_server: () => ({
 			reachable: true,
@@ -267,6 +275,19 @@
 			features: { publish: true, modManager: true },
 			release: null,
 			online: 2,
+			configsChanged: state.server?.gist ? ["EpicLoot.cfg", "Jotunn.cfg"] : [],
+			gistRelease: state.server?.gist
+				? {
+						id: "rel-mv5ejmiv",
+						companionId: "rmv5ek74s",
+						state: "staged",
+						handledAt: NOW - 30000,
+						problems: [],
+						error: null,
+						schedule: null,
+						plan: { install: 2, remove: 0, configs: 26 },
+					}
+				: null,
 			diff: {
 				onlyServer: [{ id: slim[50].id, version: slim[50].ver, explicit: true, requiredBy: [] }],
 				onlyLocal: [],
@@ -275,13 +296,18 @@
 		}),
 		adopt_server: ({ intoNew }) => (intoNew ? { ...state, profiles: [...state.profiles, intoNew], active: intoNew } : state),
 		check_all_servers: () => [{ profile: "Vanilla+", check: handlers.check_server() }],
-		discover_server: ({ url }) => ({
-			url: /^https?:/.test(url) ? url.replace(/\/+$/, "") : `http://${url}`,
-			name: "PetersWelte",
-			world: "PetersWelte",
-			mods: 7,
-			features: { publish: true, modManager: true },
-		}),
+		discover_server: ({ url }) => {
+			const code = /vmm1\.[0-9a-f]{20,40}\.[A-Za-z0-9_-]{43}/.exec(url)?.[0];
+			return code
+				? { url: "", syncCode: code, name: "PetersWelte", world: "PetersWelte", mods: 7, features: { publish: true } }
+				: {
+						url: /^https?:/.test(url) ? url.replace(/\/+$/, "") : `http://${url}`,
+						name: "PetersWelte",
+						world: "PetersWelte",
+						mods: 7,
+						features: { publish: true, modManager: true },
+					};
+		},
 		apply_release: ({ when }) =>
 			when === "now"
 				? {

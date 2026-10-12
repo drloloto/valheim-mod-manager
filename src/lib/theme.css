@@ -90,3 +90,11 @@
 	--chart-4: var(--destructive);
 	--chart-5: var(--muted-foreground);
 }
+
+/* Dev build (tauri.dev.conf.json): cyan instead of amber and a tinted chrome, so it is never mistaken for the installed app. */
+:root.dev-build {
+	--primary: oklch(0.8 0.12 200);
+	--ring: oklch(0.62 0.1 200);
+	--chrome: oklch(0.15 0.03 200);
+	--selected: oklch(0.23 0.03 200);
+}

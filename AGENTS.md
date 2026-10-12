@@ -13,7 +13,9 @@ and launches the game through Steam. Architecture: [docs/architecture.md](docs/a
 
 ```bash
 npm install
-npm run tauri dev                 # real app
+npm run tauri dev                 # real app, shares the installed app's data dir
+npm run dev:app                   # DEV app: own identifier and data dir (…valheim-mod-manager.dev), DEV badge, cyan accent
+npm run build:dev-app             # the same as a standalone debug exe (src-tauri/target/debug), no Vite needed
 VITE_MOCK_TAURI=1 npm run dev     # browser preview with mock backend at http://localhost:1420
 npm run check && npm test && npm run build && npm run lint
 cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
@@ -63,7 +65,8 @@ expected depth. Commit in meaningful slices with conventional commit messages.
 
 ## Verifying UI work without the Tauri window
 
-Start the mock preview, then `node dev/screenshot.mjs 1100 680 /installed out.png` drives headless Edge over
+Start the mock preview, then `node dev/screenshot.mjs 1100 680 /installed out.png` (from Git Bash with
+`MSYS_NO_PATHCONV=1`, or the route `/` turns into a Windows path) drives headless Edge over
 the Chrome DevTools Protocol, runs `dev/layout-audit.js` (overflow, stray scrollbars, overlapping text) and
 saves a screenshot; `PRESET` and `ACTION` (see the file header) set the locale or click a row first. Check
 every changed page at 1100 × 680 in German before claiming a UI change done. The mock lives in

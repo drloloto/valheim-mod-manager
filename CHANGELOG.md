@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Sync through a sealed GitHub gist: link a profile with the sync code the admin hands out (alone or at
+  the end of the companion's address, in "Link server…" or "Add server…"), compare, adopt and publish
+  without an open port. Publishing picks when the server applies (now, when nobody is online, at a time,
+  or stage only); the server's answer shows up in the publish dialog.
+- Server chip in the toolbar: transport, name, state (in sync, what differs, release waiting, unreachable)
+  and role (admin with a stored token, or read only). The diff dialog offers admins "Publish my profile
+  instead…". The linked server is re-checked every five minutes.
+- DEV build (`npm run dev:app`, `npm run build:dev-app`) with its own data folder, a DEV badge and a cyan
+  accent, plus a scripted scenario against the test companion (`dev/spike-gist.ps1`, `dev/spike-drive.mjs`).
+
+### Fixed
+
+- A disabled mod is no longer offered to the server as "will be installed"; check, diff and publish see
+  enabled mods only (both transports).
+- GitHub's rate-limit answer on publishing names the bucket and the reset time instead of "HTTP 403".
+
 ## [0.2.0] - 2026-10-11
 
 ### Added
