@@ -207,6 +207,11 @@ class ModManagerStore {
 	/** Linked companion server of the active profile and the last comparison with it. */
 	server = $derived(this.state.server);
 	serverStatus = $state<ServerCheck | null>(null);
+	/** Publishing is possible: the gist token for a gist link, the companion token for an HTTP link. */
+	get serverAdmin(): boolean {
+		const s = this.state.server;
+		return !!s && (s.gist ? s.hasGistToken : s.hasToken);
+	}
 	serverChecking = $state(false);
 	serverDialog = $state<"link" | "publish" | "diff" | "add" | null>(null);
 	/** Linked profiles whose server runs other versions (from the start-up check). */
@@ -287,6 +292,8 @@ class ModManagerStore {
 		if (this.autoUpdate.value && !this.state.app.portable) this.checkUpdate();
 		this.refreshServerStatus();
 		this.checkAllServers();
+		// The linked server is re-checked every five minutes while the app is open (gist reads are ETag-cached).
+		const serverClock = setInterval(() => this.refreshServerStatus(), 300_000);
 		// `valheim-mod-manager://import?…` from a companion page, at startup or while running.
 		const handle = (urls: string[]) => {
 			for (const u of urls) {
@@ -302,7 +309,10 @@ class ModManagerStore {
 		} catch {
 			/* plugin unavailable (browser preview) */
 		}
-		return () => unlisten.forEach((u) => u());
+		return () => {
+			clearInterval(serverClock);
+			unlisten.forEach((u) => u());
+		};
 	}
 
 	private onSyncDone(r: SyncDone) {

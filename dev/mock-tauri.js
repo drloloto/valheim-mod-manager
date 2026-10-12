@@ -275,8 +275,19 @@
 			features: { publish: true, modManager: true },
 			release: null,
 			online: 2,
-			configsChanged: [],
-			gistRelease: null,
+			configsChanged: state.server?.gist ? ["EpicLoot.cfg", "Jotunn.cfg"] : [],
+			gistRelease: state.server?.gist
+				? {
+						id: "rel-mv5ejmiv",
+						companionId: "rmv5ek74s",
+						state: "staged",
+						handledAt: NOW - 30000,
+						problems: [],
+						error: null,
+						schedule: null,
+						plan: { install: 2, remove: 0, configs: 26 },
+					}
+				: null,
 			diff: {
 				onlyServer: [{ id: slim[50].id, version: slim[50].ver, explicit: true, requiredBy: [] }],
 				onlyLocal: [],
@@ -285,13 +296,18 @@
 		}),
 		adopt_server: ({ intoNew }) => (intoNew ? { ...state, profiles: [...state.profiles, intoNew], active: intoNew } : state),
 		check_all_servers: () => [{ profile: "Vanilla+", check: handlers.check_server() }],
-		discover_server: ({ url }) => ({
-			url: /^https?:/.test(url) ? url.replace(/\/+$/, "") : `http://${url}`,
-			name: "PetersWelte",
-			world: "PetersWelte",
-			mods: 7,
-			features: { publish: true, modManager: true },
-		}),
+		discover_server: ({ url }) => {
+			const code = /vmm1\.[0-9a-f]{20,40}\.[A-Za-z0-9_-]{43}/.exec(url)?.[0];
+			return code
+				? { url: "", syncCode: code, name: "PetersWelte", world: "PetersWelte", mods: 7, features: { publish: true } }
+				: {
+						url: /^https?:/.test(url) ? url.replace(/\/+$/, "") : `http://${url}`,
+						name: "PetersWelte",
+						world: "PetersWelte",
+						mods: 7,
+						features: { publish: true, modManager: true },
+					};
+		},
 		apply_release: ({ when }) =>
 			when === "now"
 				? {

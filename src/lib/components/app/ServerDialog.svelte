@@ -281,6 +281,9 @@
 				{t("server.adoptConfigs")}
 			</label>
 			<Dialog.Footer>
+				{#if store.serverAdmin}
+					<Button variant="ghost" disabled={busy} onclick={() => (store.serverDialog = "publish")}>{t("server.publishInstead")}</Button>
+				{/if}
 				<Button variant="ghost" disabled={busy} onclick={() => run(() => store.launch(true))}>{t("server.startAnyway")}</Button>
 				<Button variant="outline" disabled={busy} onclick={() => run(() => store.adoptServer(false, adoptConfigs, serverName || "Server"))}
 					>{t("server.adoptIntoNew")}</Button

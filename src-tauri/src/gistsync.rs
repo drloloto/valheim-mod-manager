@@ -1,4 +1,4 @@
-//! Sync through a sealed GitHub gist (spike): the same intent as server.rs, a different transport. Two
+//! Sync through a sealed GitHub gist: the same intent as server.rs, a different transport. Two
 //! files live in one unlisted gist: `release.json` (admin → companion: the lock, configs, when to apply)
 //! and `server.json` (companion → everyone: what the server runs, its configs, the release status). Both
 //! are sealed with a key derived from the sync code's secret, so the gist id alone reveals nothing. The

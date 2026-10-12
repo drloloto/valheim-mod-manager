@@ -6,6 +6,7 @@
 	import NavTabs from "./nav-tabs.svelte";
 	import PlayButton from "./play-button.svelte";
 	import ProfileSwitcher from "./profile-switcher.svelte";
+	import ServerChip from "./server-chip.svelte";
 
 	let switcher = $state<ReturnType<typeof ProfileSwitcher>>();
 
@@ -19,6 +20,8 @@
 	<ProfileSwitcher bind:this={switcher} />
 	<span class="bg-border mx-2 h-5 w-px shrink-0" aria-hidden="true"></span>
 	<NavTabs />
+	<span class="bg-border mx-2 h-5 w-px shrink-0" aria-hidden="true"></span>
+	<ServerChip />
 	<div class="flex-1"></div>
 	<a
 		href={resolve("settings")}
