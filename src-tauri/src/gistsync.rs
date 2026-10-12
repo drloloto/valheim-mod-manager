@@ -529,4 +529,38 @@ mod tests {
         let again = rt.block_on(read_server(&m, &key)).unwrap().expect("server.json (cached)");
         assert_eq!(again.updated_at, s.updated_at);
     }
+
+    /// Publish end to end: a no-op release (the server's own lock, stage only) goes into the gist and
+    /// the companion reports it back. `VMM_TEST_SYNC_CODE=… VMM_TEST_GIST_TOKEN=… cargo test -- --ignored publishes_to_a_real_gist`
+    #[test]
+    #[ignore]
+    fn publishes_to_a_real_gist() {
+        let code = parse_sync_code(&std::env::var("VMM_TEST_SYNC_CODE").expect("VMM_TEST_SYNC_CODE")).unwrap();
+        let token = std::env::var("VMM_TEST_GIST_TOKEN").expect("VMM_TEST_GIST_TOKEN");
+        let key = derive_key(&code.secret).unwrap();
+        let m = GistMailbox::new(reqwest::Client::new(), &code.gist_id, Some(token), EtagCache::default());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let before = rt.block_on(read_server(&m, &key)).unwrap().expect("server.json");
+        let rel = ReleaseFile {
+            v: 1,
+            id: new_release_id(),
+            created_at: now_ms(),
+            message: Some("client spike: no-op, stage only".into()),
+            mods: before.manifest.map(|m| m.mods).unwrap_or_default(),
+            configs: vec![],
+            apply: Apply { when: "none".into(), at: None },
+        };
+        rt.block_on(publish_release(&m, &key, &rel)).unwrap();
+        println!("published {}", rel.id);
+        for _ in 0..12 {
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            let s = rt.block_on(read_server(&m, &key)).unwrap().expect("server.json");
+            if let Some(r) = s.release.filter(|r| r.id == rel.id) {
+                println!("companion answered: state {} plan {:?} problems {:?} error {:?}", r.state, r.plan, r.problems, r.error);
+                assert!(matches!(r.state.as_str(), "staged" | "scheduled" | "applied"), "{}", r.state);
+                return;
+            }
+        }
+        panic!("the companion did not report {} within two minutes", rel.id);
+    }
 }
