@@ -6,8 +6,8 @@ The DEV app (npm run build:dev-app, identifier ...valheim-mod-manager.dev) keeps
 %APPDATA%\io.github.drloloto.valheim-mod-manager.dev. Nothing here writes to the installed app's folder;
 the source profile and the index cache are only copied from it.
 
-The test profile is linked to the test companion's gist: sync code from ..\spike-sync\fixtures\sync-code-github.txt,
-gist token from ..\test\compose.companion.yaml. Both are throwaway test credentials.
+The test profile is linked to the test companion's gist: COMPANION_SYNC_CODE and COMPANION_GIST_TOKEN from
+..\test\.env (the same values the test companion runs with; throwaway test credentials).
 
 .PARAMETER Build   Build the dev app first (npm run build:dev-app; a few minutes).
 .PARAMETER Reset   Wipe the dev data dir before seeding.
@@ -24,14 +24,12 @@ $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $ws = (Resolve-Path (Join-Path $root "..")).Path
-$code = (Get-Content (Join-Path $ws "spike-sync\fixtures\sync-code-github.txt") -Raw).Trim()
-if ($code -notmatch '^vmm1\.[0-9a-f]{20,40}\.[A-Za-z0-9_-]{43}$') { throw "spike-sync/fixtures/sync-code-github.txt holds no sync code" }
-$compose = Get-Content (Join-Path $ws "test\compose.companion.yaml") -Raw
-if ($compose -notmatch 'COMPANION_GIST_TOKEN=([^"\s]+)') { throw "no COMPANION_GIST_TOKEN in test/compose.companion.yaml" }
-$token = $Matches[1]
-if ($compose -notmatch 'COMPANION_SYNC_CODE=vmm1\.([0-9a-f]+)\.' -or $Matches[1] -ne $code.Split('.')[1]) {
-	throw "the companion in test/compose.companion.yaml polls another gist than the fixture sync code"
-}
+$vars = @{}
+Get-Content (Join-Path $ws "test\.env") | ForEach-Object { if ($_ -match '^\s*([A-Z_]+)=(.*)$') { $vars[$Matches[1]] = $Matches[2].Trim() } }
+$code = $vars["COMPANION_SYNC_CODE"]
+$token = $vars["COMPANION_GIST_TOKEN"]
+if ($code -notmatch '^vmm1\.[0-9a-f]{20,40}\.[A-Za-z0-9_-]{43}$') { throw "test/.env: COMPANION_SYNC_CODE is missing or not a sync code" }
+if (-not $token) { throw "test/.env: COMPANION_GIST_TOKEN is missing" }
 
 $prod = Join-Path $env:APPDATA "io.github.drloloto.valheim-mod-manager"
 $dev = Join-Path $env:APPDATA "io.github.drloloto.valheim-mod-manager.dev"
@@ -86,6 +84,6 @@ Set-Content (Join-Path $dev "active.txt") $Profile -NoNewline -Encoding ascii
 
 if ($Cdp) { $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9229" }
 Write-Host "dev data dir : $dev"
-Write-Host "profile      : $Profile, $(@($p.mods).Count) mods, linked to gist $($code.Split('.')[1]) with the test token"
+Write-Host "profile      : $Profile, $(@($p.mods).Count) mods, linked to gist $($code.Split('.')[1]) with the token from test/.env"
 Write-Host "starting     : $exe$(if ($Cdp) { ' (CDP on 127.0.0.1:9229)' })"
 Start-Process $exe
