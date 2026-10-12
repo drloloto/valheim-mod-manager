@@ -506,4 +506,27 @@ mod tests {
         assert_eq!(config_hash(&[]), config_hash(&[]));
         assert_ne!(config_hash(&[PublishConfig { path: "a".into(), content_base64: "x".into() }]), config_hash(&[]));
     }
+
+    /// Against a real gist: `VMM_TEST_SYNC_CODE=vmm1.… cargo test -- --ignored reads_a_real_gist`
+    /// (reading needs no token; `VMM_GIST_API` points at the fake gist instead).
+    #[test]
+    #[ignore]
+    fn reads_a_real_gist() {
+        let code = parse_sync_code(&std::env::var("VMM_TEST_SYNC_CODE").expect("VMM_TEST_SYNC_CODE")).unwrap();
+        let key = derive_key(&code.secret).unwrap();
+        let m = GistMailbox::new(reqwest::Client::new(), &code.gist_id, None, EtagCache::default());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let s = rt.block_on(read_server(&m, &key)).unwrap().expect("server.json");
+        println!(
+            "server {:?} world {:?} mods {} configs {} release {:?}",
+            s.server.name,
+            s.server.world,
+            s.manifest.as_ref().map_or(0, |m| m.mods.len()),
+            s.configs.len(),
+            s.release.as_ref().map(|r| (&r.id, &r.state))
+        );
+        // Second read goes through the ETag cache.
+        let again = rt.block_on(read_server(&m, &key)).unwrap().expect("server.json (cached)");
+        assert_eq!(again.updated_at, s.updated_at);
+    }
 }
