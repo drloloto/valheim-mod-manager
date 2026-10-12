@@ -42,5 +42,6 @@ end against the test stack. This spec turns the spike into the product feature o
 
 ## Merge
 
-The branch `spike/gist-sync` is merged into `main` as one feature once the owner has used the toolbar chip
-and the add-by-code flow in the DEV build. No data migration: old links deserialize unchanged.
+The branch `spike/gist-sync` was merged into `main` as one feature on 2026-10-13, after the owner had used
+the toolbar chip and the add-by-code flow in the DEV build against the test companion. No data migration:
+old links deserialize unchanged. The DEV build and the scenario scripts stay as the regression check.
