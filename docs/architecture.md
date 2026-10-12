@@ -101,6 +101,16 @@ nobody is online, or at a time, and `discard_release` drops it. `valheim-mod-man
 plugins) downloads the companion's `.r2z`, imports it like any other and stores the link. Spec:
 `docs/superpowers/specs/2026-10-10-server-companion-design.md`.
 
+**Gist transport.** The same link can point at a sealed GitHub gist instead of a companion URL
+(`sync_code` + optional `gist_token`, gistsync.rs): the companion writes `server.json` (lock, configs,
+release status), the admin writes `release.json` (lock, configs, when to apply); both AES-256-GCM with a
+key derived from the sync code, so the gist itself holds nothing readable. `check_server`, `adopt_server`
+and the pre-play gate are shared; `publish_gist` seals and PATCHes one release and the companion reports
+back through `server.json`. A sync code is recognised wherever it is pasted (`find_sync_code`), the server
+only sees enabled mods (`server_mods`), and the toolbar chip (`shell/server-chip.svelte`) shows transport,
+state and role (admin = a token is stored). Spec:
+`docs/superpowers/specs/2026-10-12-gist-sync-integration.md`.
+
 ## Frontend
 
 **Store.** `src/lib/api/store.svelte.ts` holds `AppState` from the core, the slim index, the browse filters
