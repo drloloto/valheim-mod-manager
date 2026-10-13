@@ -38,15 +38,46 @@ export interface Status {
 		tokenConfigured: boolean;
 		tokenSource: "env" | "file" | "generated" | "none";
 		publicUrl: string | null;
+		/** URL scheme of the "Open in Mod Manager" button (the client's DEV build has its own) */
+		scheme: string;
 		features: Features;
 		authed: boolean;
 	};
+	/** gist sync on this companion; details from GET /api/sync */
+	sync: { enabled: boolean; canWrite: boolean };
 	server: { name: string; world: string };
 	container: { id: string; name: string; state: string; status: string; startedAt: string | null } | null;
 	manifest: { hash: string; generatedAt: number; mods: number } | null;
 	world: { name: string; size: number; lastSave: number | null } | null;
 	release: ReleaseSummary | null;
 	online: number | null;
+}
+
+/** GET/POST /api/takeover: packages found in plugins/ on a hand-installed server and what became of them. */
+export interface TakeoverInfo {
+	last: {
+		resolved: { id: string; version: string; from: "latest" | "dll" | "guess" }[];
+		unresolved: string[];
+		unidentified: string[];
+		at: number;
+	} | null;
+	scan: { candidates: { id: string; dir: string }[]; unidentified: string[] };
+	/** mods in the lock right now */
+	lock: number;
+}
+
+/** GET /api/sync: the sync through a sealed gist (no open port). */
+export interface SyncInfo {
+	enabled: boolean;
+	/** "env" = COMPANION_SYNC_CODE, "file" = set up on this page, "none" = off */
+	source: "env" | "file" | "none";
+	/** `vmm1.<gist id>.<secret>`: what players paste or get through the button */
+	code: string | null;
+	gistId: string | null;
+	/** false without a gist token: releases are read, server.json is not written */
+	canWrite: boolean;
+	lastError: string | null;
+	release: { id: string; state: string; handledAt: number; error: string | null } | null;
 }
 
 export interface ManifestMod {

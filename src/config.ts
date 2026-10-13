@@ -33,6 +33,13 @@ export const FEATURES = {
 export type Feature = keyof typeof FEATURES;
 
 export const PUBLIC_URL = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
+/** URL scheme of the landing page's "Open in Mod Manager" button. The client's DEV build registers
+ *  `valheim-mod-manager-dev`, so a test companion can be pointed at it and never opens the installed app. */
+export const DEEPLINK_SCHEME =
+	(process.env.COMPANION_DEEPLINK_SCHEME || "valheim-mod-manager")
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9-]/g, "") || "valheim-mod-manager";
 export const VERSION = "0.3.0";
 
 const TOKEN_FILE = join(MM_DIR, "companion-token");

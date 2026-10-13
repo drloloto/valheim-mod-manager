@@ -1,16 +1,15 @@
 // Valheim server companion: publishes the mod lock, shows configs, manages worlds/backups/env/players and
 // the game container. Everything is optional: see config.ts for the COMPANION_* switches. Contract with the
 // Mod Manager: docs/superpowers/specs/2026-10-10-server-companion-design.md in the client repo.
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { join } from "path";
 import { isAuthed, requireFeature, requireToken } from "./auth";
 import { createBackup, deleteBackup, importBackup, inspectBackup, listBackups, restoreFiles, safeId } from "./backups";
 import { listConfigFiles, parseConfigText, type ConfigChange } from "./bepinexconfig";
-import { FEATURES, PUBLIC_URL, VERSION, getTokenSource, resolveToken, tokenConfigured } from "./config";
+import { DEEPLINK_SCHEME, FEATURES, PUBLIC_URL, VERSION, getTokenSource, resolveToken, tokenConfigured } from "./config";
 import { containerAction, containerState, type ContainerAction } from "./docker";
 import { activeWorld, envValue, readEnv, writeEnv } from "./env";
 import { writeAtomic } from "./fsutil";
-import { startGistSync } from "./gistsync";
 import { withServerStopped } from "./maintenance";
 import { applyManifest, loadInstalled } from "./install";
 import { streamLog, tailLog } from "./logs";
@@ -39,6 +38,8 @@ import {
 	type Release,
 	type StageBody,
 } from "./releases";
+import { SyncError, SyncManager } from "./syncsetup";
+import { describe as describeTakeover, scanPlugins, takeover, type Takeover } from "./takeover";
 import { securityHeaders, serveUi } from "./web";
 import { listWorlds } from "./worlds";
 
@@ -55,13 +56,40 @@ async function serverInfo(): Promise<ServerInfo> {
 }
 
 /** The manifest is created once from the old webapp's files; an empty one is a valid "nothing published yet". */
+/**
+ * A server without a lock gets one: from the old webapp's installed.json, else from the packages that lie in
+ * plugins/ by hand (takeover.ts, once per start so Thunderstore is not asked on every request), else empty.
+ */
+let takeoverRun: Promise<Takeover | null> | null = null;
+let lastTakeover: Takeover | null = null;
+function runTakeover(info: ServerInfo): Promise<Takeover | null> {
+	takeoverRun ??= takeover(info)
+		.then((t) => {
+			lastTakeover = t;
+			if (t.resolved.length || t.unresolved.length || t.unidentified.length) console.log(`[takeover] plugins/: ${describeTakeover(t)}`);
+			return t;
+		})
+		.catch((e) => {
+			console.error(`[takeover] ${(e as Error).message}`);
+			return null;
+		});
+	return takeoverRun;
+}
 async function currentManifest(): Promise<Manifest> {
 	const m = await loadManifest();
-	if (m) return m;
+	if (m && (m.mods.length || takeoverRun)) return m;
 	const info = await serverInfo();
-	const migrated = (await migrateLegacy(info)) ?? normalizeManifest({ mods: [] }, info, await configHashes());
-	await saveManifest(migrated);
-	return migrated;
+	let next = m ?? (await migrateLegacy(info));
+	if (!next?.mods.length) {
+		const t = await runTakeover(info);
+		if (t?.manifest) {
+			next = t.manifest;
+			console.log(`[takeover] lock seeded with ${next.mods.length} mods from plugins/`);
+		}
+	}
+	next ??= normalizeManifest({ mods: [] }, info, await configHashes());
+	if (!m || next !== m) await saveManifest(next);
+	return next;
 }
 
 // One mutation at a time: installs and restores must not interleave.
@@ -73,7 +101,8 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 startScheduler(exclusive);
-startGistSync(exclusive, serverInfo);
+const sync = SyncManager.forServer(exclusive, serverInfo);
+await sync.start();
 
 const api = new Hono();
 api.use("*", requireToken);
@@ -96,9 +125,11 @@ api.get("/status", async (c) => {
 			tokenConfigured: tokenConfigured(),
 			tokenSource: getTokenSource(),
 			publicUrl: PUBLIC_URL || null,
+			scheme: DEEPLINK_SCHEME,
 			features: FEATURES,
 			authed,
 		},
+		sync: sync.summary(),
 		server: { name: info.name, world: detailed ? info.world : "" },
 		container,
 		manifest: m ? { hash: m.hash, generatedAt: m.generatedAt, mods: m.mods.length } : null,
@@ -107,6 +138,47 @@ api.get("/status", async (c) => {
 		/** players online from the log; null when logs are off or docker is unreachable */
 		online,
 	});
+});
+
+// ---- Hand-installed servers: what lies in plugins/ and the takeover into the lock ----
+
+/** The last takeover result of this start and what plugins/ holds right now. */
+api.get("/takeover", async (c) => c.json({ last: lastTakeover, scan: await scanPlugins(), lock: (await currentManifest()).mods.length }));
+/** Runs the takeover again (admin): only while the lock is empty, so a published lock is never overwritten. */
+api.post("/takeover", requireFeature("publish"), async (c) => {
+	const m = await currentManifest();
+	if (m.mods.length) return c.json({ error: "The lock is not empty; publish from the Mod Manager to change it." }, 409);
+	takeoverRun = null;
+	const t = await exclusive(async () => {
+		const r = await runTakeover(await serverInfo());
+		if (r?.manifest) await saveManifest(r.manifest);
+		return r;
+	});
+	return c.json({ last: t, scan: await scanPlugins(), lock: t?.manifest?.mods.length ?? 0 });
+});
+
+// ---- Sync through a gist: the admin sets it up here, players get the code through the page's button ----
+
+const syncError = (c: Context, e: unknown) => c.json({ error: (e as Error).message }, e instanceof SyncError ? (e.status as 400 | 409) : 400);
+
+/** Code (public read data, like the manifest), gist id, whether the companion can write, last error, release status. */
+api.get("/sync", async (c) => c.json(await sync.info()));
+/** `{ token, code? }`: a new gist for the token, or join the gist the code names. */
+api.post("/sync", async (c) => {
+	const body = (await c.req.json().catch(() => null)) as { token?: unknown; code?: unknown } | null;
+	if (!body || typeof body.token !== "string") return c.json({ error: "JSON body with a token expected" }, 400);
+	try {
+		return c.json(await sync.setup(body.token, typeof body.code === "string" ? body.code : undefined));
+	} catch (e) {
+		return syncError(c, e);
+	}
+});
+api.delete("/sync", async (c) => {
+	try {
+		return c.json(await sync.remove());
+	} catch (e) {
+		return syncError(c, e);
+	}
 });
 
 // ---- Staged releases: publish → check → apply now / when idle / at a time ----
@@ -145,7 +217,9 @@ api.delete("/releases/pending/configs/:file{.+}", requireFeature("publish"), asy
 	if (!rel) return c.json({ error: "invalid config path" }, 400);
 	return c.json(await pendingJson(await exclusive(() => revertConfig(rel))));
 });
-api.delete("/releases/pending/mods", requireFeature("publish"), async (c) => c.json(await pendingJson(await exclusive(async () => revertMods(await serverInfo())))));
+api.delete("/releases/pending/mods", requireFeature("publish"), async (c) =>
+	c.json(await pendingJson(await exclusive(async () => revertMods(await serverInfo())))),
+);
 // { when: "now" | "idle" | "at" | "none", at?: epoch ms, backup?: boolean (default true), force?: boolean }
 api.post("/releases/:id/apply", requireFeature("publish"), async (c) => {
 	const id = c.req.param("id") ?? "";
@@ -268,7 +342,9 @@ api.get("/configs/:file{.+}", async (c) => {
 		// Values the working copy changes against the live file, so the editor can show "on the server: …".
 		const live: Record<string, string> = {};
 		if (w.staged) {
-			const liveText = await Bun.file(join(BEPINEX_CONFIG_DIR, rel)).text().catch(() => "");
+			const liveText = await Bun.file(join(BEPINEX_CONFIG_DIR, rel))
+				.text()
+				.catch(() => "");
 			const cur = new Map(parseConfigText(liveText).map((s) => [`${s.section}::${s.key}`, s.value]));
 			for (const s of settings) {
 				const k = `${s.section}::${s.key}`;

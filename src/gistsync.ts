@@ -15,7 +15,8 @@ import { deriveKey, isEnvelope, makeSyncCode, newSecret, openJson, parseSyncCode
 
 export const RELEASE_FILE = "release.json";
 export const SERVER_FILE = "server.json";
-const STATE_FILE = join(MM_DIR, "sync-state.json");
+/** what the poller remembers between runs; belongs to one gist (syncsetup.ts removes it when the code changes) */
+export const STATE_FILE = join(MM_DIR, "sync-state.json");
 /** one config file above this is left out of server.json, and the whole set is capped. The sealed file is gzipped
  *  (configs are text, ~10:1), so even the cap stays below the gist API's 1 MB truncation mark in practice; a
  *  truncated file is still read whole through raw_url. */
@@ -237,9 +238,9 @@ export async function readConfigs(dir = BEPINEX_CONFIG_DIR): Promise<{ configs: 
 	return { configs, configsSkipped };
 }
 
-async function loadStateFile(): Promise<SyncState> {
+export async function loadSyncState(file = STATE_FILE): Promise<SyncState> {
 	try {
-		return { ...emptyState(), ...(JSON.parse(await readFile(STATE_FILE, "utf-8")) as Partial<SyncState>) };
+		return { ...emptyState(), ...(JSON.parse(await readFile(file, "utf-8")) as Partial<SyncState>) };
 	} catch {
 		return emptyState();
 	}
@@ -261,15 +262,24 @@ export function envConfig(env: NodeJS.ProcessEnv = process.env): GistSyncEnv {
 	};
 }
 
-/** Starts the poller when COMPANION_SYNC_CODE is set; otherwise the feature is off and nothing happens. */
-export function startGistSync(exclusive: <T>(fn: () => Promise<T>) => Promise<T>, serverInfo: () => Promise<ServerInfo>, cfg = envConfig()): boolean {
-	if (!cfg.code) return false;
+/** A running poller, as syncsetup.ts manages it: it can be stopped (and a new one started) without a restart. */
+export interface SyncHandle {
+	gistId: string;
+	canWrite: boolean;
+	/** the failure the poller is in right now, null while it works */
+	lastError(): string | null;
+	stop(): void;
+}
+
+/** Starts the poller for `cfg.code`; null when there is no code or it does not parse (logged). */
+export function startGistSync(exclusive: <T>(fn: () => Promise<T>) => Promise<T>, serverInfo: () => Promise<ServerInfo>, cfg = envConfig()): SyncHandle | null {
+	if (!cfg.code) return null;
 	let code;
 	try {
 		code = parseSyncCode(cfg.code);
 	} catch (e) {
-		console.error(`[sync] COMPANION_SYNC_CODE ignored: ${(e as Error).message}`);
-		return false;
+		console.error(`[sync] sync code ignored: ${(e as Error).message}`);
+		return null;
 	}
 	const log = (l: string) => console.log(`[sync] ${l}`);
 	const deps: SyncDeps = {
@@ -286,20 +296,23 @@ export function startGistSync(exclusive: <T>(fn: () => Promise<T>) => Promise<T>
 			const info = await serverInfo();
 			return { server: { name: info.name, world: info.world }, manifest: await loadManifest(), ...(await readConfigs()) };
 		},
-		loadState: loadStateFile,
+		loadState: () => loadSyncState(),
 		saveState: (s) => writeAtomic(STATE_FILE, JSON.stringify(s, null, 2)),
 		log,
 	};
-	log(`gist ${code.gistId} every ${cfg.pollSeconds}s via ${cfg.api}${cfg.token ? "" : " (read-only: no COMPANION_GIST_TOKEN)"}`);
+	log(`gist ${code.gistId} every ${cfg.pollSeconds}s via ${cfg.api}${cfg.token ? "" : " (read-only: no gist token)"}`);
 	let busy = false;
+	let stopped = false;
 	let lastError = "";
+	let lastErrorText: string | null = null;
 	const tick = async () => {
-		if (busy) return;
+		if (busy || stopped) return;
 		busy = true;
 		try {
 			await syncOnce(deps);
 			if (lastError) log("sync works again");
 			lastError = "";
+			lastErrorText = null;
 		} catch (e) {
 			// The same failure (a used-up rate limit, an unreachable API) is logged once, not every poll. A
 			// rate-limit message counts down the minutes, so it is compared by its bucket, not its text.
@@ -309,13 +322,23 @@ export function startGistSync(exclusive: <T>(fn: () => Promise<T>) => Promise<T>
 				if (process.env.COMPANION_DEBUG) console.error((e as Error).stack);
 			}
 			lastError = key;
+			lastErrorText = (e as Error).message;
 		} finally {
 			busy = false;
 		}
 	};
 	void tick();
-	setInterval(tick, cfg.pollSeconds! * 1000);
-	return true;
+	const timer = setInterval(tick, cfg.pollSeconds! * 1000);
+	return {
+		gistId: code.gistId,
+		canWrite: !!cfg.token,
+		lastError: () => lastErrorText,
+		stop: () => {
+			stopped = true;
+			clearInterval(timer);
+			log(`gist ${code.gistId}: poller stopped`);
+		},
+	};
 }
 
 // ---- CLI: what the Mod Manager does, runnable from a shell (create a gist, publish, read) ----

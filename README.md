@@ -76,19 +76,29 @@ game container by its compose labels). `docker compose up -d --build companion` 
 
 ### Sync through a gist (no open port)
 
-Instead of reaching the companion over HTTP, the Mod Manager and the companion can exchange two sealed files
-in one unlisted GitHub gist: `release.json` (admin → server: lock + configs + when to apply) and `server.json`
+Instead of reaching the companion over HTTP, the Mod Manager and the companion exchange two sealed files in
+one secret GitHub gist: `release.json` (admin → server: lock + configs + when to apply) and `server.json`
 (server → everyone: what runs now + release status). Players and the admin only need the **sync code**
 `vmm1.<gist id>.<secret>`; the secret seals the files (HKDF-SHA256 → AES-256-GCM, gzip), so the gist holds
 nothing readable. The companion polls the gist, hands a new release to the staging pipeline above and reports
 back. Nothing is published on any port for this.
 
-| Variable                | Effect                                                                                       |
-| ----------------------- | -------------------------------------------------------------------------------------------- |
-| `COMPANION_SYNC_CODE`   | turns the poller on                                                                          |
-| `COMPANION_GIST_TOKEN`  | GitHub token with the `gist` scope; without it releases are still read, `server.json` is not written |
-| `COMPANION_GIST_POLL`   | seconds between polls (default 60, minimum 10); a 304 costs no rate limit with a token         |
-| `COMPANION_GIST_API`    | API base, default `https://api.github.com` (tests use `src/testing/fakegist.ts`)              |
+**Setup:** sign in on the landing page and fill in _Sync without an open port_ with a GitHub token. Use a
+GitHub account created for the server (never a personal one) and a classic token with only the `gist` scope;
+fine-grained tokens cannot write gists. The companion creates the gist, keeps code and token in
+`config/modmanager/sync.json` (owner-only), starts the poller and shows the code. From then on the page's
+**Open in Mod Manager** button carries the code: the Mod Manager links the new profile through the gist and
+adopts mods and configs before the game starts; players need neither an address nor an account. The admin
+enters the same gist token under _Link server…_ in the Mod Manager to publish. _Turn sync off_ stops the
+poller and forgets the file; the gist stays on GitHub. API: `GET/POST/DELETE /api/sync`.
+
+| Variable                    | Effect                                                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `COMPANION_SYNC_CODE`       | sync code from the environment instead of the page (the page can then not change it)                            |
+| `COMPANION_GIST_TOKEN`      | the token for it; without a token releases are still read, `server.json` is not written                         |
+| `COMPANION_GIST_POLL`       | seconds between polls (default 60, minimum 10); a 304 costs no rate limit with a token                          |
+| `COMPANION_GIST_API`        | API base, default `https://api.github.com` (tests use `src/testing/fakegist.ts`)                                |
+| `COMPANION_DEEPLINK_SCHEME` | URL scheme of the button, default `valheim-mod-manager`; `valheim-mod-manager-dev` opens the client's DEV build |
 
 CLI for trying it without the client: `bun run src/gistsync.ts create|publish|read|code …` (see the file
 header). File formats and the client side: `../spike-sync/CLIENT-SPIKE.md`.
@@ -119,10 +129,19 @@ header). File formats and the client side: `../spike-sync/CLIENT-SPIKE.md`.
 - **Restore** extracts into `config/modmanager/restore-tmp/`, checks the archive (no `..`, no symlinks), then
   swaps world (and configs) in by rename; a failure moves the previous files back. Restored files get the owner
   of the files they replace.
-- **First publish on a hand-installed server:** files in `bepinex/plugins` and `bepinex/patchers` that the
-  companion did not install are moved to `config/modmanager/untracked/<time>/` (kept, not deleted), so old and
-  new copies of a mod do not both load. The release plan lists them before you apply. The image removes them
-  from `/opt/valheim` on the next start (`.synced_from_config`). Mods placed directly in `data/` are not seen.
+- **Hand-installed server, first start:** without a lock the companion reads `bepinex/plugins`: every folder
+  named `Namespace-Name` (the way r2modman and the Mod Manager lay mods out) becomes a lock entry. The version
+  is the newest Thunderstore release that existed when the files were copied (the latest release if it
+  predates the copy, else the version the DLL itself carries when Thunderstore knows it), dependencies are
+  pinned as Thunderstore lists them. Loose DLLs and other folders cannot be identified without an index; the
+  page lists them and the admin's first publish from the Mod Manager covers them. `GET/POST /api/takeover`;
+  the page offers the takeover again while the lock is empty. Nothing on disk changes: the first applied
+  release moves the hand-installed files aside and installs the packages cleanly.
+- **First applied release on a hand-installed server:** files in `bepinex/plugins` and `bepinex/patchers`
+  that the companion did not install are moved to `config/modmanager/untracked/<time>/` (kept, not deleted),
+  so old and new copies of a mod do not both load. The release plan lists them before you apply. The image
+  removes them from `/opt/valheim` on the next start (`.synced_from_config`). Mods placed directly in `data/`
+  are not seen.
 - **`valheim.env`:** only changed lines are rewritten, quoted so Compose reads back the exact value (`$` is
   not expanded), a copy of the previous file goes to `config/modmanager/env-history/`. Compose reads the file
   when it creates the container: apply with `docker compose up -d valheim`; a restart keeps the old values.
