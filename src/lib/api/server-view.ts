@@ -6,7 +6,7 @@ import type { ServerCheck } from "./types";
 //
 //   checking     no answer yet
 //   unreachable  the companion or the gist did not answer
-//   differs      the profile and the server run different mods or configs → a player adopts, an admin publishes
+//   differs      the profile and the server run different mods or versions → a player adopts, an admin publishes
 //   pending      a release waits on the server (staged, or scheduled) → an admin follows it, a player is told
 //   inSync       nothing to do
 //
@@ -46,11 +46,15 @@ export function serverView(check: ServerCheck | null, admin: boolean, t: T): Ser
 	if (!check.reachable) return { kind: "unreachable", tone: "err", pulse: false, text: t("chip.unreachable"), action: "refresh", release: null };
 	const release = pendingRelease(check);
 	const mods = check.diff.changed.length + check.diff.onlyLocal.length + check.diff.onlyServer.length;
-	const configs = check.configsChanged.length;
-	const differs = (): ServerView => {
-		const what = [mods ? t("chip.mods", { n: mods }) : "", configs ? t("chip.configs", { n: configs }) : ""].filter(Boolean).join(" · ");
-		return { kind: "differs", tone: "warn", pulse: false, text: t("chip.differs", { what }), action: admin ? "publish" : "diff", release };
-	};
+	// Configs are not part of this: synced mods take them at join, the rest came once with the profile.
+	const differs = (): ServerView => ({
+		kind: "differs",
+		tone: "warn",
+		pulse: false,
+		text: t("chip.differs", { what: t("chip.mods", { n: mods }) }),
+		action: admin ? "publish" : "diff",
+		release,
+	});
 	const pending = (): ServerView => ({
 		kind: "pending",
 		tone: "warn",

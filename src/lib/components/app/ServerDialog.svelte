@@ -9,7 +9,7 @@
 	// The address field shows the linked server until the user edits it; closing discards the edits.
 	let urlEdit = $state<string | null>(null);
 	let token = $state("");
-	let withConfigs = $state(true);
+	let withConfigs = $state(false);
 	let installAll = $state(true);
 	let busy = $state(false);
 	let atValue = $state("");
@@ -150,6 +150,7 @@
 						<Checkbox bind:checked={withConfigs} />
 						{t("server.withConfigs")}
 					</label>
+					<p class="text-muted-foreground pl-6 text-xs">{t("server.withConfigsHint")}</p>
 					<div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
 						<Label for="gist-when">{t("server.gistWhen")}</Label>
 						<Select.Root type="single" value={gistWhen} onValueChange={(v) => (gistWhen = v as ApplyWhen)}>
@@ -248,6 +249,7 @@
 						<Checkbox bind:checked={withConfigs} />
 						{t("server.withConfigs")}
 					</label>
+					<p class="text-muted-foreground pl-6 text-xs">{t("server.withConfigsHint")}</p>
 				</div>
 				<Dialog.Footer>
 					<Button variant="outline" onclick={close}>{t("common.cancel")}</Button>
@@ -283,22 +285,7 @@
 						{#if side(m.id) === "server"}· {t("server.serverSideHint")}{/if}
 					</li>
 				{/each}
-				{#if check.configsChanged.length}
-					<!-- One line for the configs; the file list is there for whoever wants it, not in the way. -->
-					<li>
-						<details>
-							<summary class="cursor-pointer">{t("server.configsChanged", { n: check.configsChanged.length })}</summary>
-							<ul class="text-muted-foreground mt-1 grid gap-0.5 pl-3 font-mono">
-								{#each check.configsChanged as p (p)}<li>{p}</li>{/each}
-							</ul>
-						</details>
-					</li>
-				{/if}
 			</ul>
-			<label class="flex items-center gap-2 text-sm">
-				<Checkbox bind:checked={adoptConfigs} />
-				{t("server.adoptConfigs")}
-			</label>
 			<!-- From Play the choice ends in a start; from the chip, the status bar or a fresh link it just sets the profile. -->
 			<Dialog.Footer>
 				{#if store.serverAdmin}
@@ -309,13 +296,14 @@
 				{:else}
 					<Button variant="ghost" disabled={busy} onclick={close}>{t("server.keepMine")}</Button>
 				{/if}
-				<Button variant="outline" disabled={busy} onclick={() => run(() => store.adoptServer(false, adoptConfigs, serverName || "Server"))}
+				<!-- A new profile is a server import and takes the configs once; an existing profile only ever takes mods. -->
+				<Button variant="outline" disabled={busy} onclick={() => run(() => store.adoptServer(false, true, serverName || "Server"))}
 					>{t("server.adoptIntoNew")}</Button
 				>
 				{#if store.serverDialogFromPlay}
-					<Button disabled={busy} onclick={() => run(() => store.adoptServer(true, adoptConfigs))}>{t("server.adoptAndStart")}</Button>
+					<Button disabled={busy} onclick={() => run(() => store.adoptServer(true, false))}>{t("server.adoptAndStart")}</Button>
 				{:else}
-					<Button disabled={busy} onclick={() => run(() => store.adoptServer(false, adoptConfigs))}>{t("server.adopt")}</Button>
+					<Button disabled={busy} onclick={() => run(() => store.adoptServer(false, false))}>{t("server.adopt")}</Button>
 				{/if}
 			</Dialog.Footer>
 		{:else if mode === "add"}
@@ -348,12 +336,18 @@
 						{t("import.installAll")}
 					</label>
 					<p class="text-muted-foreground pl-6 text-xs">{t("import.installAllHint")}</p>
+					<label class="flex items-center gap-2 text-sm">
+						<Checkbox bind:checked={adoptConfigs} />
+						{t("server.adoptConfigs")}
+					</label>
+					<p class="text-muted-foreground pl-6 text-xs">{t("server.adoptConfigsHint")}</p>
 				</div>
 			</div>
 			<Dialog.Footer>
 				<Button variant="outline" onclick={close}>{t("common.cancel")}</Button>
-				<Button disabled={busy || !discovery || discovery.features.modManager === false} onclick={() => run(() => store.addServer(discovery!, installAll))}
-					>{t("server.createProfile")}</Button
+				<Button
+					disabled={busy || !discovery || discovery.features.modManager === false}
+					onclick={() => run(() => store.addServer(discovery!, installAll, adoptConfigs))}>{t("server.createProfile")}</Button
 				>
 			</Dialog.Footer>
 		{/if}

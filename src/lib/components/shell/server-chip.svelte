@@ -27,7 +27,6 @@
 			for (const c of check.diff.changed) lines.push(t("server.changed", { id: nameOf(c.id), local: c.local, server: c.server }));
 			for (const m of check.diff.onlyServer) lines.push(t("server.onlyServer", { id: nameOf(m.id), version: m.version }));
 			for (const m of check.diff.onlyLocal) lines.push(t("server.onlyLocal", { id: nameOf(m.id), version: m.version }));
-			if (check.configsChanged.length) lines.push(t("server.configsChanged", { n: check.configsChanged.length }));
 			if (view.release) lines.push(t("chip.releaseLine", { id: check.gistRelease?.id ?? check.release?.id ?? "", state: view.release }));
 		}
 		return lines.join("\n");

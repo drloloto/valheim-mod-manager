@@ -447,20 +447,20 @@ class ModManagerStore {
 		}
 	}
 
-	/** New profile straight from a companion: its mods, versions and configs, linked for later checks. */
-	async addServer(d: ServerDiscovery, installAll = true): Promise<boolean> {
-		if (d.syncCode) return this.addGistServer(d, installAll);
-		return this.importFromUrl(`${d.url}/api/profile.r2z`, d.name || d.world || "Server", d.url, installAll);
+	/** New profile straight from a companion: its mods and versions, optionally its configs (this once), linked for later checks. */
+	async addServer(d: ServerDiscovery, installAll = true, withConfigs = true): Promise<boolean> {
+		if (d.syncCode) return this.addGistServer(d, installAll, withConfigs);
+		return this.importFromUrl(`${d.url}/api/profile.r2z`, d.name || d.world || "Server", d.url, installAll, withConfigs);
 	}
 
 	/** A gist server has no .r2z to fetch: a new profile, linked by its code, then adopted from server.json. */
-	private async addGistServer(d: ServerDiscovery, installAll: boolean): Promise<boolean> {
+	private async addGistServer(d: ServerDiscovery, installAll: boolean, withConfigs: boolean): Promise<boolean> {
 		const fail = t("toast.importFailed");
 		if (!(await this.applyState(() => api.createProfile(d.name || d.world || "Server"), fail))) return false;
 		const name = this.state.active;
 		if (!name) return false;
 		if (!(await this.applyState(() => api.setServerLink(name, { url: "", name: d.name, syncCode: d.syncCode }), fail))) return false;
-		if (!(await this.applyState(() => api.adoptServer(name, true, null, installAll), fail))) return false;
+		if (!(await this.applyState(() => api.adoptServer(name, withConfigs, null, installAll), fail))) return false;
 		this.toast(t("toast.adoptedInto", { name }), "ok");
 		this.refreshServerStatus();
 		return true;
@@ -561,9 +561,9 @@ class ModManagerStore {
 		}
 	}
 
-	async importFromUrl(url: string, name: string, link: string | null, installAll = true): Promise<boolean> {
+	async importFromUrl(url: string, name: string, link: string | null, installAll = true, withConfigs = true): Promise<boolean> {
 		try {
-			this.onImported(await api.importProfileUrl(url, name, true, installAll, link ? { url: link, name, token: null } : null));
+			this.onImported(await api.importProfileUrl(url, name, withConfigs, installAll, link ? { url: link, name, token: null } : null));
 			this.refreshServerStatus();
 			return true;
 		} catch (e) {

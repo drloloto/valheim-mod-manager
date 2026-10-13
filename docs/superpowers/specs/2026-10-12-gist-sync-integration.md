@@ -46,6 +46,14 @@ end against the test stack. This spec turns the spike into the product feature o
     shown as a dependency ("Required by the server" when nothing local names it). A "dependency" nothing
     requires is a pick; older locks carry such entries.
 
+12. **Configs belong to the server.** Of the server's mods, those with config sync (ServerSync, Jötunn's
+    `IsAdminOnly`) hand their values to every client at join; the admin edits them on the server or
+    in-game. So "in sync" means mods and versions on both transports, configs are never compared, never
+    block Play and are never fetched later. A profile _created_ from the server ("Add server…", "Into a
+    new profile") takes the server's config files once, as a starting point for mods without sync; an
+    existing profile only ever takes mods. Publishing sends no configs unless asked (a server's first
+    setup).
+
 ## Out of scope (client)
 
 - Companion UI for creating the gist and handing out the sync code, token handling on the server, write

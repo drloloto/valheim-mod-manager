@@ -661,9 +661,9 @@ async fn check_gist(ctx: &AppCtx, profile: &str, link: &ServerLink, m: &gistsync
     let manifest = s.manifest.unwrap_or_default();
     let diff = server::diff(&plan.resolved, &manifest.mods);
     let changed = configs_changed(ctx, profile, &s.configs);
-    let adopted = format!("{}:{}", manifest.hash, gistsync::config_hash(&s.configs));
-    // Mods must match; differing configs only count until this exact server state was adopted once.
-    let in_sync = diff.is_empty() && (changed.is_empty() || link.last_adopted.as_deref() == Some(adopted.as_str()));
+    // Mods and versions must match. Configs are the server's business: synced mods hand them to the
+    // client at join, and a profile created from the server took the rest once (see adopt_server).
+    let in_sync = diff.is_empty();
     ServerCheck {
         reachable: true,
         error: None,

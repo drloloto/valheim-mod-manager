@@ -27,6 +27,9 @@ All notable changes to this project are documented here. The format follows
 - Adopting a server no longer lists the server's dependencies as the player's own mods: they stay pinned to
   the server's versions but show up as dependencies, like in the admin's profile. Publishing the adopted
   profile reports them as dependencies again.
+- Configs belong to the server: "in sync" means mods and versions, config differences are no longer
+  reported or compared. A profile created from a server takes its config files once (checkbox in "Add
+  server…"); publishing sends no configs unless asked.
 - The toolbar chip and the status bar now say the same thing about the server, in the same words, and the
   server name is never empty. A player whose profile differs is sent to adopt before being told about a
   waiting release; linking a profile that differs opens the comparison right away, with "Adopt server

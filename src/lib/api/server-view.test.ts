@@ -40,7 +40,7 @@ describe("serverView: one reading for chip, status bar and dialogs", () => {
 	it("a player who differs from the server is sent to adopt, counts first", () => {
 		const v = serverView(differs, false, t);
 		expect(v).toMatchObject({ kind: "differs", action: "diff", release: null });
-		expect(v.text).toBe("chip.differs:chip.mods:1 · chip.configs:2");
+		expect(v.text).toBe("chip.differs:chip.mods:1");
 	});
 
 	it("an admin who differs is sent to publish", () => {
