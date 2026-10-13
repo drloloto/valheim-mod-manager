@@ -71,6 +71,25 @@ Add only this block to the compose file the server already runs from (same proje
 game container by its compose labels). `docker compose up -d --build companion` starts it without recreating
 `valheim`; players stay connected.
 
+### Sync through a gist (no open port)
+
+Instead of reaching the companion over HTTP, the Mod Manager and the companion can exchange two sealed files
+in one unlisted GitHub gist: `release.json` (admin → server: lock + configs + when to apply) and `server.json`
+(server → everyone: what runs now + release status). Players and the admin only need the **sync code**
+`vmm1.<gist id>.<secret>`; the secret seals the files (HKDF-SHA256 → AES-256-GCM, gzip), so the gist holds
+nothing readable. The companion polls the gist, hands a new release to the staging pipeline above and reports
+back. Nothing is published on any port for this.
+
+| Variable                | Effect                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------- |
+| `COMPANION_SYNC_CODE`   | turns the poller on                                                                          |
+| `COMPANION_GIST_TOKEN`  | GitHub token with the `gist` scope; without it releases are still read, `server.json` is not written |
+| `COMPANION_GIST_POLL`   | seconds between polls (default 60, minimum 10); a 304 costs no rate limit with a token         |
+| `COMPANION_GIST_API`    | API base, default `https://api.github.com` (tests use `src/testing/fakegist.ts`)              |
+
+CLI for trying it without the client: `bun run src/gistsync.ts create|publish|read|code …` (see the file
+header). File formats and the client side: `../spike-sync/CLIENT-SPIKE.md`.
+
 ### What the companion does to an existing server
 
 - **Never touched:** `./data` (`/opt/valheim`), the `valheim` service definition, the image's own backups in

@@ -10,6 +10,7 @@ import { FEATURES, PUBLIC_URL, VERSION, getTokenSource, resolveToken, tokenConfi
 import { containerAction, containerState, type ContainerAction } from "./docker";
 import { activeWorld, envValue, readEnv, writeEnv } from "./env";
 import { writeAtomic } from "./fsutil";
+import { startGistSync } from "./gistsync";
 import { withServerStopped } from "./maintenance";
 import { applyManifest, loadInstalled } from "./install";
 import { streamLog, tailLog } from "./logs";
@@ -63,6 +64,7 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 startScheduler(exclusive);
+startGistSync(exclusive, serverInfo);
 
 const api = new Hono();
 api.use("*", requireToken);
