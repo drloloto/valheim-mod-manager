@@ -137,7 +137,7 @@ api.get("/releases/pending", requireFeature("publish"), async (c) => c.json(awai
 /** The review step: every staged config as before/after text plus the changed values. */
 api.get("/releases/pending/diff", requireFeature("publish"), async (c) => {
 	const r = await freshPending();
-	return c.json({ release: r, summary: r ? summary(r) : null, files: r ? await draftDiff(r) : [] });
+	return c.json({ release: r, summary: r ? summary(r) : null, files: r ? await draftDiff(r) : [], online: await playersOnline() });
 });
 /** Drop one staged config file or the staged lock; the rest of the working state stays. */
 api.delete("/releases/pending/configs/:file{.+}", requireFeature("publish"), async (c) => {
