@@ -9,7 +9,7 @@ const CLIENT = resolve(import.meta.dir, "..", "..", "..", "modmanager-client", "
 const TARGET = resolve(import.meta.dir, "..", "src", "lib");
 
 /** Whole folders under components/ui and single files elsewhere, relative to src/lib. */
-const UI = ["button", "input", "label", "switch", "checkbox", "dialog", "separator", "sonner", "toggle", "toggle-group"];
+const UI = ["button", "input", "label", "switch", "checkbox", "dialog", "separator", "sonner", "toggle", "toggle-group", "select", "tooltip", "scroll-area"];
 const FILES = [
 	"theme.css",
 	"style-vega.css",

@@ -12,15 +12,23 @@ export interface Features {
 	logs: boolean;
 }
 
+export type Source = "client" | "web" | "gist";
+export type Schedule = { when: "idle"; at?: undefined; setAt: number } | { when: "at"; at: number; setAt: number };
+
 export interface ReleaseSummary {
 	id: string;
 	createdAt: number;
+	updatedAt: number;
+	modsFrom: Source | null;
 	install: number;
 	remove: number;
 	configs: number;
+	conflicts: number;
 	untracked: number;
+	restartRequired: boolean;
+	empty: boolean;
 	problems: string[];
-	schedule: { when: "idle" | "at"; at?: number; setAt: number } | null;
+	schedule: Schedule | null;
 	lastError: string | null;
 }
 
@@ -62,6 +70,53 @@ export interface ConfigSetting {
 	type?: string;
 	defaultValue?: string;
 	acceptableValues?: string;
+	/** several of the acceptable values may be combined, comma separated */
+	multiple?: boolean;
+	/** the mod tags the entry [Synced with Server] / [Not Synced with Server] */
+	synced?: boolean;
+}
+
+export type SyncKind = "serversync" | "jotunn" | "none" | "unknown";
+
+/** What a server-side edit of a config file reaches; from the plugin DLL (companion modsync.ts). */
+export interface ConfigSync {
+	sync: SyncKind;
+	liveReload: boolean;
+	versionCheck: boolean;
+	mod: string | null;
+	dll: string | null;
+}
+
+export interface ConfigMeta {
+	source: Source;
+	at: number;
+	baseHash: string | null;
+}
+
+export interface ConfigsIndex {
+	files: string[];
+	info: Record<string, ConfigSync>;
+	/** files with a staged working copy */
+	staged: string[];
+	/** with ?settings=1: every setting of every file (working copies) */
+	settings?: Record<string, ConfigSetting[]>;
+}
+
+export interface ConfigFile {
+	file: string;
+	settings: ConfigSetting[];
+	staged: boolean;
+	meta: ConfigMeta | null;
+	/** "section::key" → value on the server, for settings the working copy changes */
+	live: Record<string, string>;
+	info: ConfigSync;
+}
+
+export interface ConfigSaved {
+	ok: boolean;
+	staged: boolean;
+	summary: ReleaseSummary;
+	effect: ConfigSync | null;
 }
 
 export interface EnvEntry {
@@ -129,13 +184,50 @@ export interface ReleasePlan {
 	remove: string[];
 	configsChanged: string[];
 	configsNew: string[];
+	conflicts: string[];
 	untracked?: string[];
+	restartRequired: boolean;
+	effects: Record<string, ConfigSync>;
+}
+
+export interface Release {
+	id: string;
+	createdAt: number;
+	updatedAt: number;
+	manifest: Manifest & { mods: ManifestMod[] };
+	modsFrom: Source | null;
+	modsAt: number | null;
+	configs: string[];
+	configMeta: Record<string, ConfigMeta>;
+	plan: ReleasePlan;
+	problems: string[];
+	schedule: Schedule | null;
+	lastError: string | null;
 }
 
 export interface PendingRelease {
-	release: { id: string; plan: ReleasePlan; problems: string[] } | null;
+	release: Release | null;
 	summary: ReleaseSummary | null;
 	online: number | null;
+}
+
+export interface ConfigDiff {
+	path: string;
+	status: "changed" | "new";
+	before: string | null;
+	after: string | null;
+	tooLarge: boolean;
+	conflict: boolean;
+	meta: ConfigMeta | null;
+	effect: ConfigSync | null;
+	changes: { section: string; key: string; from: string | null; to: string | null }[];
+}
+
+export interface PendingDiff {
+	online: number | null;
+	release: Release | null;
+	summary: ReleaseSummary | null;
+	files: ConfigDiff[];
 }
 
 export interface ApplyResponse {
@@ -143,7 +235,13 @@ export interface ApplyResponse {
 	result?: { installed: string[]; removed: string[]; errors: string[] };
 	backup?: { id: string; size: number } | null;
 	started?: ActionResult | null;
+	stopped?: ActionResult | null;
+	configsWritten?: string[];
 	restartRequired?: boolean;
+	stayedUp?: boolean;
+	nothingToDo?: boolean;
+	log?: string[];
+	summary?: ReleaseSummary;
 }
 
 export interface RestoreResponse {

@@ -14,6 +14,7 @@
 		[
 			{ href: resolve("/"), label: t("nav.overview"), show: true },
 			{ href: resolve("/configs"), label: t("nav.configs"), show: true },
+			{ href: resolve("/release"), label: t("nav.release"), show: session.authed && session.on("publish") },
 			{ href: resolve("/server"), label: t("nav.server"), show: session.authed },
 			{ href: resolve("/players"), label: t("nav.players"), show: session.authed && session.on("players") },
 			{ href: resolve("/backups"), label: t("nav.backups"), show: session.authed && session.on("backups") },
@@ -49,7 +50,7 @@
 	</nav>
 	<div class="flex-1"></div>
 	{#if release}
-		<a href={resolve("/server")} class="text-primary text-meta mr-2 hidden items-center gap-1.5 font-mono hover:underline sm:flex">
+		<a href={resolve("/release")} class="text-primary text-meta mr-2 hidden items-center gap-1.5 font-mono hover:underline sm:flex">
 			<span class="bg-primary size-1.5 animate-pulse rounded-full"></span>{t("release.pendingShort")}
 		</a>
 	{/if}

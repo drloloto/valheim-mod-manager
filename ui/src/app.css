@@ -104,6 +104,12 @@
 	--spacing-label: 220px;
 }
 
+@utility scroll-y {
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-gutter: stable;
+}
+
 @utility label-caps {
 	font-family: var(--font-mono);
 	font-size: 10.5px;
@@ -154,4 +160,34 @@
 	color: var(--muted-foreground);
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
+}
+
+/* @git-diff-view/svelte in Werkbank colours (the review step of a release) */
+.diff-tailwindcss-wrapper[data-theme="dark"] .diff-style-root {
+	--diff-border--: var(--border);
+	--diff-plain-content--: var(--background);
+	--diff-plain-lineNumber--: var(--panel);
+	--diff-plain-lineNumber-color--: var(--subtle-foreground);
+	--diff-expand-content--: var(--panel);
+	--diff-expand-lineNumber--: var(--panel);
+	--diff-expand-lineNumber-color--: var(--subtle-foreground);
+	--diff-empty-content--: var(--chrome);
+	--diff-hunk-content--: var(--info-soft);
+	--diff-hunk-content-color--: var(--info);
+	--diff-hunk-lineNumber--: var(--info-soft);
+	--diff-hunk-lineNumber-hover--: var(--info-line);
+	--diff-add-content--: oklch(0.24 0.04 150);
+	--diff-add-lineNumber--: oklch(0.28 0.05 150);
+	--diff-add-content-highlight--: oklch(0.36 0.08 150);
+	--diff-del-content--: oklch(0.24 0.04 25);
+	--diff-del-lineNumber--: oklch(0.28 0.05 25);
+	--diff-del-content-highlight--: oklch(0.38 0.09 25);
+	--diff-add-widget--: var(--primary);
+	--diff-add-widget-color--: var(--primary-foreground);
+	font-family: var(--font-mono);
+}
+.diff-tailwindcss-wrapper[data-theme="dark"] [data-state="diff"],
+.diff-tailwindcss-wrapper[data-theme="dark"] [data-state="plain"],
+.diff-tailwindcss-wrapper[data-theme="dark"] [data-state="hunk"] {
+	color: var(--foreground-soft);
 }

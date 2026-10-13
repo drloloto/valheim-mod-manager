@@ -16,11 +16,18 @@ the server, can act on it, and never gets in the way when you do things by hand.
   server log, log tail and live follow.
 - Token onboarding: generated on first start and printed to `docker compose logs companion`.
 
+## Done (0.4)
+
+- Gist sync: lock and server state through one sealed gist, no open port.
+- Working state and the guided release (server now → working state → review with diff → release), restart
+  only when a changed file needs one, backup optional per release, conflicts with in-game write-backs caught.
+- Config editor: search across all files, collapsible sections, typed controls (switch, range slider,
+  enum select, flags chips, colour, vector, range, row tables for `Name:n` lists), zod advice with a raw
+  escape hatch, default and "on the server" per value. Per-mod sync detection from the plugin DLLs
+  (ServerSync / Jötunn / client-side, live reload).
+
 ## Next (in order of value for a small friends' server)
 
-1. **Config editor with validation** — edit `.cfg` values in the browser with the type/range metadata the
-   parser already extracts (bool toggles, number ranges, enums), "changed vs default" view, diff before save,
-   automatic restart prompt. The client has the same editor; same metadata, same look.
 2. **Mod updates on the server** — "N updates available" per installed mod (Thunderstore package endpoint
    per mod, no full index), one-click update into the manifest, change log link. Clients see the new lock
    before Play and adopt it.

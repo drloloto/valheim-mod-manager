@@ -1,8 +1,11 @@
 # Valheim server companion
 
 A small service next to the `valheim` container (image `ghcr.io/community-valheim-tools/valheim-server`).
-It publishes the server's mod lock so the Valheim Mod Manager can match it with one click, shows the mod
-configs, and manages the game container, worlds, backups, player lists, logs and `valheim.env`.
+It publishes the server's mod lock so the Valheim Mod Manager can match it with one click, is where the mod
+configs are edited (the server's `BepInEx/config` is the single source of truth; clients take it over), and
+manages the game container, worlds, backups, player lists, logs and `valheim.env`. Every change — a lock
+from the Mod Manager, a config edit in the browser — goes into one **working state** and reaches the server
+in one guided release: server now → working state → review (diff) → release.
 It replaces `webapp`. Everything is optional; see the switches below. Where this is heading: [ROADMAP.md](ROADMAP.md).
 
 Design: `modmanager-client/docs/superpowers/specs/2026-10-10-server-companion-design.md`.
@@ -96,10 +99,21 @@ header). File formats and the client side: `../spike-sync/CLIENT-SPIKE.md`.
   `config/backups`.
 - **First start:** creates `config/modmanager/` (token, manifest, download cache), `./backups`, and the
   BepInEx folders if missing. Nothing existing is changed.
-- **Every change to game files** (apply a release, `PUT /api/manifest`, restore) runs the same sequence: stop
+- **Every change to game files** (release, `PUT /api/manifest`, restore) runs the same sequence: stop
   the game and confirm with Docker that it is down → back up the active world + the BepInEx configs (`config/bepinex` without `plugins/`/`patchers/`) + manifest →
   change → start again (only if it was running). A failed stop or backup aborts with nothing changed. A
-  restore additionally refuses when it cannot confirm the server is stopped.
+  restore additionally refuses when it cannot confirm the server is stopped. A release that only changes
+  configs of mods that re-read their file (see below) skips the stop/start; the backup can be unticked per
+  release.
+- **Config edits never touch the live file directly.** The editor copies the file into the working state
+  (`config/modmanager/releases/<id>/config/`) and changes that copy; the release writes it back with an
+  atomic rename, owner and mode kept, only the changed lines different. If the live file changed meanwhile
+  (ServerSync and Jötunn write configs back in-game), the review step shows a conflict and the release
+  refuses until the admin reverts the staged copy or ticks "overwrite".
+- **What an edit reaches** is read from the plugin DLLs once (`config/modmanager/plugin-scan.json`, cached by
+  hash): ServerSync (server values reach players when they join), Jötunn (only `IsAdminOnly` entries), or
+  nothing (client-side config: a server edit reaches nobody), and whether the mod watches its file (no
+  restart needed). The editor and the review show it per file.
 - **Stop timeout:** the companion waits at least 120 s for the world save before Docker may kill the game,
   longer if `stop_grace_period` says so. Keep `stop_grace_period: 2m` on `valheim`.
 - **Restore** extracts into `config/modmanager/restore-tmp/`, checks the archive (no `..`, no symlinks), then
@@ -149,15 +163,24 @@ secret (webhook URLs, API keys).
 - `GET /api/manifest`: the lock, every package with version, `explicit` and `requiredBy`, config hashes,
   order-independent `hash` (ETag), plus the switches relevant to the client.
 - `GET /api/profile.r2z`: the same as an r2modman profile zip (mods + `BepInEx/config`).
-- **Staged releases** (how the Mod Manager publishes, players are never kicked by surprise):
-  `POST /api/releases` (token) takes the lock + config files, pulls every zip, checks it and reports a plan
-  (install / remove / config changes) with problems; nothing changes live. `GET /api/releases/pending`,
-  `POST /api/releases/<id>/apply` with `{ "when": "now" | "idle" | "at", "at": <epoch ms> }` (now = stop,
-  backup, install, write configs, start; idle = as soon as the log shows nobody online; at = at that time;
-  `"none"` clears the schedule), `DELETE /api/releases/<id>` discards. Mods whose download failed are left
-  out of the applied manifest, so the client keeps showing them as missing on the server.
+- **Working state / staged release** (players are never kicked by surprise): `POST /api/releases` (token)
+  takes a lock + optional config files from the Mod Manager or the gist, pulls every zip, checks it and
+  merges it into the pending working state (a second publish replaces the lock, staged config edits stay).
+  `GET /api/releases/pending` returns it with the plan checked against the server right now (install /
+  remove / changed and new configs / conflicts / `restartRequired` / per-file `effects`);
+  `GET /api/releases/pending/diff` adds every staged file as before/after text and changed values.
+  `DELETE /api/releases/pending/configs/<file>` drops one staged file, `DELETE /api/releases/pending/mods`
+  the staged lock, `DELETE /api/releases/<id>` everything. `POST /api/releases/<id>/apply` with
+  `{ "when": "now" | "idle" | "at", "at": <epoch ms>, "backup": true, "force": false }` (now = stop if
+  needed, backup unless `backup: false`, install, write configs, start; idle = as soon as the log shows
+  nobody online; at = at that time; `"none"` clears the schedule; `force` overwrites conflicting files).
+  Mods whose download failed are left out of the applied manifest, so the client keeps showing them as
+  missing on the server.
 - `PUT /api/manifest` (token): direct apply without staging, for scripts and the backup restore.
-- `GET /api/configs`, `GET /api/configs/<file>`; `PUT /api/configs/<file>` (token) edits values in place.
+- `GET /api/configs` (`files`, per-file sync `info`, `staged` list; `?settings=1` adds every setting of
+  every file for the search), `GET /api/configs/<file>` (the working copy's settings with type/default/
+  acceptable values/`multiple`/`synced`, the `live` values it changes, `info`); `PUT /api/configs/<file>`
+  (token) stages value changes in the working state and answers with the release summary and the effect.
 - `GET/PUT /api/env` (token), `POST /api/server/restart|stop|start` (token).
 - `GET /api/logs?tail=N`, `GET /api/logs/stream` (SSE) — token.
 - `GET /api/players` (token): lists, online players and recent sessions; `PUT /api/players/admin|permitted|banned`.
@@ -169,8 +192,18 @@ secret (webhook URLs, API keys).
 
 `ui/` is a SvelteKit 3 / Svelte 5 SPA with shadcn-svelte and the Mod Manager's "Werkbank" design system, built to
 static files and served by the companion itself (no second server). Public: overview with the one-click profile and
-the mod list, mod configs. With the admin token: server (pending release, start/stop, `valheim.env`), players,
-backups, log; config values become editable. German or English from the browser language.
+the mod list, mod configs. With the admin token: release (the four-step flow), server (start/stop,
+`valheim.env`), players, backups, log; config values become editable. German or English from the browser language.
+
+- **Configs:** a search across every setting of every file; sections collapse; each value gets the control
+  its type calls for (switch, number with slider for a range, select for an enum, chips for a flags enum,
+  colour picker, vector and range fields, a row-per-entry table for `Name:1,Other:2` lists) with a "edit
+  as text" escape hatch; zod explains what is wrong, "reset to default" and "on the server: …" per value.
+  Saving stages the values in the working state.
+- **Release:** server now → working state (what came from where, revert per file or the lock) → review
+  (problems, conflicts, restart or not, mods table, per-file value list and text diff via
+  `@git-diff-view/svelte`) → release (backup checkbox, overwrite conflicts, now / when nobody is online / at
+  a time).
 
 - **Same look as the client:** `bun run sync` in `ui/` copies the tokens (`theme.css`), the shadcn "vega" style, the
   shadcn primitives and the kit components unchanged from `../modmanager-client`. Never edit those copies; change
