@@ -8,7 +8,7 @@ use crate::install;
 use crate::localmod;
 use crate::logs;
 use crate::migrate::{self, ForeignProfile};
-use crate::models::{Pkg, Plan, Profile, ProfileMod, ServerLink, Source};
+use crate::models::{Installed, Pkg, Plan, Profile, ProfileMod, ServerLink, Source};
 use crate::paths::Paths;
 use crate::profiles;
 use crate::publish;
@@ -19,7 +19,7 @@ use crate::share::{self, ImportSummary};
 use crate::sync::{self, SyncHandle, SyncJob, SyncStatus};
 use crate::thunderstore::{self, Index, IndexStore};
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
@@ -117,7 +117,7 @@ pub struct AppState {
 
 fn build_state(ctx: &AppCtx) -> Result<AppState> {
     let active = profiles::active(&ctx.paths);
-    let (mods, server) = match &active {
+    let (mut mods, server) = match &active {
         Some(n) => {
             let p = profiles::load(&ctx.paths, n)?;
             let server = p.server.map(|s| ServerLinkInfo {
@@ -142,8 +142,12 @@ fn build_state(ctx: &AppCtx) -> Result<AppState> {
     let health_ids = health::ids_to_check(&mods, plan.as_ref().map(|p| &p.resolved));
     let health = health::check(&health_ids, &installed, ctx.index.get().as_deref().map(|i| &i.by_id), manifest.as_ref().map(|m| m.0));
     let names = profiles::list(&ctx.paths);
-    let profile_mods =
-        names.iter().filter_map(|n| profiles::load(&ctx.paths, n).ok().map(|p| (n.clone(), p.mods.iter().map(ProfileMod::id).collect()))).collect();
+    let profile_mods = names
+        .iter()
+        .filter_map(|n| profiles::load(&ctx.paths, n).ok().map(|p| (n.clone(), p.mods.iter().filter(|m| !m.implicit).map(ProfileMod::id).collect())))
+        .collect();
+    // Implicit entries pin a server's dependencies for the plan above; the UI sees them as dependencies.
+    mods.retain(|m| !m.implicit);
     Ok(AppState {
         profiles: names,
         active,
@@ -431,11 +435,29 @@ pub async fn clone_profile(ctx: State<'_, AppCtx>, from: String, to: String) -> 
 #[tauri::command]
 pub fn set_mods(app: AppHandle, ctx: State<'_, AppCtx>, profile: String, mods: Vec<ProfileMod>) -> Result<AppState> {
     let mut p = profiles::load(&ctx.paths, &profile)?;
-    p.mods = mods;
+    p.mods = merge_implicit(&p.mods, mods, ctx.index.get().as_deref().map(|i| &i.by_id));
     profiles::save(&ctx.paths, &p)?;
     prune_local_copies(&ctx.paths, &profile, &p.mods);
     request_sync(&app, &profile, false);
     build_state(&ctx)
+}
+
+/// The list the UI sends back holds only the mods it shows. Implicit entries (a server's dependencies,
+/// see `ProfileMod::implicit`) are carried over unless the UI made one explicit, and an implicit entry
+/// that nothing left in the profile needs is dropped, so it does not stay pinned for no reason. The
+/// BepInEx pack is the one dependency nothing declares; it stays.
+fn merge_implicit(old: &[ProfileMod], mut new: Vec<ProfileMod>, by_id: Option<&HashMap<String, Pkg>>) -> Vec<ProfileMod> {
+    let explicit: HashSet<String> = new.iter().map(ProfileMod::id).collect();
+    let carried: Vec<ProfileMod> = old.iter().filter(|m| m.implicit && !explicit.contains(&m.id())).cloned().collect();
+    if carried.is_empty() {
+        return new;
+    }
+    new.extend(carried);
+    if let Some(by_id) = by_id {
+        let plan = resolver::plan(&new, by_id, &Installed::default());
+        new.retain(|m| !m.implicit || m.id() == resolver::BEPINEX_PACK_ID || plan.resolved.get(&m.id()).is_some_and(|r| !r.required_by.is_empty()));
+    }
+    new
 }
 
 #[tauri::command]
@@ -1096,6 +1118,40 @@ pub fn stop_log_tail(ctx: State<'_, AppCtx>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::test_pkg;
+
+    #[test]
+    fn set_mods_keeps_a_servers_dependencies_until_nothing_needs_them() {
+        let by_id: HashMap<String, Pkg> = [
+            test_pkg("a-A", &[("1.0.0", &["b-B-1.0.0"])]),
+            test_pkg("b-B", &[("2.0.0", &[]), ("1.0.0", &[])]),
+            test_pkg(resolver::BEPINEX_PACK_ID, &[("5.4.0", &[])]),
+        ]
+        .into_iter()
+        .map(|p| (p.id.clone(), p))
+        .collect();
+        let dep = |id: &str, v: &str| {
+            let (ns, n) = id.split_once('-').unwrap();
+            ProfileMod { implicit: true, ..ProfileMod::thunderstore(ns, n, v) }
+        };
+        let old = vec![ProfileMod::thunderstore("a", "A", "1.0.0"), dep("b-B", "1.0.0"), dep(resolver::BEPINEX_PACK_ID, "5.4.0")];
+        let ids = |mods: &[ProfileMod]| mods.iter().map(|m| (m.id(), m.version.clone(), m.implicit)).collect::<Vec<_>>();
+
+        // The UI re-sends what it shows (a-A only): b-B stays pinned at the server's 1.0.0, the pack stays.
+        let kept = merge_implicit(&old, vec![ProfileMod::thunderstore("a", "A", "1.0.0")], Some(&by_id));
+        assert_eq!(
+            ids(&kept),
+            vec![("a-A".into(), "1.0.0".into(), false), ("b-B".into(), "1.0.0".into(), true), (resolver::BEPINEX_PACK_ID.into(), "5.4.0".into(), true)]
+        );
+        // a-A removed: nothing needs b-B any more, it goes; the pack stays.
+        let pruned = merge_implicit(&old, vec![], Some(&by_id));
+        assert_eq!(ids(&pruned), vec![(resolver::BEPINEX_PACK_ID.into(), "5.4.0".into(), true)]);
+        // The player picks b-B themselves: their explicit entry replaces the implicit one.
+        let picked = merge_implicit(&old, vec![ProfileMod::thunderstore("b", "B", "2.0.0")], Some(&by_id));
+        assert_eq!(ids(&picked), vec![("b-B".into(), "2.0.0".into(), false), (resolver::BEPINEX_PACK_ID.into(), "5.4.0".into(), true)]);
+        // Without an index nothing can be pruned, so everything implicit is carried over.
+        assert_eq!(merge_implicit(&old, vec![], None).len(), 2);
+    }
 
     const CODE: &str = "vmm1.5f2964a03b693a8655578dfdcbd4b6b6.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 

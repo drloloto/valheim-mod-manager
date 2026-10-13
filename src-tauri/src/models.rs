@@ -58,6 +58,11 @@ pub struct ProfileMod {
     /// Local mods only: dependencies from their manifest.json.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deps: Vec<String>,
+    /// Adopted from a server as one of its dependencies: kept in the profile so the resolver pins the
+    /// server's version, but not the player's own pick. The UI never sees it as a profile mod; it shows up
+    /// as a dependency like any other (`set_mods` carries it over, see commands.rs).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub implicit: bool,
 }
 
 impl ProfileMod {
@@ -74,6 +79,7 @@ impl ProfileMod {
             source: Source::Thunderstore,
             pinned: false,
             deps: vec![],
+            implicit: false,
         }
     }
 }

@@ -102,7 +102,7 @@ pub fn diff(local: &BTreeMap<String, Resolved>, manifest: &[ManifestMod]) -> Ser
 /// The lock to publish: every resolved package, `explicit` from the profile. Local mods cannot be
 /// installed on the server and are returned separately.
 pub fn manifest_mods(profile: &Profile, resolved: &BTreeMap<String, Resolved>) -> (Vec<ManifestMod>, Vec<String>) {
-    let explicit: Vec<String> = profile.mods.iter().filter(|m| m.source == Source::Thunderstore && m.enabled).map(ProfileMod::id).collect();
+    let explicit: Vec<String> = profile.mods.iter().filter(|m| m.source == Source::Thunderstore && m.enabled && !m.implicit).map(ProfileMod::id).collect();
     let local: Vec<String> = profile.mods.iter().filter(|m| m.source == Source::Local).map(ProfileMod::id).collect();
     let mods = resolved
         .iter()
@@ -112,13 +112,15 @@ pub fn manifest_mods(profile: &Profile, resolved: &BTreeMap<String, Resolved>) -
     (mods, local)
 }
 
-/// Rewrites the profile to the manifest: every entry becomes an explicit, pinned, enabled Thunderstore
-/// mod (so the resolver cannot drift from the server); local mods are kept.
+/// Rewrites the profile to the manifest: every entry becomes a pinned, enabled Thunderstore mod (so the
+/// resolver cannot drift from the server). What the server lists as a dependency stays one here
+/// (`implicit`), so the profile reads like the admin's: their picks, and the rest as dependencies.
+/// Local mods are kept.
 pub fn adopt(profile: &mut Profile, manifest: &[ManifestMod]) {
     let mut mods: Vec<ProfileMod> = profile.mods.iter().filter(|m| m.source == Source::Local).cloned().collect();
     for m in manifest {
         if let Some((ns, name)) = m.id.split_once('-') {
-            mods.push(ProfileMod::thunderstore(ns, name, &m.version));
+            mods.push(ProfileMod { implicit: !m.explicit, ..ProfileMod::thunderstore(ns, name, &m.version) });
         }
     }
     profile.mods = mods;
@@ -441,6 +443,7 @@ mod tests {
             enabled: true,
             source: Source::Local,
             pinned: false,
+            implicit: false,
             deps: vec![],
         });
         let mut resolved = BTreeMap::new();
@@ -453,12 +456,18 @@ mod tests {
         assert!(mods[0].explicit && !mods[1].explicit);
         assert_eq!(mods[1].required_by, vec!["a-A"]);
 
-        adopt(&mut p, &[mm("a-A", "1.5.0"), mm("b-B", "2.0.0")]);
+        adopt(&mut p, &[mm("a-A", "1.5.0"), ManifestMod { explicit: false, required_by: vec!["a-A".into()], ..mm("b-B", "2.0.0") }]);
         assert_eq!(
-            p.mods.iter().map(|m| (m.id(), m.version.clone())).collect::<Vec<_>>(),
-            vec![("local-Mine".into(), "0.1.0".into()), ("a-A".into(), "1.5.0".into()), ("b-B".into(), "2.0.0".into())]
+            p.mods.iter().map(|m| (m.id(), m.version.clone(), m.implicit)).collect::<Vec<_>>(),
+            vec![("local-Mine".into(), "0.1.0".into(), false), ("a-A".into(), "1.5.0".into(), false), ("b-B".into(), "2.0.0".into(), true)]
         );
         assert!(p.mods.iter().all(|m| m.enabled));
+        // Publishing the adopted profile again reports the dependency as one, not as a pick of this player.
+        let mut resolved = BTreeMap::new();
+        resolved.insert("a-A".to_string(), res("1.5.0", &[]));
+        resolved.insert("b-B".to_string(), res("2.0.0", &["a-A"]));
+        let (mods, _) = manifest_mods(&p, &resolved);
+        assert_eq!(mods.iter().map(|m| (m.id.as_str(), m.explicit)).collect::<Vec<_>>(), vec![("a-A", true), ("b-B", false)]);
     }
 
     #[test]

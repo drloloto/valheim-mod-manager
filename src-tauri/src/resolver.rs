@@ -119,7 +119,7 @@ pub fn plan(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>, installed: &Insta
 /// Explicit, unpinned Thunderstore mods for which the index knows a newer version.
 pub fn updates(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>) -> BTreeMap<String, String> {
     mods.iter()
-        .filter(|m| m.source == Source::Thunderstore && !m.pinned)
+        .filter(|m| m.source == Source::Thunderstore && !m.pinned && !m.implicit)
         .filter_map(|m| {
             let latest = by_id.get(&m.id())?.versions.first()?;
             (cmp_version(&m.version, &latest.v) == Ordering::Less).then(|| (m.id(), latest.v.clone()))
@@ -228,6 +228,7 @@ mod tests {
             enabled: true,
             source: Source::Local,
             pinned: false,
+            implicit: false,
             deps: vec!["b-B-1.0.0".into()],
         };
         let p = plan(&[local], &idx, &Installed::new());

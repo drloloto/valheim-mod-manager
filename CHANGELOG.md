@@ -24,6 +24,9 @@ All notable changes to this project are documented here. The format follows
 
 - A disabled mod is no longer offered to the server as "will be installed"; check, diff and publish see
   enabled mods only (both transports).
+- Adopting a server no longer lists the server's dependencies as the player's own mods: they stay pinned to
+  the server's versions but show up as dependencies, like in the admin's profile. Publishing the adopted
+  profile reports them as dependencies again.
 - GitHub's rate-limit answer on publishing names the bucket and the reset time instead of "HTTP 403".
 
 ### Changed
