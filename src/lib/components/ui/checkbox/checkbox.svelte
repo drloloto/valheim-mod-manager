@@ -17,33 +17,18 @@
 	data-slot="checkbox"
 	class={cn(
 		"cn-checkbox peer relative shrink-0 outline-none after:absolute after:-inset-x-3 after:-inset-y-2 disabled:cursor-not-allowed disabled:opacity-50",
-		className
+		className,
 	)}
 	bind:checked
 	bind:indeterminate
 	{...restProps}
 >
 	{#snippet children({ checked, indeterminate })}
-		<div
-			data-slot="checkbox-indicator"
-			class="cn-checkbox-indicator grid place-content-center text-current transition-none"
-		>
+		<div data-slot="checkbox-indicator" class="cn-checkbox-indicator grid place-content-center text-current transition-none">
 			{#if checked}
-				<IconPlaceholder
-					lucide="CheckIcon"
-					tabler="IconCheck"
-					hugeicons="Tick02Icon"
-					phosphor="CheckIcon"
-					remixicon="RiCheckLine"
-				/>
+				<IconPlaceholder lucide="CheckIcon" tabler="IconCheck" hugeicons="Tick02Icon" phosphor="CheckIcon" remixicon="RiCheckLine" />
 			{:else if indeterminate}
-				<IconPlaceholder
-					lucide="MinusIcon"
-					tabler="IconMinus"
-					hugeicons="MinusSignIcon"
-					phosphor="MinusIcon"
-					remixicon="RiSubtractLine"
-				/>
+				<IconPlaceholder lucide="MinusIcon" tabler="IconMinus" hugeicons="MinusSignIcon" phosphor="MinusIcon" remixicon="RiSubtractLine" />
 			{/if}
 		</div>
 	{/snippet}

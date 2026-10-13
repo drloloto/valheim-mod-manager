@@ -27,10 +27,7 @@
 	<DialogPrimitive.Content
 		bind:ref
 		data-slot="dialog-content"
-		class={cn(
-			"cn-dialog-content fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none",
-			className
-		)}
+		class={cn("cn-dialog-content fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none", className)}
 		{...restProps}
 	>
 		{@render children?.()}
@@ -38,13 +35,7 @@
 			<DialogPrimitive.Close data-slot="dialog-close">
 				{#snippet child({ props })}
 					<Button variant="ghost" class="cn-dialog-close" size="icon-sm" {...props}>
-						<IconPlaceholder
-							lucide="XIcon"
-							tabler="IconX"
-							hugeicons="Cancel01Icon"
-							phosphor="XIcon"
-							remixicon="RiCloseLine"
-						/>
+						<IconPlaceholder lucide="XIcon" tabler="IconX" hugeicons="Cancel01Icon" phosphor="XIcon" remixicon="RiCloseLine" />
 						<span class="sr-only">Close</span>
 					</Button>
 				{/snippet}

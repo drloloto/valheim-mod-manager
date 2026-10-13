@@ -16,15 +16,9 @@
 	data-slot="scroll-area-scrollbar"
 	data-orientation={orientation}
 	{orientation}
-	class={cn(
-		"cn-scroll-area-scrollbar flex touch-none p-px transition-colors select-none",
-		className
-	)}
+	class={cn("cn-scroll-area-scrollbar flex touch-none p-px transition-colors select-none", className)}
 	{...restProps}
 >
 	{@render children?.()}
-	<ScrollAreaPrimitive.Thumb
-		data-slot="scroll-area-thumb"
-		class="cn-scroll-area-thumb relative flex-1 bg-border"
-	/>
+	<ScrollAreaPrimitive.Thumb data-slot="scroll-area-thumb" class="cn-scroll-area-thumb bg-border relative flex-1" />
 </ScrollAreaPrimitive.Scrollbar>

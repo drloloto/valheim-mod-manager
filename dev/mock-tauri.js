@@ -159,6 +159,7 @@
 		indexAge: 240000,
 		sync: { running: false, queued: false },
 		game: { valheimDir: "C:\\Steam\\steamapps\\common\\Valheim", found: true, lastUpdated: NOW - 30 * DAY, buildId: "25730771" },
+		implicitMods: [],
 		profileMods: { Hardcore: inProfile, "Vanilla+": slim.slice(30, 60).map((p) => p.id), Bauen: slim.slice(100, 110).map((p) => p.id) },
 		health: [
 			{ kind: "duplicate", ids: [inProfile[0], inProfile[1]], detail: "Shared.dll" },

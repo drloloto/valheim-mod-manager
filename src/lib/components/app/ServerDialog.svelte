@@ -280,15 +280,24 @@
 				<Checkbox bind:checked={adoptConfigs} />
 				{t("server.adoptConfigs")}
 			</label>
+			<!-- From Play the choice ends in a start; from the chip, the status bar or a fresh link it just sets the profile. -->
 			<Dialog.Footer>
 				{#if store.serverAdmin}
-					<Button variant="ghost" disabled={busy} onclick={() => (store.serverDialog = "publish")}>{t("server.publishInstead")}</Button>
+					<Button variant="ghost" disabled={busy} onclick={() => store.showServer("publish")}>{t("server.publishInstead")}</Button>
 				{/if}
-				<Button variant="ghost" disabled={busy} onclick={() => run(() => store.launch(true))}>{t("server.startAnyway")}</Button>
+				{#if store.serverDialogFromPlay}
+					<Button variant="ghost" disabled={busy} onclick={() => run(() => store.launch(true))}>{t("server.startAnyway")}</Button>
+				{:else}
+					<Button variant="ghost" disabled={busy} onclick={close}>{t("server.keepMine")}</Button>
+				{/if}
 				<Button variant="outline" disabled={busy} onclick={() => run(() => store.adoptServer(false, adoptConfigs, serverName || "Server"))}
 					>{t("server.adoptIntoNew")}</Button
 				>
-				<Button disabled={busy} onclick={() => run(() => store.adoptServer(true, adoptConfigs))}>{t("server.adoptAndStart")}</Button>
+				{#if store.serverDialogFromPlay}
+					<Button disabled={busy} onclick={() => run(() => store.adoptServer(true, adoptConfigs))}>{t("server.adoptAndStart")}</Button>
+				{:else}
+					<Button disabled={busy} onclick={() => run(() => store.adoptServer(false, adoptConfigs))}>{t("server.adopt")}</Button>
+				{/if}
 			</Dialog.Footer>
 		{:else if mode === "add"}
 			<!-- "Autoconfig": paste an address, see what it is, get a ready profile. -->

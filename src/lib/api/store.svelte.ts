@@ -1,5 +1,6 @@
 // Central reactive app state (Svelte 5 runes), fed by the Rust core.
 import { goto } from "$app/navigation";
+import { serverView, type ServerAction } from "./server-view";
 import { resolve } from "$app/paths";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -75,6 +76,7 @@ const EMPTY_STATE: AppState = {
 	sync: { running: false, queued: false },
 	game: { valheimDir: null, found: true, lastUpdated: null, buildId: null },
 	profileMods: {},
+	implicitMods: [],
 	health: [],
 	app: { version: "", portable: false, dev: false, dataDir: "" },
 };
@@ -214,6 +216,30 @@ class ModManagerStore {
 	}
 	serverChecking = $state(false);
 	serverDialog = $state<"link" | "publish" | "diff" | "add" | null>(null);
+	/** The diff dialog came from Play: its buttons start the game afterwards. */
+	serverDialogFromPlay = $state(false);
+
+	/** What the chip and the status bar call the server; never empty, a bare link shows "Server". */
+	get serverName(): string {
+		return this.serverStatus?.name || this.state.server?.name || this.state.server?.url || t("server.fallbackName");
+	}
+
+	/** Opens the server dialog from the chip, the status bar or a link, never as the Play gate. */
+	showServer(mode: "link" | "publish" | "diff" | "add") {
+		this.serverDialogFromPlay = false;
+		this.serverDialog = mode;
+	}
+
+	/** The click on the server state, same for the chip and the status bar (see server-view.ts). */
+	serverAct(action: ServerAction) {
+		if (action === "refresh") this.refreshServerStatus();
+		else this.showServer(action);
+	}
+
+	/** The state text everything shows: "9 mods differ", "release staged", "in sync", … */
+	get serverViewNow() {
+		return serverView(this.serverStatus, this.serverAdmin, t);
+	}
 	/** Linked profiles whose server runs other versions (from the start-up check). */
 	serverUpdates = $state<Record<string, ServerCheck>>({});
 	/** Result of the last stage (publish step 1), shown in the publish dialog until applied or discarded. */
@@ -382,6 +408,8 @@ class ModManagerStore {
 			c?.reachable ? t("toast.serverLinked", { name: c.name || url }) : t("server.unreachable", { error: c?.error ?? "" }),
 			c?.reachable ? "ok" : "err",
 		);
+		// A profile that differs from the server is shown the comparison now, with "adopt" in reach.
+		if (c?.reachable && !c.inSync) this.showServer("diff");
 		return true;
 	}
 
@@ -881,6 +909,7 @@ class ModManagerStore {
 			try {
 				const c = await this.refreshServerStatus();
 				if (c?.reachable && !c.inSync) {
+					this.serverDialogFromPlay = true;
 					this.serverDialog = "diff";
 					return;
 				}

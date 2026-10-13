@@ -232,6 +232,8 @@ export interface AppState {
 	game: { valheimDir: string | null; found: boolean; lastUpdated: number | null; buildId: string | null };
 	/** Mod IDs per profile (all profiles) */
 	profileMods: Record<string, string[]>;
+	/** Adopted from the server as its dependencies: pinned, shown as dependencies even when nothing local needs them. */
+	implicitMods: string[];
 	health: HealthIssue[];
 	app: AppInfo;
 }

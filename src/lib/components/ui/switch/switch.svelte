@@ -20,7 +20,7 @@
 	data-size={size}
 	class={cn(
 		"cn-switch peer group/switch relative inline-flex items-center transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 data-disabled:cursor-not-allowed data-disabled:opacity-50",
-		className
+		className,
 	)}
 	{...restProps}
 >
@@ -29,7 +29,7 @@
 		class={cn(
 			"cn-switch-thumb pointer-events-none block ring-0 transition-transform",
 			// parity-ignore: keep rtl utilities until the CLI rewrites them
-			"rtl:data-[state=checked]:translate-x-[calc(-100%)]"
+			"rtl:data-[state=checked]:translate-x-[calc(-100%)]",
 		)}
 	/>
 </SwitchPrimitive.Root>

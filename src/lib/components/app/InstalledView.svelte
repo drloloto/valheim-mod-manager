@@ -226,7 +226,7 @@
 								>
 							{/if}
 						{:else if key === "mod"}
-							{@const name = r.kind === "mod" ? r.m.name : r.id}
+							{@const name = r.kind === "mod" ? r.m.name : (p?.name ?? r.id)}
 							<div class="flex min-w-0 items-center gap-[11px]">
 								{#if !compact}<ModAvatar {name} icon={p?.icon} />{/if}
 								<div class="flex min-w-0 flex-col gap-0.5">
@@ -234,7 +234,11 @@
 									{#if !compact}
 										{#if r.kind === "dep"}
 											<span class="text-muted-foreground truncate text-xs"
-												>{r.requiredBy.length ? t("installed.requiredBy", { names: r.requiredBy.join(", ") }) : t("installed.base")}</span
+												>{r.requiredBy.length
+													? t("installed.requiredBy", { names: r.requiredBy.join(", ") })
+													: store.state.implicitMods.includes(r.id)
+														? t("installed.fromServer")
+														: t("installed.base")}</span
 											>
 										{:else if r.m.source === "local"}
 											<span class="text-muted-foreground text-xs">{t("installed.localMod")}</span>

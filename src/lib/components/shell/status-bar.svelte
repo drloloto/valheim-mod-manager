@@ -51,20 +51,15 @@
 		{/if}
 
 		{#if store.server}
-			{@const name = store.serverStatus?.name || store.server.name || store.server.url}
-			{#if store.serverChecking && !store.serverStatus}
-				<StatusItem tone="muted" pulse>{t("status.serverChecking", { name })}</StatusItem>
-			{:else if store.serverStatus?.reachable && store.serverStatus.release}
-				<StatusItem tone="warn" pulse class="text-primary" onclick={() => (store.serverDialog = "publish")}>{t("status.serverPending", { name })}</StatusItem>
-			{:else if store.serverStatus?.reachable && store.serverStatus.inSync}
-				<StatusItem tone="ok">{t("status.serverInSync", { name })}</StatusItem>
-			{:else if store.serverStatus?.reachable}
-				<StatusItem tone="warn" class="text-primary" onclick={() => (store.serverDialog = "diff")}>{t("status.serverDiffers", { name })}</StatusItem>
-			{:else}
-				<StatusItem tone="hollow" title={store.serverStatus?.error} onclick={() => store.refreshServerStatus()}
-					>{t("status.serverUnreachable", { name })}</StatusItem
-				>
-			{/if}
+			<!-- Same reading as the toolbar chip (server-view.ts): name, state, same click. -->
+			{@const view = store.serverViewNow}
+			<StatusItem
+				tone={view.tone === "err" ? "hollow" : view.tone}
+				pulse={view.pulse}
+				class={view.tone === "warn" ? "text-primary" : ""}
+				title={store.serverStatus?.error}
+				onclick={() => store.serverAct(view.action)}>{t("status.server", { name: store.serverName, state: view.text })}</StatusItem
+			>
 		{/if}
 
 		{#if store.readiness.status === "incomplete" && store.readiness.missing.length}

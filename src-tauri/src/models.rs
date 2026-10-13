@@ -60,7 +60,8 @@ pub struct ProfileMod {
     pub deps: Vec<String>,
     /// Adopted from a server as one of its dependencies: kept in the profile so the resolver pins the
     /// server's version, but not the player's own pick. The UI never sees it as a profile mod; it shows up
-    /// as a dependency like any other (`set_mods` carries it over, see commands.rs).
+    /// as a dependency like any other (`set_mods` carries it over, see commands.rs) until the next
+    /// adoption replaces the set.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub implicit: bool,
 }

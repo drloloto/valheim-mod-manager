@@ -4,10 +4,7 @@
 
 	type InputType = Exclude<HTMLInputTypeAttribute, "file">;
 
-	type Props = WithElementRef<
-		Omit<HTMLInputAttributes, "type"> &
-			({ type: "file"; files?: FileList } | { type?: InputType; files?: undefined })
-	>;
+	type Props = WithElementRef<Omit<HTMLInputAttributes, "type"> & ({ type: "file"; files?: FileList } | { type?: InputType; files?: undefined })>;
 
 	let {
 		ref = $bindable(null),
@@ -25,8 +22,8 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			"cn-input w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-			className
+			"cn-input file:text-foreground placeholder:text-muted-foreground w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+			className,
 		)}
 		type="file"
 		bind:files
@@ -38,8 +35,8 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			"cn-input w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-			className
+			"cn-input file:text-foreground placeholder:text-muted-foreground w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+			className,
 		)}
 		{type}
 		bind:value

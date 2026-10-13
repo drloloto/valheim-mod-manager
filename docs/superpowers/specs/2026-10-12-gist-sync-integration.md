@@ -33,6 +33,19 @@ end against the test stack. This spec turns the spike into the product feature o
 8. **Dev build and scenario stay.** `tauri.dev.conf.json`, `dev/spike-gist.ps1` and `dev/spike-drive.mjs`
    are the regression check for this feature against the test companion; they are not part of the release.
 
+9. **One vocabulary for the server state.** `src/lib/api/server-view.ts` turns a check into one of five
+   states (checking, unreachable, differs, pending, in sync) with one text, one tone and one click action;
+   the toolbar chip and the status bar render that reading, nothing else. A player sees "differs" before a
+   waiting release (their job is to match the server), an admin sees the release first (after a publish
+   their profile is ahead by definition). The name is never empty ("Server" as the last resort).
+10. **The comparison is offered when it matters, not only on Play.** Linking a profile that differs opens
+    the diff dialog at once; the same dialog from the chip or the status bar ends in "Adopt server
+    versions" / "Keep my profile", from Play in "…and start" / "Start anyway".
+11. **Adopted dependencies stay dependencies.** A manifest entry the server lists as a dependency of
+    something becomes an implicit profile entry: pinned to the server's version, hidden from the mod list,
+    shown as a dependency ("Required by the server" when nothing local names it). A "dependency" nothing
+    requires is a pick; older locks carry such entries.
+
 ## Out of scope (client)
 
 - Companion UI for creating the gist and handing out the sync code, token handling on the server, write
