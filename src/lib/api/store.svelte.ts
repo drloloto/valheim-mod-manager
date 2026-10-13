@@ -431,6 +431,8 @@ class ModManagerStore {
 		if (ok) {
 			this.toast(intoNew ? t("toast.adoptedInto", { name: this.state.active ?? intoNew }) : t("toast.adopted"), "ok");
 			delete this.serverUpdates[active];
+			// The chip and the status bar say "in sync" now, not once the download has finished.
+			this.refreshServerStatus();
 		} else this.launchAfterSync = false;
 		return ok;
 	}
