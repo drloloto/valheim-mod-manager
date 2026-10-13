@@ -14,6 +14,25 @@ describe("plugin sync markers", () => {
 		expect(classify(["ServerSync", "ConfigSync"])).toEqual({ sync: "serversync", liveReload: false, versionCheck: false });
 		expect(classify(["SynchronizationManager", "IsAdminOnly", "FileSystemWatcher"])).toEqual({ sync: "jotunn", liveReload: true, versionCheck: false });
 		expect(classify(["SynchronizationManager"])).toEqual({ sync: "none", liveReload: false, versionCheck: false });
+		expect(classify(["IsAdminOnly"])).toEqual({ sync: "jotunn", liveReload: false, versionCheck: false });
 		expect(classify([])).toEqual({ sync: "none", liveReload: false, versionCheck: false });
+	});
+});
+
+describe("config → plugin matching", () => {
+	const { resemblance } = require("./modsync") as typeof import("./modsync");
+	it("prefers the mod whose id or file name looks like the config GUID", () => {
+		expect(resemblance("Therzie.Warfare", "Therzie-Warfare", "plugins/Therzie-Warfare/Warfare.dll")).toBeGreaterThan(
+			resemblance("Therzie.Warfare", "Therzie-Monstrum", "plugins/Therzie-Monstrum/Monstrum.dll"),
+		);
+		expect(resemblance("goldenrevolver.quick_stack_store", "Goldenrevolver-Quick_Stack_Store_Sort_Trash_Restock", "plugins/QuickStackStore.dll")).toBeGreaterThan(
+			resemblance("goldenrevolver.quick_stack_store", "Tenemo-EpicLoot_ProgressionFix", "plugins/EpicLootProgressionFix.dll"),
+		);
+		expect(resemblance("randyknapp.mods.epicloot", "RandyKnapp-EpicLoot", "plugins/EpicLoot.dll")).toBeGreaterThan(
+			resemblance("randyknapp.mods.epicloot", "ValheimModding-Jotunn", "plugins/Jotunn.dll"),
+		);
+		expect(resemblance("valheim.epiclootprogressionfix", "Tenemo-EpicLoot_ProgressionFix", "plugins/EpicLootProgressionFix.dll")).toBeGreaterThan(
+			resemblance("valheim.epiclootprogressionfix", "RandyKnapp-EpicLoot", "plugins/EpicLoot.dll"),
+		);
 	});
 });

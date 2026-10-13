@@ -1,7 +1,7 @@
 // What a config edit on the server reaches, per mod. Each plugin DLL is scanned once (plain string search
 // over the file, cached by hash) for the markers of the two sync libraries and of a file watcher:
 //   ServerSync + ConfigSync            → ServerSync: the server's values reach clients when they join
-//   SynchronizationManager + IsAdminOnly → Jötunn: only entries marked IsAdminOnly are synced
+//   IsAdminOnly (± SynchronizationManager) → Jötunn: only entries marked IsAdminOnly are synced
 //   FileSystemWatcher / SetupWatcher / ReadConfigValues / ConfigFileWatcher → the mod re-reads its file
 //   nothing                            → client-side config: a server edit reaches nobody
 // A config file is matched to the DLL that contains its base name (the BepInEx GUID, e.g. "Therzie.Warfare").
@@ -54,7 +54,9 @@ const CACHE_FILE = join(MM_DIR, "plugin-scan.json");
 /** Pure classification of a DLL's markers, shared with the tests. */
 export function classify(markers: readonly string[]): Pick<ConfigSync, "sync" | "liveReload" | "versionCheck"> {
 	const has = (m: Marker) => markers.includes(m);
-	const sync: SyncKind = has("ServerSync") && has("ConfigSync") ? "serversync" : has("SynchronizationManager") && has("IsAdminOnly") ? "jotunn" : "none";
+	// Jötunn syncs the entries marked IsAdminOnly; a mod sets that through ConfigurationManagerAttributes and
+	// need not mention SynchronizationManager itself (EpicLootProgressionFix does not).
+	const sync: SyncKind = has("ServerSync") && has("ConfigSync") ? "serversync" : has("IsAdminOnly") ? "jotunn" : "none";
 	return { sync, liveReload: WATCHERS.some(has), versionCheck: sync === "serversync" && has("VersionCheck") };
 }
 
@@ -129,18 +131,39 @@ export async function configSyncInfo(configFiles: string[], bepinexDir = BEPINEX
 	for (const [id, { files }] of Object.entries(installed)) for (const f of files) modOf.set(f.replaceAll("\\", "/"), id);
 
 	const out: Record<string, ConfigSync> = {};
+	const unknown = (): ConfigSync => ({ sync: "unknown", liveReload: false, versionCheck: false, mod: null, dll: null });
 	for (const file of configFiles) {
 		const name = baseName(file);
-		// The GUID is also a substring of longer names (e.g. "Therzie.Warfare" in "Therzie.Warfare.Extra");
-		// the DLL whose own config this is contains the name, a DLL of a dependent mod may too. Prefer the
-		// DLL that mentions no other, longer config name that also matches.
+		// A dependent mod's DLL mentions the GUID too (Monstrum references Therzie.Warfare), and a name every
+		// DLL contains (BepInEx) says nothing: pick the DLL whose mod id or file name resembles the config name.
 		const hits = dlls.filter((d) => cache[d]?.names[name]);
-		const best = hits.find((d) => !names.some((n) => n !== name && n.startsWith(name) && cache[d].names[n])) ?? hits[0] ?? null;
-		if (!best) {
-			out[file] = { sync: "unknown", liveReload: false, versionCheck: false, mod: null, dll: null };
+		if (!hits.length || (dlls.length > 2 && hits.length > dlls.length / 2)) {
+			out[file] = unknown();
 			continue;
 		}
+		const best = hits.map((d) => ({ d, score: resemblance(name, modOf.get(d) ?? null, d) })).sort((a, b) => b.score - a.score)[0].d;
 		out[file] = { ...classify(cache[best].markers), mod: modOf.get(best) ?? null, dll: best };
 	}
 	return out;
+}
+
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+const tokens = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((x) => x.length >= 3 && x !== "mods" && x !== "valheim"));
+
+/** How much a config name (BepInEx GUID) looks like the mod id from installed.json or the DLL's file name. */
+export function resemblance(configName: string, modId: string | null, dll: string): number {
+	const ct = tokens(configName);
+	// the GUID without filler words: "valheim.epiclootprogressionfix" → "epiclootprogressionfix"
+	const c = [...ct].join("") || norm(configName);
+	let score = 0;
+	if (modId) {
+		const m = norm(modId);
+		if (m === c) score += 6;
+		else if (m.includes(c) || c.includes(m)) score += 4;
+		score += [...tokens(modId)].filter((x) => ct.has(x)).length;
+	}
+	const f = norm((dll.split("/").pop() ?? "").replace(/\.dll$/i, ""));
+	if (f && f === c) score += 3;
+	else if (f && (c.includes(f) || f.includes(c))) score += 2;
+	return score;
 }
