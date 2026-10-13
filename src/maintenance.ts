@@ -16,6 +16,8 @@ export interface MaintenanceOptions {
 	control: boolean;
 	/** the change is unsafe while the game runs (world restore): refuse unless it is verifiably stopped */
 	requireStopped: boolean;
+	/** back the world up first (default true); the admin may skip it for a config-only release */
+	backup?: boolean;
 	log?: (line: string) => void;
 }
 
@@ -50,7 +52,8 @@ export async function withServerStopped<T>(opts: MaintenanceOptions, fn: () => P
 
 	let backup: MaintenanceReport["backup"] = null;
 	try {
-		if ((await worldEntries(opts.world)).length) {
+		if (opts.backup === false) log("backup skipped by request");
+		else if ((await worldEntries(opts.world)).length) {
 			const b = await createBackup(opts.world, opts.label);
 			backup = { id: b.id, size: b.size };
 			log(`backup ${b.id}`);

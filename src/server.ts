@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { join } from "path";
 import { isAuthed, requireFeature, requireToken } from "./auth";
 import { createBackup, deleteBackup, importBackup, inspectBackup, listBackups, restoreFiles, safeId } from "./backups";
-import { listConfigFiles, parseConfigFile, saveConfigChanges } from "./bepinexconfig";
+import { listConfigFiles, parseConfigText, type ConfigChange } from "./bepinexconfig";
 import { FEATURES, PUBLIC_URL, VERSION, getTokenSource, resolveToken, tokenConfigured } from "./config";
 import { containerAction, containerState, type ContainerAction } from "./docker";
 import { activeWorld, envValue, readEnv, writeEnv } from "./env";
@@ -16,18 +16,27 @@ import { applyManifest, loadInstalled } from "./install";
 import { streamLog, tailLog } from "./logs";
 import { configHashes, loadManifest, migrateLegacy, normalizeManifest, saveManifest, type Manifest, type ServerInfo } from "./manifest";
 import { configRel } from "./configdir";
+import { configSyncInfo } from "./modsync";
 import { BEPINEX_CONFIG_DIR, ensureDirs } from "./paths";
 import { LIST_FILES, onlineFrom, readAllLists, sessionsFromLog, writeList, type ListName } from "./players";
 import { buildR2z } from "./r2z";
 import {
 	applyRelease,
 	discardRelease,
+	draftDiff,
 	pendingRelease,
 	playersOnline,
+	refreshPlan,
+	savePending,
+	revertConfig,
+	revertMods,
 	scheduleRelease,
+	stageConfigChanges,
 	stageRelease,
 	startScheduler,
 	summary,
+	workingConfig,
+	type Release,
 	type StageBody,
 } from "./releases";
 import { securityHeaders, serveUi } from "./web";
@@ -113,18 +122,38 @@ api.post("/releases", requireFeature("publish"), async (c) => {
 		return c.json({ error: (e as Error).message }, 400);
 	}
 });
-api.get("/releases/pending", requireFeature("publish"), async (c) => {
+/** The working state with its plan checked against the server as it is right now. */
+async function freshPending(): Promise<Release | null> {
 	const r = await pendingRelease();
-	return c.json({ release: r, summary: r ? summary(r) : null, online: await playersOnline() });
+	if (!r) return null;
+	const before = JSON.stringify(r.plan);
+	await refreshPlan(r);
+	if (JSON.stringify(r.plan) !== before) await savePending(r);
+	return r;
+}
+const pendingJson = async (r: Release | null) => ({ release: r, summary: r ? summary(r) : null, online: await playersOnline() });
+
+api.get("/releases/pending", requireFeature("publish"), async (c) => c.json(await pendingJson(await freshPending())));
+/** The review step: every staged config as before/after text plus the changed values. */
+api.get("/releases/pending/diff", requireFeature("publish"), async (c) => {
+	const r = await freshPending();
+	return c.json({ release: r, summary: r ? summary(r) : null, files: r ? await draftDiff(r) : [] });
 });
-// { when: "now" | "idle" | "at" | "none", at?: epoch ms }
+/** Drop one staged config file or the staged lock; the rest of the working state stays. */
+api.delete("/releases/pending/configs/:file{.+}", requireFeature("publish"), async (c) => {
+	const rel = configRel(c.req.param("file") ?? "");
+	if (!rel) return c.json({ error: "invalid config path" }, 400);
+	return c.json(await pendingJson(await exclusive(() => revertConfig(rel))));
+});
+api.delete("/releases/pending/mods", requireFeature("publish"), async (c) => c.json(await pendingJson(await exclusive(async () => revertMods(await serverInfo())))));
+// { when: "now" | "idle" | "at" | "none", at?: epoch ms, backup?: boolean (default true), force?: boolean }
 api.post("/releases/:id/apply", requireFeature("publish"), async (c) => {
 	const id = c.req.param("id") ?? "";
-	const { when, at } = (await c.req.json().catch(() => ({}))) as { when?: string; at?: number };
+	const { when, at, backup, force } = (await c.req.json().catch(() => ({}))) as { when?: string; at?: number; backup?: boolean; force?: boolean };
 	try {
 		if (when === "now") {
 			const log: string[] = [];
-			const report = await exclusive(() => applyRelease(id, (l) => log.push(l)));
+			const report = await exclusive(() => applyRelease(id, (l) => log.push(l), { backup: backup !== false, force: force === true }));
 			return c.json({ applied: true, ...report, log });
 		}
 		const schedule =
@@ -214,30 +243,57 @@ api.get("/installed", async (c) => c.json(await loadInstalled()));
 
 // ---- Configs ----
 
-api.get("/configs", async (c) => c.json({ files: await listConfigFiles() }));
+// The editor works on the working state: a value edit copies the live file into the pending release once
+// and changes that copy; the server's file changes when the admin releases. `info` says what an edit
+// reaches (ServerSync / Jötunn / client-side) and whether the mod re-reads its file (no restart).
+api.get("/configs", async (c) => {
+	const files = await listConfigFiles();
+	const [info, pending] = await Promise.all([configSyncInfo(files), pendingRelease()]);
+	const staged = pending?.configs.filter((f) => files.includes(f)) ?? [];
+	const body: Record<string, unknown> = { files, info, staged };
+	if (c.req.query("settings") === "1") {
+		// Every setting of every file, from the working copies: the search across all configs.
+		const settings: Record<string, ReturnType<typeof parseConfigText>> = {};
+		for (const f of files) settings[f] = parseConfigText((await workingConfig(f).catch(() => ({ text: "" }))).text);
+		body.settings = settings;
+	}
+	return c.json(body);
+});
 api.get("/configs/:file{.+}", async (c) => {
+	const rel = configRel(c.req.param("file") ?? "");
+	if (!rel) return c.json({ error: "invalid config path" }, 400);
 	try {
-		return c.json(await parseConfigFile(c.req.param("file")));
+		const w = await workingConfig(rel);
+		const settings = parseConfigText(w.text);
+		// Values the working copy changes against the live file, so the editor can show "on the server: …".
+		const live: Record<string, string> = {};
+		if (w.staged) {
+			const liveText = await Bun.file(join(BEPINEX_CONFIG_DIR, rel)).text().catch(() => "");
+			const cur = new Map(parseConfigText(liveText).map((s) => [`${s.section}::${s.key}`, s.value]));
+			for (const s of settings) {
+				const k = `${s.section}::${s.key}`;
+				if (cur.has(k) && cur.get(k) !== s.value) live[k] = cur.get(k)!;
+			}
+		}
+		const info = (await configSyncInfo([rel]))[rel];
+		return c.json({ file: rel, settings, staged: w.staged, meta: w.meta, live, info });
 	} catch (e) {
 		return c.json({ error: (e as Error).message }, 404);
 	}
 });
 api.put("/configs/:file{.+}", requireFeature("configEdit"), async (c) => {
-	const { changes } = ((await c.req.json().catch(() => ({}))) ?? {}) as {
-		changes?: { section: string; key: string; value: string }[];
-	};
+	const rel = configRel(c.req.param("file") ?? "");
+	if (!rel) return c.json({ error: "invalid config path" }, 400);
+	const { changes } = ((await c.req.json().catch(() => ({}))) ?? {}) as { changes?: ConfigChange[] };
 	// One value per line: a line break would inject further keys or sections into the .cfg.
 	if (!Array.isArray(changes) || changes.some((x) => [x?.section, x?.key, x?.value].some((v) => typeof v !== "string" || /[\r\n\0]/.test(v))))
 		return c.json({ error: "changes must be single-line strings" }, 400);
 	try {
-		await saveConfigChanges(c.req.param("file") ?? "", changes);
+		const r = await exclusive(async () => stageConfigChanges(rel, changes, await serverInfo()));
+		return c.json({ ok: true, staged: r.configs.includes(rel), summary: summary(r), effect: r.plan.effects[rel] ?? null });
 	} catch (e) {
 		return c.json({ error: (e as Error).message }, 400);
 	}
-	const m = await currentManifest();
-	m.configs = await configHashes();
-	await saveManifest(m);
-	return c.json({ ok: true });
 });
 
 // ---- Env, control, logs ----

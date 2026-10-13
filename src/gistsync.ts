@@ -276,7 +276,7 @@ export function startGistSync(exclusive: <T>(fn: () => Promise<T>) => Promise<T>
 		mailbox: new GistMailbox(code.gistId, cfg.token ?? null, cfg.api),
 		key: deriveKey(code.secret),
 		canWrite: !!cfg.token,
-		stage: (body) => exclusive(async () => stageRelease(body, await serverInfo(), log)),
+		stage: (body) => exclusive(async () => stageRelease(body, await serverInfo(), log, "gist")),
 		schedule: scheduleRelease,
 		apply: async (id) => {
 			await exclusive(() => applyRelease(id, log));
