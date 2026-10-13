@@ -128,6 +128,7 @@ export const en = {
 	"server.noToken": "No token stored. Enter it under “Server…” in the profile menu.",
 	"server.publishDisabled": "Publishing is switched off on this server (COMPANION_ALLOW_PUBLISH=false).",
 	"server.identical": "The server already runs these versions.",
+	"server.inSyncTitle": "In sync with {name}",
 	"server.diffTitle": "{name} runs other versions",
 	"server.diffDesc": "Your profile and the server differ. Adopt the server's versions to play there.",
 	"server.adoptAndStart": "Adopt server versions and start",

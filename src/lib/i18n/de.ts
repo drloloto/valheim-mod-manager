@@ -128,6 +128,7 @@ export const de: Record<MessageKey, string> = {
 	"server.restartRequired": "Server neu starten, damit es geladen wird.",
 	"server.noToken": "Kein Token hinterlegt. Trag ihn unter „Server…“ im Profilmenü ein.",
 	"server.publishDisabled": "Veröffentlichen ist auf diesem Server abgeschaltet (COMPANION_ALLOW_PUBLISH=false).",
+	"server.inSyncTitle": "Synchron mit {name}",
 	"server.identical": "Der Server läuft bereits mit diesen Versionen.",
 	"server.diffTitle": "{name} läuft mit anderen Versionen",
 	"server.diffDesc": "Dein Profil und der Server weichen voneinander ab. Übernimm die Server-Versionen, um dort zu spielen.",

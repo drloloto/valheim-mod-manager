@@ -254,8 +254,17 @@
 					<Button disabled={busy || !store.server?.hasToken || publishOff} onclick={() => stage()}>{busy ? t("server.staging") : t("server.stage")}</Button>
 				</Dialog.Footer>
 			{/if}
+		{:else if mode === "diff" && check && check.inSync}
+			<!-- The state moved under an open dialog (a re-check, an adoption from elsewhere): nothing left to decide. -->
+			<Dialog.Header>
+				<Dialog.Title>{t("server.inSyncTitle", { name: serverName })}</Dialog.Title>
+				<Dialog.Description>{t("server.identical")}</Dialog.Description>
+			</Dialog.Header>
+			<Dialog.Footer>
+				<Button onclick={close}>{t("common.done")}</Button>
+			</Dialog.Footer>
 		{:else if mode === "diff" && check}
-			<!-- Before Play (or from the status bar): the server moved on. Like a modpack update: take it, take it into a copy, or play as is. -->
+			<!-- Before Play (or from the chip, the status bar, a fresh link): the server moved on. Like a modpack update: take it, take it into a copy, or play as is. -->
 			<Dialog.Header>
 				<Dialog.Title>{t("server.diffTitle", { name: serverName })}</Dialog.Title>
 				<Dialog.Description>{t("server.diffDesc")}</Dialog.Description>
@@ -274,7 +283,17 @@
 						{#if side(m.id) === "server"}· {t("server.serverSideHint")}{/if}
 					</li>
 				{/each}
-				{#each check.configsChanged as p (p)}<li>{t("server.configChanged", { path: p })}</li>{/each}
+				{#if check.configsChanged.length}
+					<!-- One line for the configs; the file list is there for whoever wants it, not in the way. -->
+					<li>
+						<details>
+							<summary class="cursor-pointer">{t("server.configsChanged", { n: check.configsChanged.length })}</summary>
+							<ul class="text-muted-foreground mt-1 grid gap-0.5 pl-3 font-mono">
+								{#each check.configsChanged as p (p)}<li>{p}</li>{/each}
+							</ul>
+						</details>
+					</li>
+				{/if}
 			</ul>
 			<label class="flex items-center gap-2 text-sm">
 				<Checkbox bind:checked={adoptConfigs} />
