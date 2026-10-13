@@ -142,11 +142,12 @@ if (when === "add") {
 	process.exit(0);
 }
 
-// 3. Publish through the dialog's own store call, with the dialog open for the picture.
+// 3. Publish through the dialog's own store call, with the dialog open for the picture. Mods and versions
+//    only, like the dialog's default: configs belong to the server (spec decision 12).
 await evaluate('(vmm.serverDialog = "publish", true)');
 await sleep(1200);
 await shot("spike-2-publish.png");
-const ok = await evaluate(`vmm.publishGist(true, ${JSON.stringify(when)}, null)`);
+const ok = await evaluate(`vmm.publishGist(false, ${JSON.stringify(when)}, null)`);
 if (!ok) fail("publishGist returned false (see the toast / errors below)");
 console.log(`published (apply: ${when}); waiting for the companion`);
 

@@ -117,7 +117,6 @@
 								{#each check.diff.changed as c (c.id)}<li>{t("server.changed", { id: nameOf(c.id), local: c.local, server: c.server })}</li>{/each}
 								{#each check.diff.onlyLocal as m (m.id)}<li>{t("server.willInstall", { id: nameOf(m.id), version: m.version })}</li>{/each}
 								{#each check.diff.onlyServer as m (m.id)}<li>{t("server.willRemove", { id: nameOf(m.id), version: m.version })}</li>{/each}
-								{#if check.configsChanged.length}<li>{t("server.configsChanged", { n: check.configsChanged.length })}</li>{/if}
 							</ul>
 						{/if}
 					{:else if check}

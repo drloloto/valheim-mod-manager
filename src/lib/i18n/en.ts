@@ -156,8 +156,6 @@ export const en = {
 	"server.gistStatus": "Release {id}: {state}",
 	"server.gistNone": "No release published through the gist yet.",
 	"server.noGistToken": "No gist token stored. Enter it as the token under “Server…” in the profile menu.",
-	"server.configChanged": "Config {path} differs from the server's",
-	"server.configsChanged": "{n} config files differ",
 	"toast.gistPublished": "Release {id} published; the server picks it up within about a minute.",
 
 	"status.gameFound": "Valheim found",

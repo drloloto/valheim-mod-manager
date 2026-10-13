@@ -158,8 +158,6 @@ export const de: Record<MessageKey, string> = {
 	"server.gistStatus": "Release {id}: {state}",
 	"server.gistNone": "Noch kein Release über den Gist veröffentlicht.",
 	"server.noGistToken": "Kein Gist-Token gespeichert. Trag ihn als Token unter „Server…“ im Profilmenü ein.",
-	"server.configChanged": "Config {path} weicht vom Server ab",
-	"server.configsChanged": "{n} Config-Dateien weichen ab",
 	"toast.gistPublished": "Release {id} veröffentlicht; der Server holt es innerhalb von etwa einer Minute ab.",
 
 	"status.gameFound": "Valheim gefunden",
