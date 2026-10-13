@@ -352,6 +352,11 @@ pub fn encode_config(path: &str, bytes: &[u8]) -> PublishConfig {
     PublishConfig { path: path.replace('\\', "/"), content_base64: STANDARD.encode(bytes) }
 }
 
+/// The file's bytes, or None when the server sent something that is not base64.
+pub fn decode_config(c: &PublishConfig) -> Option<Vec<u8>> {
+    STANDARD.decode(&c.content_base64).ok()
+}
+
 pub async fn fetch_status(client: &reqwest::Client, link: &ServerLink) -> Result<Status> {
     let url = format!("{}/api/status", normalize_url(&link.url)?);
     let res = client.get(&url).send().await?;

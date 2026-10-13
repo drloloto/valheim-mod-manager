@@ -175,6 +175,15 @@ pub struct ExportResult {
     skipped_local: Vec<String>,
 }
 
+/// What `publish_gist` wrote: the release id the companion will report back, and the local mods that
+/// stayed out because the server cannot install them.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GistPublishResult {
+    id: String,
+    skipped_local: Vec<String>,
+}
+
 fn emit_index_updated(app: &AppHandle, ctx: &AppCtx) {
     if let Some(i) = ctx.index.get() {
         let _ = app.emit("index://updated", serde_json::json!({ "fetchedAt": i.fetched_at }));
@@ -604,12 +613,11 @@ fn gist_of(ctx: &AppCtx, link: &ServerLink) -> Result<Option<(gistsync::GistMail
 
 /// Config files in server.json whose content differs from the profile's copy (or is missing there).
 fn configs_changed(ctx: &AppCtx, profile: &str, configs: &[server::PublishConfig]) -> Vec<String> {
-    use base64::Engine;
     let dir = ctx.paths.config_dir(profile);
     configs
         .iter()
         .filter(|c| {
-            let Ok(remote) = base64::engine::general_purpose::STANDARD.decode(&c.content_base64) else { return true };
+            let Some(remote) = server::decode_config(c) else { return true };
             crate::util::safe_join(&dir, &c.path).ok().and_then(|p| std::fs::read(p).ok()).as_deref() != Some(remote.as_slice())
         })
         .map(|c| c.path.clone())
@@ -779,9 +787,17 @@ pub async fn discover_server(ctx: State<'_, AppCtx>, url: String) -> Result<serv
 
 /// Rewrites the profile (or a fresh clone named `into_new`) to the server manifest, every entry explicit and
 /// pinned, optionally with the server's config files, then syncs. The clone becomes the active profile.
+/// `install = Some(false)` rewrites the profile and links it but starts no download yet ("Add server…"
+/// without "install all"); the default installs right away.
 #[tauri::command]
-pub async fn adopt_server(app: AppHandle, ctx: State<'_, AppCtx>, profile: String, with_configs: bool, into_new: Option<String>) -> Result<AppState> {
-    use base64::Engine;
+pub async fn adopt_server(
+    app: AppHandle,
+    ctx: State<'_, AppCtx>,
+    profile: String,
+    with_configs: bool,
+    into_new: Option<String>,
+    install: Option<bool>,
+) -> Result<AppState> {
     let link = link_of(&ctx, &profile)?;
     // (server info, mods, config files, what to remember as adopted)
     let (info, mods, configs, adopted) = match gist_of(&ctx, &link)? {
@@ -789,11 +805,7 @@ pub async fn adopt_server(app: AppHandle, ctx: State<'_, AppCtx>, profile: Strin
             let s = gistsync::read_server(&m, &key).await?.ok_or_else(|| AppError::Network("The server has not written to the gist yet.".into()))?;
             let manifest = s.manifest.unwrap_or_default();
             let adopted = format!("{}:{}", manifest.hash, gistsync::config_hash(&s.configs));
-            let configs = if with_configs {
-                s.configs.iter().filter_map(|c| base64::engine::general_purpose::STANDARD.decode(&c.content_base64).ok().map(|b| (c.path.clone(), b))).collect()
-            } else {
-                vec![]
-            };
+            let configs = if with_configs { s.configs.iter().filter_map(|c| server::decode_config(c).map(|b| (c.path.clone(), b))).collect() } else { vec![] };
             (s.server, manifest.mods, configs, Some(adopted))
         }
         None => {
@@ -837,7 +849,9 @@ pub async fn adopt_server(app: AppHandle, ctx: State<'_, AppCtx>, profile: Strin
         std::fs::write(dest, bytes)?;
     }
     drop(guard);
-    request_sync(&app, &target, false);
+    if install.unwrap_or(true) {
+        request_sync(&app, &target, false);
+    }
     build_state(&ctx)
 }
 
@@ -872,7 +886,7 @@ pub async fn publish_profile(ctx: State<'_, AppCtx>, profile: String, with_confi
 /// Gist transport of publish + apply in one step: seals release.json (lock, configs, `when`) into the gist.
 /// The companion picks it up on its next poll and reports back through server.json (`gist_release`).
 #[tauri::command]
-pub async fn publish_gist(ctx: State<'_, AppCtx>, profile: String, with_configs: bool, when: String, at: Option<i64>) -> Result<String> {
+pub async fn publish_gist(ctx: State<'_, AppCtx>, profile: String, with_configs: bool, when: String, at: Option<i64>) -> Result<GistPublishResult> {
     let link = link_of(&ctx, &profile)?;
     let (m, key) = gist_of(&ctx, &link)?.ok_or_else(|| AppError::Invalid("This profile is not linked through a sync code.".into()))?;
     if !matches!(when.as_str(), "now" | "idle" | "at" | "none") || (when == "at" && at.is_none()) {
@@ -884,7 +898,7 @@ pub async fn publish_gist(ctx: State<'_, AppCtx>, profile: String, with_configs:
     if !plan.errors.is_empty() {
         return Err(AppError::Invalid(format!("The profile cannot be resolved: {}", plan.errors.join("; "))));
     }
-    let (mods, _skipped_local) = server::manifest_mods(&p, &plan.resolved);
+    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved);
     let mut configs = vec![];
     if with_configs {
         let dir = ctx.paths.config_dir(&profile);
@@ -902,7 +916,7 @@ pub async fn publish_gist(ctx: State<'_, AppCtx>, profile: String, with_configs:
         apply: gistsync::Apply { when, at },
     };
     gistsync::publish_release(&m, &key, &rel).await?;
-    Ok(rel.id)
+    Ok(GistPublishResult { id: rel.id, skipped_local })
 }
 
 /// `when`: "now" (stop, backup, install, start), "idle" (when nobody is online), "at" (+ `at` ms), "none".

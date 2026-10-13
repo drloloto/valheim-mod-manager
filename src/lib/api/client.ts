@@ -17,6 +17,7 @@ import type {
 	ProfileServerCheck,
 	ServerCheck,
 	ServerDiscovery,
+	GistPublishResult,
 	StageResponse,
 	WikiIndex,
 	PublishCategory,
@@ -86,11 +87,13 @@ export const api = {
 	checkServer: (profile: string) => call<ServerCheck>("check_server", { profile }),
 	checkAllServers: () => call<ProfileServerCheck[]>("check_all_servers"),
 	discoverServer: (url: string) => call<ServerDiscovery>("discover_server", { url }),
-	adoptServer: (profile: string, withConfigs: boolean, intoNew: string | null) => call<AppState>("adopt_server", { profile, withConfigs, intoNew }),
+	adoptServer: (profile: string, withConfigs: boolean, intoNew: string | null, install = true) =>
+		call<AppState>("adopt_server", { profile, withConfigs, intoNew, install }),
 	publishProfile: (profile: string, withConfigs: boolean) => call<StageResponse>("publish_profile", { profile, withConfigs }),
 	applyRelease: (profile: string, id: string, when: ApplyWhen, at: number | null) => call<ApplyResponse>("apply_release", { profile, id, when, at }),
 	/** Gist links: seal release.json (lock, configs, apply schedule) into the gist; returns the release id. */
-	publishGist: (profile: string, withConfigs: boolean, when: ApplyWhen, at: number | null) => call<string>("publish_gist", { profile, withConfigs, when, at }),
+	publishGist: (profile: string, withConfigs: boolean, when: ApplyWhen, at: number | null) =>
+		call<GistPublishResult>("publish_gist", { profile, withConfigs, when, at }),
 	discardRelease: (profile: string, id: string) => call<void>("discard_release", { profile, id }),
 	listForeignProfiles: () => call<ForeignProfile[]>("list_foreign_profiles"),
 	importForeignProfile: (path: string, name: string, withConfigs: boolean, installAll: boolean) =>

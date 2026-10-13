@@ -419,18 +419,18 @@ class ModManagerStore {
 
 	/** New profile straight from a companion: its mods, versions and configs, linked for later checks. */
 	async addServer(d: ServerDiscovery, installAll = true): Promise<boolean> {
-		if (d.syncCode) return this.addGistServer(d);
+		if (d.syncCode) return this.addGistServer(d, installAll);
 		return this.importFromUrl(`${d.url}/api/profile.r2z`, d.name || d.world || "Server", d.url, installAll);
 	}
 
 	/** A gist server has no .r2z to fetch: a new profile, linked by its code, then adopted from server.json. */
-	private async addGistServer(d: ServerDiscovery): Promise<boolean> {
+	private async addGistServer(d: ServerDiscovery, installAll: boolean): Promise<boolean> {
 		const fail = t("toast.importFailed");
 		if (!(await this.applyState(() => api.createProfile(d.name || d.world || "Server"), fail))) return false;
 		const name = this.state.active;
 		if (!name) return false;
 		if (!(await this.applyState(() => api.setServerLink(name, { url: "", name: d.name, syncCode: d.syncCode }), fail))) return false;
-		if (!(await this.applyState(() => api.adoptServer(name, true, null), fail))) return false;
+		if (!(await this.applyState(() => api.adoptServer(name, true, null, installAll), fail))) return false;
 		this.toast(t("toast.adoptedInto", { name }), "ok");
 		this.refreshServerStatus();
 		return true;
@@ -471,8 +471,9 @@ class ModManagerStore {
 		const active = this.state.active;
 		if (!active) return false;
 		try {
-			const id = await api.publishGist(active, withConfigs, when, at);
-			this.toast(t("toast.gistPublished", { id }), "ok");
+			const r = await api.publishGist(active, withConfigs, when, at);
+			this.toast(t("toast.gistPublished", { id: r.id }), "ok");
+			if (r.skippedLocal.length) this.toast(t("toast.localSkipped", { names: r.skippedLocal.join(", ") }), "info");
 			this.refreshServerStatus();
 			return true;
 		} catch (e) {

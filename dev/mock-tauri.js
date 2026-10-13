@@ -329,6 +329,7 @@
 						log: [],
 					},
 		discard_release: () => undefined,
+		publish_gist: () => ({ id: `rel-${Date.now().toString(36)}`, skippedLocal: [] }),
 		publish_profile: () => ({
 			release: {
 				id: "r1",

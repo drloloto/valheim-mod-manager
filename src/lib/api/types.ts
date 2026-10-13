@@ -192,6 +192,12 @@ export interface ReleasePlan {
 	configsNew: string[];
 }
 
+/** What publish_gist wrote: the release id, and the local mods that stayed out of it. */
+export interface GistPublishResult {
+	id: string;
+	skippedLocal: string[];
+}
+
 export interface StageResponse {
 	release: { id: string; plan: ReleasePlan; problems: string[] };
 	summary: ReleaseSummary;
