@@ -26,6 +26,11 @@ All notable changes to this project are documented here. The format follows
   enabled mods only (both transports).
 - GitHub's rate-limit answer on publishing names the bucket and the reset time instead of "HTTP 403".
 
+### Changed
+
+- Dependencies: reqwest 0.13, sha2 0.11 with hkdf 0.13, base64 0.23, winreg 0.56, tokio 1.53.2, marked 18,
+  jsdom 30 (Dependabot #5, #7 to #12). TypeScript stays on 6 until SvelteKit's peer range allows 7.
+
 ## [0.2.0] - 2026-10-11
 
 ### Added

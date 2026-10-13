@@ -269,7 +269,7 @@ pub fn config_hash(configs: &[PublishConfig]) -> String {
         h.update(c.content_base64.as_bytes());
         h.update([0]);
     }
-    format!("{:x}", h.finalize())
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 // ---- The mailbox ----
