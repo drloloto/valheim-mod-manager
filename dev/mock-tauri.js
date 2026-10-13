@@ -165,7 +165,7 @@
 			{ kind: "stale", ids: [inProfile[2]], detail: String(NOW - 200 * DAY) },
 			{ kind: "deprecated", ids: [inProfile[3]], detail: "" },
 		],
-		app: { version: "0.2.0", portable: false, dev: false, dataDir: "C:\\Users\\you\\AppData\\Roaming\\io.github.drloloto.valheim-mod-manager" },
+		app: { version: "0.3.0", portable: false, dev: false, dataDir: "C:\\Users\\you\\AppData\\Roaming\\io.github.drloloto.valheim-mod-manager" },
 	};
 	const settings = { valheimDir: null, steamExe: null, downloadConcurrency: 4, indexTtlMinutes: 30, showNsfw: false, thunderstoreToken: "tss_mock" };
 

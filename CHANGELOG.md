@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-13
+
 ### Added
 
 - Sync through a sealed GitHub gist: link a profile with the sync code the admin hands out (alone or at
