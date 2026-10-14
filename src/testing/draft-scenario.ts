@@ -15,7 +15,7 @@ await mkdir(join(CONFIG, "modmanager"), { recursive: true });
 const cfgText = ["[General]", "", "## Speed", "# Setting type: Int32", "# Default value: 1", "Speed = 1", ""].join("\n");
 await writeFile(bep("Mod.Alpha.cfg"), cfgText);
 await writeFile(bep("Other.cfg"), "[X]\nA = 1\n");
-// a plugin that merges ServerSync and re-reads its file; its GUID appears in the DLL as plain bytes
+// a plugin that merges ServerSync and mentions a watcher; its GUID appears in the DLL as plain bytes
 await writeFile(bep("plugins/Mod/Alpha.dll"), "MZ\0\0Mod.Alpha\0ServerSync\0ConfigSync\0ReadConfigValues\0");
 await writeFile(join(CONFIG, "modmanager", "installed.json"), JSON.stringify({ "Mod-Alpha": { version: "1.0.0", files: ["plugins/Mod/Alpha.dll"] } }));
 
@@ -33,7 +33,7 @@ out.plan1 = { changed: r.plan.configsChanged, restart: r.plan.restartRequired, e
 r = await stageConfigChanges("Mod.Alpha.cfg", [{ section: "General", key: "Speed", value: "1" }], info);
 out.afterUndo = { configs: r.configs, empty: summary(r).empty };
 
-// 3. a second file without a matching plugin needs a restart; a hand edit of the live copy is a conflict
+// 3. a second file without a matching plugin is "unknown"; a hand edit of the live copy is a conflict
 r = await stageConfigChanges("Other.cfg", [{ section: "X", key: "A", value: "2" }], info);
 out.plan3 = { restart: r.plan.restartRequired, effect: r.plan.effects["Other.cfg"]?.sync, conflicts: r.plan.conflicts };
 await writeFile(bep("Other.cfg"), "[X]\nA = 3\n");

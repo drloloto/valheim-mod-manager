@@ -39,7 +39,7 @@
 			? [
 					plan.install.length || plan.remove.length ? t("release.s3.whyMods") : "",
 					(() => {
-						const needing = [...plan.configsChanged, ...plan.configsNew].filter((f) => !plan.effects[f]?.liveReload);
+						const needing = [...plan.configsChanged, ...plan.configsNew];
 						return needing.length ? t("release.s3.whyConfigs", { files: needing.join(", ") }) : "";
 					})(),
 				].filter(Boolean)

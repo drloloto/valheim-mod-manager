@@ -87,20 +87,20 @@ describe("working state (own process, real files)", async () => {
 		expect(out.stagedFiles).toEqual(["Mod.Alpha.cfg"]);
 		expect(out.liveAfterEdit).toContain("Speed = 1");
 		expect(out.working).toContain("Speed = 5");
-		expect(out.plan1).toMatchObject({ changed: ["Mod.Alpha.cfg"], restart: false, empty: false, modsFrom: null });
+		expect(out.plan1).toMatchObject({ changed: ["Mod.Alpha.cfg"], restart: true, empty: false, modsFrom: null });
 		expect(out.plan1.effect).toMatchObject({ sync: "serversync", liveReload: true, mod: "Mod-Alpha", dll: "plugins/Mod/Alpha.dll" });
 	});
 	it("drops a copy that equals the live file again", () => {
 		expect(out.afterUndo).toEqual({ configs: [], empty: true });
 	});
-	it("needs a restart for a file without a live-reloading plugin and flags a hand edit as a conflict", () => {
+	it("needs a restart for every config change and flags a hand edit as a conflict", () => {
 		expect(out.plan3).toEqual({ restart: true, effect: "unknown", conflicts: [] });
 		expect(out.conflicts).toEqual(["Other.cfg"]);
 		expect(out.diff).toEqual([{ path: "Other.cfg", status: "changed", conflict: true, before: "[X]\nA = 3\n", changes: [{ section: "X", key: "A", from: "3", to: "2" }] }]);
 		expect(out.refused).toContain("changed on the server meanwhile");
 	});
 	it("releases the staged file, records it in the manifest and clears the working state", () => {
-		expect(out.report).toEqual({ written: ["Mod.Alpha.cfg"], stayedUp: true, restartRequired: false, backup: null, nothingToDo: false });
+		expect(out.report).toEqual({ written: ["Mod.Alpha.cfg"], stayedUp: false, restartRequired: true, backup: null, nothingToDo: false });
 		expect(out.liveAfterRelease).toContain("Speed = 7");
 		expect(out.pendingAfterRelease).toBeNull();
 		expect(out.manifestConfigs).toEqual(["Mod.Alpha.cfg", "Other.cfg"]);

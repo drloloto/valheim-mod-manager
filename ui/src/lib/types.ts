@@ -115,7 +115,6 @@ export type SyncKind = "serversync" | "jotunn" | "none" | "unknown";
 export interface ConfigSync {
 	sync: SyncKind;
 	liveReload: boolean;
-	versionCheck: boolean;
 	mod: string | null;
 	dll: string | null;
 }

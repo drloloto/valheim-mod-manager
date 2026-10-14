@@ -132,8 +132,9 @@ header). File formats, the client side and the test log: `docs/adr/2026-10-12-sy
   refuses until the admin reverts the staged copy or ticks "overwrite".
 - **What an edit reaches** is read from the plugin DLLs once (`config/modmanager/plugin-scan.json`, cached by
   hash): ServerSync (server values reach players when they join), Jötunn (only `IsAdminOnly` entries), or
-  nothing (client-side config: a server edit reaches nobody), and whether the mod watches its file (no
-  restart needed). The editor and the review show it per file.
+  nothing (client-side config: a server edit reaches nobody), and whether the DLL mentions a file watcher
+  (the mod probably re-reads its file). The editor and the review show it per file. All of this is a string
+  scan, so it only informs: a release that changes a config always restarts the server.
 - **Stop timeout:** the companion waits at least 120 s for the world save before Docker may kill the game,
   longer if `stop_grace_period` says so. Keep `stop_grace_period: 2m` on `valheim`.
 - **Restore** extracts into `config/modmanager/restore-tmp/`, checks the archive (no `..`, no symlinks), then

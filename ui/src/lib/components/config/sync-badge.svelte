@@ -29,8 +29,5 @@
 				{long ? t(info.liveReload ? "effect.live" : "effect.restart") : t(info.liveReload ? "effect.short.live" : "effect.short.restart")}
 			</Badge>
 		{/if}
-		{#if info.versionCheck && long}
-			<Badge variant="outline" class="border-input text-muted-foreground font-mono text-[10.5px]">{t("effect.versionCheck")}</Badge>
-		{/if}
 	</span>
 {/if}

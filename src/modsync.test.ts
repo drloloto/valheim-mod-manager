@@ -10,12 +10,12 @@ describe("plugin sync markers", () => {
 		expect(findStrings(dll, ["Therzie.Warfare", "Therzie.Monstrum"])).toEqual(["Therzie.Warfare"]);
 	});
 	it("classifies ServerSync, Jötunn and client-side mods", () => {
-		expect(classify(["ServerSync", "ConfigSync", "VersionCheck", "ReadConfigValues"])).toEqual({ sync: "serversync", liveReload: true, versionCheck: true });
-		expect(classify(["ServerSync", "ConfigSync"])).toEqual({ sync: "serversync", liveReload: false, versionCheck: false });
-		expect(classify(["SynchronizationManager", "IsAdminOnly", "FileSystemWatcher"])).toEqual({ sync: "jotunn", liveReload: true, versionCheck: false });
-		expect(classify(["SynchronizationManager"])).toEqual({ sync: "none", liveReload: false, versionCheck: false });
-		expect(classify(["IsAdminOnly"])).toEqual({ sync: "jotunn", liveReload: false, versionCheck: false });
-		expect(classify([])).toEqual({ sync: "none", liveReload: false, versionCheck: false });
+		expect(classify(["ServerSync", "ConfigSync", "VersionCheck", "ReadConfigValues"])).toEqual({ sync: "serversync", liveReload: true });
+		expect(classify(["ServerSync", "ConfigSync"])).toEqual({ sync: "serversync", liveReload: false });
+		expect(classify(["SynchronizationManager", "IsAdminOnly", "FileSystemWatcher"])).toEqual({ sync: "jotunn", liveReload: true });
+		expect(classify(["SynchronizationManager"])).toEqual({ sync: "none", liveReload: false });
+		expect(classify(["IsAdminOnly"])).toEqual({ sync: "jotunn", liveReload: false });
+		expect(classify([])).toEqual({ sync: "none", liveReload: false });
 	});
 });
 

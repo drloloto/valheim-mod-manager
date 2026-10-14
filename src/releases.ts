@@ -206,7 +206,9 @@ export async function refreshPlan(r: Release): Promise<Release> {
 		configsNew,
 		conflicts,
 		untracked: modsChange && (await firstTakeover()) ? await untrackedFiles(installed) : [],
-		restartRequired: modsChange || staged.some((rel) => !effects[rel]?.liveReload),
+		// Any config change restarts the server. The live-reload hint in `effects` is a string scan of the DLL and
+		// cannot tell which file is watched; skipping the restart on it once left edits silently ineffective.
+		restartRequired: modsChange || staged.length > 0,
 		effects,
 	};
 	r.updatedAt = Date.now();

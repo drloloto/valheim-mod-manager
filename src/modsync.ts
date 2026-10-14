@@ -2,7 +2,8 @@
 // over the file, cached by hash) for the markers of the two sync libraries and of a file watcher:
 //   ServerSync + ConfigSync            → ServerSync: the server's values reach clients when they join
 //   IsAdminOnly (± SynchronizationManager) → Jötunn: only entries marked IsAdminOnly are synced
-//   FileSystemWatcher / SetupWatcher / ReadConfigValues / ConfigFileWatcher → the mod re-reads its file
+//   FileSystemWatcher / SetupWatcher / ReadConfigValues / ConfigFileWatcher → the mod probably re-reads its
+//                                        file (a hint for the admin; a release restarts the server anyway)
 //   nothing                            → client-side config: a server edit reaches nobody
 // A config file is matched to the DLL that contains its base name (the BepInEx GUID, e.g. "Therzie.Warfare").
 import { readdir, readFile, stat } from "fs/promises";
@@ -15,10 +16,9 @@ export type SyncKind = "serversync" | "jotunn" | "none" | "unknown";
 
 export interface ConfigSync {
 	sync: SyncKind;
-	/** the mod re-reads its config file while running: no restart needed for a change to take effect */
+	/** the DLL mentions a file watcher, so the mod may re-read its config while running. A hint only: the string
+	 *  does not say which file is watched, so a release never skips the restart because of it. */
 	liveReload: boolean;
-	/** ServerSync's version check: clients with another mod version are kicked */
-	versionCheck: boolean;
 	/** the mod (manifest id) whose DLL matched, when installed.json knows the file */
 	mod: string | null;
 	/** the DLL relative to the BepInEx folder, null when no plugin mentions the config's name */
@@ -28,7 +28,6 @@ export interface ConfigSync {
 export const MARKERS = [
 	"ServerSync",
 	"ConfigSync",
-	"VersionCheck",
 	"SynchronizationManager",
 	"IsAdminOnly",
 	"FileSystemWatcher",
@@ -52,12 +51,12 @@ interface ScanEntry {
 const CACHE_FILE = join(MM_DIR, "plugin-scan.json");
 
 /** Pure classification of a DLL's markers, shared with the tests. */
-export function classify(markers: readonly string[]): Pick<ConfigSync, "sync" | "liveReload" | "versionCheck"> {
+export function classify(markers: readonly string[]): Pick<ConfigSync, "sync" | "liveReload"> {
 	const has = (m: Marker) => markers.includes(m);
 	// Jötunn syncs the entries marked IsAdminOnly; a mod sets that through ConfigurationManagerAttributes and
 	// need not mention SynchronizationManager itself (EpicLootProgressionFix does not).
 	const sync: SyncKind = has("ServerSync") && has("ConfigSync") ? "serversync" : has("IsAdminOnly") ? "jotunn" : "none";
-	return { sync, liveReload: WATCHERS.some(has), versionCheck: sync === "serversync" && has("VersionCheck") };
+	return { sync, liveReload: WATCHERS.some(has) };
 }
 
 /** Which of `needles` occur as plain ASCII bytes in `bytes` (the .NET metadata string heap is UTF-8). */
@@ -131,7 +130,7 @@ export async function configSyncInfo(configFiles: string[], bepinexDir = BEPINEX
 	for (const [id, { files }] of Object.entries(installed)) for (const f of files) modOf.set(f.replaceAll("\\", "/"), id);
 
 	const out: Record<string, ConfigSync> = {};
-	const unknown = (): ConfigSync => ({ sync: "unknown", liveReload: false, versionCheck: false, mod: null, dll: null });
+	const unknown = (): ConfigSync => ({ sync: "unknown", liveReload: false, mod: null, dll: null });
 	for (const file of configFiles) {
 		const name = baseName(file);
 		// A dependent mod's DLL mentions the GUID too (Monstrum references Therzie.Warfare), and a name every
