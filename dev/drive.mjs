@@ -1,6 +1,6 @@
-// Drives the running DEV app over CDP (start it with `pwsh dev/spike-gist.ps1 -Cdp`). No dependencies.
+// Drives the running DEV app over CDP (start it with `pwsh dev/dev-app.ps1 -Cdp`). No dependencies.
 //
-//   node dev/spike-drive.mjs [when] [out dir]
+//   node dev/drive.mjs [when] [out dir]
 //     when     none (default: the companion only stages the release) | idle | now
 //              add: instead of publishing, "Add server…" with the sync code pasted as a URL
 //                   (http://127.0.0.1:9002/vmm1.…) and check that the new profile is in sync
@@ -30,7 +30,7 @@ async function pageTarget() {
 		}
 		await sleep(500);
 	}
-	throw new Error(`no app page on CDP port ${port}; start the app with dev/spike-gist.ps1 -Cdp`);
+	throw new Error(`no app page on CDP port ${port}; start the app with dev/dev-app.ps1 -Cdp`);
 }
 
 const ws = new WebSocket((await pageTarget()).webSocketDebuggerUrl);
@@ -117,9 +117,11 @@ await shot("spike-1-main.png");
 
 if (when === "add") {
 	// "Add server…" with the code pasted the way people do it: at the end of the companion's address.
-	const env = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", ".env"), "utf-8");
-	const code = /^COMPANION_SYNC_CODE=(\S+)/m.exec(env)?.[1];
-	if (!code) fail("no COMPANION_SYNC_CODE in test/.env");
+	// The companion is the only source of its sync code.
+	const companion = process.env.COMPANION_URL ?? "http://127.0.0.1:9002";
+	const sync = await (await fetch(`${companion}/api/sync`)).json().catch(() => null);
+	const code = sync?.enabled ? sync.code : null;
+	if (!code) fail(`the companion at ${companion} has no gist sync on (pwsh test/up.ps1 -SetupSync)`);
 	const d = await evaluate(`vmm.discoverServer(${JSON.stringify(`http://127.0.0.1:9002/${code}`)})`);
 	console.log("discovered:", JSON.stringify({ ...d, syncCode: d?.syncCode ? "vmm1.…" : null }));
 	if (d?.syncCode !== code || !d.name) fail("the pasted URL was not recognised as a sync code");

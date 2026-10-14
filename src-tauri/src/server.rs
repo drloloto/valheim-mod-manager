@@ -69,12 +69,6 @@ pub struct ServerDiff {
     pub changed: Vec<Changed>,
 }
 
-impl ServerDiff {
-    pub fn is_empty(&self) -> bool {
-        self.only_server.is_empty() && self.only_local.is_empty() && self.changed.is_empty()
-    }
-}
-
 /// Local resolved set vs the server manifest; the BepInEx pack is ignored on both sides.
 pub fn diff(local: &BTreeMap<String, Resolved>, manifest: &[ManifestMod]) -> ServerDiff {
     let mut d = ServerDiff::default();
@@ -112,20 +106,40 @@ pub fn manifest_mods(profile: &Profile, resolved: &BTreeMap<String, Resolved>) -
     (mods, local)
 }
 
-/// Rewrites the profile to the manifest: every entry becomes a pinned, enabled Thunderstore mod (so the
-/// resolver cannot drift from the server). What the server lists as a dependency *of something* stays one
-/// here (`implicit`), so the profile reads like the admin's: their picks, and the rest as dependencies.
-/// An entry the server calls a dependency that nothing requires is a pick (older locks carry such
-/// entries). Local mods are kept.
+/// Writes the server's list into the profile: every listed mod becomes a pinned, enabled, `managed`
+/// Thunderstore entry in the server's version (so the resolver cannot drift from the server), replacing
+/// whatever the profile had under that id. What the server lists as a dependency *of something* stays one
+/// here (`implicit`); an entry the server calls a dependency that nothing requires is a pick (older locks
+/// carry such entries). Managed entries the server no longer lists are removed. Everything else, the
+/// player's own mods and local mods, stays untouched, so a player can run client-side extras next to
+/// the server's set.
+///
+/// A profile adopted before `managed` existed was the server list in full (the old rewrite); it is read
+/// that way once, so its next adoption behaves exactly as before.
 pub fn adopt(profile: &mut Profile, manifest: &[ManifestMod]) {
-    let mut mods: Vec<ProfileMod> = profile.mods.iter().filter(|m| m.source == Source::Local).cloned().collect();
+    let legacy = profile.server.as_ref().is_some_and(|s| s.last_adopted.is_some()) && !profile.mods.iter().any(|m| m.managed);
+    let listed = |m: &ProfileMod| manifest.iter().any(|x| x.id == m.id());
+    let servers = |m: &ProfileMod| m.managed || (legacy && m.source == Source::Thunderstore);
+    let mut mods: Vec<ProfileMod> = profile.mods.iter().filter(|m| m.source == Source::Local || (!listed(m) && !servers(m))).cloned().collect();
     for m in manifest {
         if let Some((ns, name)) = m.id.split_once('-') {
             let implicit = !m.explicit && !m.required_by.is_empty();
-            mods.push(ProfileMod { implicit, ..ProfileMod::thunderstore(ns, name, &m.version) });
+            mods.push(ProfileMod { implicit, managed: true, ..ProfileMod::thunderstore(ns, name, &m.version) });
         }
     }
     profile.mods = mods;
+}
+
+/// Whether a link carries admin credentials (publishing), on either transport.
+pub fn is_admin(link: &ServerLink) -> bool {
+    let set = |s: &Option<String>| s.as_deref().is_some_and(|t| !t.trim().is_empty());
+    set(&link.token) || set(&link.gist_token)
+}
+
+/// A player is in sync when every server mod is there in the server's version; mods only they have are
+/// theirs to keep. An admin's profile is the server list, so a mod only they have is unpublished work.
+pub fn in_sync(d: &ServerDiff, admin: bool) -> bool {
+    d.only_server.is_empty() && d.changed.is_empty() && (!admin || d.only_local.is_empty())
 }
 
 pub fn normalize_url(url: &str) -> Result<String> {
@@ -304,6 +318,9 @@ pub struct Discovery {
     /// Set when the pasted text held a sync code: the server is reached through its gist.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sync_code: Option<String>,
+    /// The gist's id, shortened: the server's identity as the page and the companion log show it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gist: Option<String>,
     pub name: String,
     pub world: String,
     pub mods: usize,
@@ -328,6 +345,24 @@ pub fn guess_base(raw: &str) -> Result<String> {
     normalize_url(&format!("{scheme}://{host}"))
 }
 
+/// `GET /api/sync` of a companion: its sync code when the gist sync is on. The companion is the only source of
+/// the code, so an address is just another way to find it; None when the companion is off, old, or has no sync.
+pub async fn fetch_sync_code(client: &reqwest::Client, base: &str) -> Option<String> {
+    #[derive(Deserialize)]
+    struct Sync {
+        #[serde(default)]
+        enabled: bool,
+        #[serde(default)]
+        code: Option<String>,
+    }
+    let res = client.get(format!("{base}/api/sync")).send().await.ok()?;
+    if !res.status().is_success() {
+        return None;
+    }
+    let s: Sync = res.json().await.ok()?;
+    s.code.filter(|c| s.enabled && !c.is_empty())
+}
+
 pub async fn discover(client: &reqwest::Client, raw: &str) -> Result<Discovery> {
     let url = guess_base(raw)?;
     let link = ServerLink { url: url.clone(), ..Default::default() };
@@ -335,6 +370,7 @@ pub async fn discover(client: &reqwest::Client, raw: &str) -> Result<Discovery> 
     Ok(Discovery {
         url,
         sync_code: None,
+        gist: None,
         name: m.server.name,
         world: m.server.world,
         mods: m.mods.iter().filter(|x| !is_pack(&x.id)).count(),
@@ -432,7 +468,7 @@ mod tests {
         assert_eq!(d.only_local.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["b-B"]);
         assert!(!d.only_local[0].explicit);
         assert_eq!(d.only_server, vec![mm("c-C", "1.0.0")]);
-        assert!(diff(&local, &[mm("a-A", "1.0.0"), mm("b-B", "1.0.0")]).is_empty());
+        assert!(in_sync(&diff(&local, &[mm("a-A", "1.0.0"), mm("b-B", "1.0.0")]), true));
     }
 
     #[test]
@@ -446,6 +482,7 @@ mod tests {
             source: Source::Local,
             pinned: false,
             implicit: false,
+            managed: false,
             deps: vec![],
         });
         let mut resolved = BTreeMap::new();
@@ -484,6 +521,43 @@ mod tests {
         resolved.insert("c-C".to_string(), res("1.0.0", &[]));
         let (mods, _) = manifest_mods(&p, &resolved);
         assert_eq!(mods.iter().map(|m| (m.id.as_str(), m.explicit)).collect::<Vec<_>>(), vec![("a-A", true), ("b-B", false), ("c-C", true)]);
+    }
+
+    #[test]
+    fn adopt_replaces_the_servers_set_and_keeps_the_players_own_mods() {
+        let ids = |p: &Profile| p.mods.iter().map(|m| (m.id(), m.version.clone(), m.managed)).collect::<Vec<_>>();
+        let own = |id: &str, v: &str| (id.to_string(), v.to_string(), false);
+        let srv = |id: &str, v: &str| (id.to_string(), v.to_string(), true);
+        let mods = vec![ProfileMod::thunderstore("me", "Minimap", "1.0.0"), ProfileMod::thunderstore("a", "A", "1.0.0")];
+        let mut p = Profile { name: "p".into(), mods, server: None };
+        // first adoption: a-A takes the server's version, the player's Minimap stays
+        adopt(&mut p, &[mm("a-A", "1.5.0"), mm("b-B", "2.0.0")]);
+        assert_eq!(ids(&p), vec![own("me-Minimap", "1.0.0"), srv("a-A", "1.5.0"), srv("b-B", "2.0.0")]);
+        // the server drops b-B and the player has added c-C meanwhile: b-B goes, c-C stays
+        p.mods.push(ProfileMod::thunderstore("c", "C", "3.0.0"));
+        adopt(&mut p, &[mm("a-A", "1.6.0")]);
+        assert_eq!(ids(&p), vec![own("me-Minimap", "1.0.0"), own("c-C", "3.0.0"), srv("a-A", "1.6.0")]);
+        assert!(p.mods.iter().all(|m| m.enabled));
+    }
+
+    #[test]
+    fn adopt_reads_a_profile_adopted_before_managed_existed_as_the_server_list() {
+        let link = ServerLink { last_adopted: Some("h:c".into()), ..Default::default() };
+        let mods = vec![ProfileMod::thunderstore("a", "A", "1.0.0"), ProfileMod::thunderstore("old", "Gone", "1.0.0")];
+        let mut p = Profile { name: "p".into(), mods, server: Some(link) };
+        adopt(&mut p, &[mm("a-A", "1.0.0")]);
+        assert_eq!(p.mods.iter().map(|m| (m.id(), m.managed)).collect::<Vec<_>>(), vec![("a-A".to_string(), true)]);
+    }
+
+    #[test]
+    fn in_sync_ignores_a_players_own_mods_but_not_an_admins() {
+        let extra = ServerDiff { only_local: vec![mm("me-Minimap", "1.0.0")], ..Default::default() };
+        assert!(in_sync(&extra, false));
+        assert!(!in_sync(&extra, true));
+        let missing = ServerDiff { only_server: vec![mm("a-A", "1.0.0")], ..Default::default() };
+        assert!(!in_sync(&missing, false));
+        assert!(is_admin(&ServerLink { gist_token: Some("g".into()), ..Default::default() }));
+        assert!(!is_admin(&ServerLink { token: Some(" ".into()), ..Default::default() }));
     }
 
     #[test]

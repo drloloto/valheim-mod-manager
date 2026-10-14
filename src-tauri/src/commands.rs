@@ -440,6 +440,12 @@ pub async fn clone_profile(ctx: State<'_, AppCtx>, from: String, to: String) -> 
 #[tauri::command]
 pub fn set_mods(app: AppHandle, ctx: State<'_, AppCtx>, profile: String, mods: Vec<ProfileMod>) -> Result<AppState> {
     let mut p = profiles::load(&ctx.paths, &profile)?;
+    // The UI edits the list but never the server's claim on an entry: `managed` survives any round trip.
+    let managed: HashSet<String> = p.mods.iter().filter(|m| m.managed).map(ProfileMod::id).collect();
+    let mut mods = mods;
+    for m in &mut mods {
+        m.managed |= managed.contains(&m.id());
+    }
     p.mods = merge_implicit(&p.mods, mods);
     profiles::save(&ctx.paths, &p)?;
     prune_local_copies(&ctx.paths, &profile, &p.mods);
@@ -663,7 +669,7 @@ async fn check_gist(ctx: &AppCtx, profile: &str, link: &ServerLink, m: &gistsync
     let changed = configs_changed(ctx, profile, &s.configs);
     // Mods and versions must match. Configs are the server's business: synced mods hand them to the
     // client at join, and a profile created from the server took the rest once (see adopt_server).
-    let in_sync = diff.is_empty();
+    let in_sync = server::in_sync(&diff, server::is_admin(link));
     ServerCheck {
         reachable: true,
         error: None,
@@ -695,6 +701,31 @@ pub fn set_server_link(ctx: State<'_, AppCtx>, profile: String, link: Option<Ser
     p.server = link.map(|l| merge_link(p.server.as_ref(), l)).transpose()?;
     profiles::save(&ctx.paths, &p)?;
     build_state(&ctx)
+}
+
+/// The invite for a gist-linked profile: the server's sync code and name, nothing else (no companion address, no
+/// token). Whoever opens it links read-only through the gist; the code cannot write to it.
+#[tauri::command]
+pub fn invite_link(ctx: State<'_, AppCtx>, profile: String) -> Result<String> {
+    let link = link_of(&ctx, &profile)?;
+    let code = link.sync_code.as_deref().ok_or_else(|| AppError::Invalid("This profile is not linked through a sync code.".into()))?;
+    let name = if link.name.trim().is_empty() { profile.as_str() } else { link.name.trim() };
+    Ok(invite_url(code, name))
+}
+
+/// `valheim-mod-manager://import?code=…&name=…`, percent-encoded like `encodeURIComponent`.
+pub fn invite_url(code: &str, name: &str) -> String {
+    fn enc(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        for b in s.bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')' => out.push(b as char),
+                _ => out.push_str(&format!("%{b:02X}")),
+            }
+        }
+        out
+    }
+    format!("valheim-mod-manager://import?code={}&name={}", enc(code), enc(name))
 }
 
 /// What the server should run: the profile without its disabled mods (and whatever only they pulled in).
@@ -749,7 +780,7 @@ async fn check_link(ctx: &AppCtx, profile: &str) -> Result<ServerCheck> {
                 error: None,
                 name: m.server.name,
                 world: m.server.world,
-                in_sync: diff.is_empty(),
+                in_sync: server::in_sync(&diff, server::is_admin(&link)),
                 diff,
                 server_mods: m.mods.len(),
                 server_configs: m.configs.len(),
@@ -787,19 +818,29 @@ pub async fn check_all_servers(ctx: State<'_, AppCtx>) -> Result<Vec<ProfileServ
     Ok(linked.into_iter().zip(checks).filter_map(|(profile, c)| c.ok().map(|check| ProfileServerCheck { profile, check })).collect())
 }
 
-/// "Autoconfig": anything that points at a companion becomes a link candidate.
+/// "Autoconfig": anything that points at a companion becomes a link candidate. The companion is the only
+/// source of its sync code: a pasted code is used as is, an address is asked for one (`/api/sync`), and
+/// only a companion without the gist sync is linked over HTTP.
 #[tauri::command]
 pub async fn discover_server(ctx: State<'_, AppCtx>, url: String) -> Result<server::Discovery> {
-    // A sync code (alone or inside a URL) means a gist server: read server.json, no token needed.
-    if let Some(code) = gistsync::find_sync_code(&url) {
+    let quick = thunderstore::http_client(Duration::from_secs(3), Duration::from_secs(6))?;
+    let code = match gistsync::find_sync_code(&url) {
+        Some(c) => Some(c),
+        None => match server::guess_base(&url) {
+            Ok(base) => server::fetch_sync_code(&quick, &base).await,
+            Err(_) => None,
+        },
+    };
+    if let Some(code) = code {
+        let parsed = gistsync::parse_sync_code(&code)?;
         let link = ServerLink { sync_code: Some(code.clone()), ..Default::default() };
         let (m, key) = gist_of(&ctx, &link)?.ok_or_else(|| AppError::Invalid("That is not a sync code.".into()))?;
         let s = gistsync::read_server(&m, &key).await?.ok_or_else(|| AppError::Network("The server has not written to the gist yet.".into()))?;
         let mods = s.manifest.as_ref().map_or(0, |m| m.mods.iter().filter(|x| !server::is_pack(&x.id)).count());
         let features = BTreeMap::from([("publish".to_string(), true)]);
-        return Ok(server::Discovery { url: String::new(), sync_code: Some(code), name: s.server.name, world: s.server.world, mods, features });
+        let gist = Some(parsed.gist_id.chars().take(8).collect());
+        return Ok(server::Discovery { url: String::new(), sync_code: Some(code), gist, name: s.server.name, world: s.server.world, mods, features });
     }
-    let quick = thunderstore::http_client(Duration::from_secs(3), Duration::from_secs(6))?;
     server::discover(&quick, &url).await
 }
 
@@ -1135,6 +1176,13 @@ mod tests {
     }
 
     const CODE: &str = "vmm1.5f2964a03b693a8655578dfdcbd4b6b6.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    #[test]
+    fn invite_carries_only_code_and_name() {
+        let u = invite_url("vmm1.5f2964a03b693a8655578dfdcbd4b6b6.4okNMk4QDw6NEzsno2auxfX_CZ3Xs-XnfjeD0LCFp-M", "Peters Welte & Co");
+        assert_eq!(u, "valheim-mod-manager://import?code=vmm1.5f2964a03b693a8655578dfdcbd4b6b6.4okNMk4QDw6NEzsno2auxfX_CZ3Xs-XnfjeD0LCFp-M&name=Peters%20Welte%20%26%20Co");
+        assert!(!u.contains("http"));
+    }
 
     fn link(url: &str, token: Option<&str>, code: Option<&str>, gist_token: Option<&str>) -> ServerLink {
         ServerLink {

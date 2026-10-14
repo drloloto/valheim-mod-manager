@@ -1,6 +1,7 @@
 # Claude Code notes
 
-Read [AGENTS.md](AGENTS.md) first; it has the commands, the repository map and the rules.
+Read `../CLAUDE.md` (the workspace: start folder, test stack, the one-sync rule) and [AGENTS.md](AGENTS.md)
+first; AGENTS.md has the commands, the repository map and the rules.
 
 Claude-specific additions:
 

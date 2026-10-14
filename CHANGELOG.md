@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-14
+
+### Added
+
+- Invite links: the companion's page and the publish dialog ("Copy invite link") hand out a link that
+  opens the Mod Manager with the server's sync code and name (`valheim-mod-manager://import?code=…`), or
+  a static page (`web/join.html`) that does, when the companion is told where that page is published.
+  Pasting the companion's address asks it for its sync code, so players never need the address afterwards.
+- A linked profile keeps the player's own mods. Adoption writes the server's mods (shown as "From the
+  server" in the list) in the server's versions, removes what the server dropped and leaves everything
+  else alone. "In sync" means every server mod is there in the server's version; a player's extra mods
+  are no difference and no longer prompt. Profiles adopted by 0.3.0 are read as the server's full list
+  once, so their next adoption behaves as before (`docs/superpowers/specs/2026-10-14-server-managed-mods.md`).
+
+### Changed
+
+- DEV build: own scheme `valheim-mod-manager-dev://`, so the test companion's button opens the DEV app
+  and never the installed one. `dev/dev-app.ps1` starts it against the test stack and `dev/drive.mjs`
+  steers it over CDP; they replace `dev/spike-gist.ps1` and `dev/spike-drive.mjs`.
+
 ## [0.3.0] - 2026-10-13
 
 ### Added

@@ -80,9 +80,11 @@ pub fn run() {
                 }
             }
             tauri::async_runtime::spawn(commands::index_worker(app.handle().clone()));
-            // The installers register the scheme; this covers `npm run tauri dev` and the portable build.
+            // The installers register the scheme; this covers `npm run tauri dev` and the portable build. The
+            // dev app registers its own scheme (`valheim-mod-manager-dev`, tauri.dev.conf.json), so a test
+            // companion's button opens the dev app and never the installed one.
             #[cfg(any(windows, target_os = "linux"))]
-            if !dev {
+            {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 if let Err(e) = app.deep_link().register_all() {
                     eprintln!("deep link registration failed: {e}");
@@ -120,6 +122,7 @@ pub fn run() {
             commands::adopt_server,
             commands::publish_profile,
             commands::publish_gist,
+            commands::invite_link,
             commands::apply_release,
             commands::discard_release,
             commands::list_foreign_profiles,

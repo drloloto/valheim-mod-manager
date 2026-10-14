@@ -324,8 +324,9 @@ class ModManagerStore {
 		const handle = (urls: string[]) => {
 			for (const u of urls) {
 				const d = parseDeepLink(u);
-				if (d) this.importFromUrl(d.url, d.name, d.link);
-				else this.toast(t("toast.deepLinkInvalid"), "err");
+				if (!d) this.toast(t("toast.deepLinkInvalid"), "err");
+				else if (d.code) this.addServerByCode(d.code, d.name);
+				else if (d.url) this.importFromUrl(d.url, d.name, d.link);
 			}
 		};
 		try {
@@ -451,6 +452,13 @@ class ModManagerStore {
 	async addServer(d: ServerDiscovery, installAll = true, withConfigs = true): Promise<boolean> {
 		if (d.syncCode) return this.addGistServer(d, installAll, withConfigs);
 		return this.importFromUrl(`${d.url}/api/profile.r2z`, d.name || d.world || "Server", d.url, installAll, withConfigs);
+	}
+
+	/** The companion page's button for a gist server: read server.json by the code, then the "Add server…" path. */
+	async addServerByCode(code: string, name = ""): Promise<boolean> {
+		const d = await this.discoverServer(code);
+		if (!d) return false;
+		return this.addServer({ ...d, name: name || d.name }, true, true);
 	}
 
 	/** A gist server has no .r2z to fetch: a new profile, linked by its code, then adopted from server.json. */
@@ -958,6 +966,17 @@ class ModManagerStore {
 			await openUrl(url);
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.openLinkFailed")), "err");
+		}
+	}
+
+	/** The invite for the active profile's server: its sync code and name, no address, read-only for whoever opens it. */
+	async copyInviteLink() {
+		const active = this.state.active;
+		if (!active) return;
+		try {
+			await this.copyText(await api.inviteLink(active), t("server.inviteCopied"));
+		} catch (e) {
+			this.toast(errorMessage(e, t("common.copyFailed")), "err");
 		}
 	}
 

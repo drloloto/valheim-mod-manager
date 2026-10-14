@@ -1,6 +1,6 @@
 # Gist sync as a first-class server link
 
-Date: 2026-10-12. The spike on `spike/gist-sync` (spec and result: `../../../../spike-sync/CLIENT-SPIKE.md`)
+Date: 2026-10-12. The spike on `spike/gist-sync` (spec and result: `../../../../companion/docs/adr/2026-10-12-sync-through-a-gist.md`)
 showed that a profile can follow a server through one sealed GitHub gist instead of an open companion port:
 the companion writes `server.json`, the admin's Mod Manager writes `release.json`, both AES-256-GCM sealed
 with a key derived from the sync code. Read, adopt, publish and the companion's status report work end to
@@ -30,7 +30,7 @@ end against the test stack. This spec turns the spike into the product feature o
 7. **Rate limits are named.** A 403 with an empty bucket tells the admin which bucket (`gist_update`, 100
    writes per hour per user, shared with the companion) and when it resets. The companion side writes
    `server.json` only when the server changed (fixed in `../companion` on 2026-10-12).
-8. **Dev build and scenario stay.** `tauri.dev.conf.json`, `dev/spike-gist.ps1` and `dev/spike-drive.mjs`
+8. **Dev build and scenario stay.** `tauri.dev.conf.json`, `dev/dev-app.ps1` and `dev/drive.mjs` (renamed on 2026-10-14; the sync code now comes from the companion's `/api/sync`)
    are the regression check for this feature against the test companion; they are not part of the release.
 
 9. **One vocabulary for the server state.** `src/lib/api/server-view.ts` turns a check into one of five
