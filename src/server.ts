@@ -6,7 +6,7 @@ import { join } from "path";
 import { isAuthed, requireFeature, requireToken } from "./auth";
 import { createBackup, deleteBackup, importBackup, inspectBackup, listBackups, restoreFiles, safeId } from "./backups";
 import { listConfigFiles, parseConfigText, type ConfigChange } from "./bepinexconfig";
-import { DEEPLINK_SCHEME, FEATURES, PUBLIC_URL, VERSION, getTokenSource, resolveToken, tokenConfigured } from "./config";
+import { DEEPLINK_SCHEME, FEATURES, INVITE_URL, PUBLIC_URL, VERSION, getTokenSource, resolveToken, tokenConfigured } from "./config";
 import { containerAction, containerState, type ContainerAction } from "./docker";
 import { activeWorld, envValue, readEnv, writeEnv } from "./env";
 import { writeAtomic } from "./fsutil";
@@ -126,6 +126,7 @@ api.get("/status", async (c) => {
 			tokenSource: getTokenSource(),
 			publicUrl: PUBLIC_URL || null,
 			scheme: DEEPLINK_SCHEME,
+			inviteUrl: INVITE_URL || null,
 			features: FEATURES,
 			authed,
 		},

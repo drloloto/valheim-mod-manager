@@ -27,6 +27,15 @@
 		`${scheme}://import?${code ? `code=${encodeURIComponent(code)}&` : ""}url=${encodeURIComponent(`${base}/api/profile.r2z`)}&name=${encodeURIComponent(name)}&link=${encodeURIComponent(base)}`,
 	);
 
+	// The invite: the server's identity only (sync code + name), never this companion's address. The code lets a
+	// Mod Manager read the lock and the configs; writing needs the admin's gist token, which no invite carries.
+	const inviteLink = $derived.by(() => {
+		if (!code) return null;
+		const q = `code=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`;
+		const base = s?.companion.inviteUrl;
+		return base ? `${base}#${q}` : `${scheme}://import?${q}`;
+	});
+
 	// Reload the list when the published lock changes (a primitive, so the 15 s status poll does not refetch).
 	const hash = $derived(s?.manifest?.hash);
 	$effect(() => {
@@ -135,6 +144,16 @@
 					>
 				{/if}
 			</p>
+			{#if inviteLink}
+				<div class="bg-field flex flex-col gap-2 rounded-md p-3 text-sm" data-testid="invite">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<span class="font-semibold">{t("home.inviteTitle")}</span>
+						<Button variant="outline" size="sm" onclick={() => copy(inviteLink)}><CopyIcon />{t("home.inviteCopy")}</Button>
+					</div>
+					<code class="font-mono text-xs break-all">{inviteLink}</code>
+					<p class="text-muted-foreground text-xs leading-relaxed">{t("home.inviteHint")}</p>
+				</div>
+			{/if}
 		</section>
 	{/if}
 

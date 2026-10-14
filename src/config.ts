@@ -40,6 +40,10 @@ export const DEEPLINK_SCHEME =
 		.trim()
 		.toLowerCase()
 		.replace(/[^a-z0-9-]/g, "") || "valheim-mod-manager";
+/** Optional https page that forwards an invite to the app (the client repo's web/join.html on GitHub Pages).
+ *  With it the invite link is clickable in any chat; without it the invite is the raw `scheme://import?code=…`
+ *  link. The code travels in the URL fragment, which browsers never send to the page's server. */
+export const INVITE_URL = (process.env.COMPANION_INVITE_URL || "").trim().replace(/\/$/, "");
 export const VERSION = "0.3.0";
 
 const TOKEN_FILE = join(MM_DIR, "companion-token");

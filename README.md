@@ -93,13 +93,22 @@ adopts mods and configs before the game starts; players need neither an address 
 enters the same gist token under _Link server…_ in the Mod Manager to publish. _Turn sync off_ stops the
 poller and forgets the file; the gist stays on GitHub. API: `GET/POST/DELETE /api/sync`.
 
-| Variable                    | Effect                                                                                                          |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `COMPANION_SYNC_CODE`       | sync code from the environment instead of the page (the page can then not change it)                            |
-| `COMPANION_GIST_TOKEN`      | the token for it; without a token releases are still read, `server.json` is not written                         |
-| `COMPANION_GIST_POLL`       | seconds between polls (default 60, minimum 10); a 304 costs no rate limit with a token                          |
-| `COMPANION_GIST_API`        | API base, default `https://api.github.com` (tests use `src/testing/fakegist.ts`)                                |
-| `COMPANION_DEEPLINK_SCHEME` | URL scheme of the button, default `valheim-mod-manager`; `valheim-mod-manager-dev` opens the client's DEV build |
+| Variable                    | Effect                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `COMPANION_SYNC_CODE`       | sync code from the environment instead of the page (the page can then not change it)                                                          |
+| `COMPANION_GIST_TOKEN`      | the token for it; without a token releases are still read, `server.json` is not written                                                       |
+| `COMPANION_GIST_POLL`       | seconds between polls (default 60, minimum 10); a 304 costs no rate limit with a token                                                        |
+| `COMPANION_GIST_API`        | API base, default `https://api.github.com` (tests use `src/testing/fakegist.ts`)                                                              |
+| `COMPANION_DEEPLINK_SCHEME` | URL scheme of the button, default `valheim-mod-manager`; `valheim-mod-manager-dev` opens the client's DEV build                               |
+| `COMPANION_INVITE_URL`      | https page that forwards an invite to the app (the client repo's `web/join.html` on GitHub Pages); without it the invite is the raw deep link |
+
+**Inviting players:** the page shows an _Invite link for players_ once the sync is on. It carries only the
+sync code and the server name, never this companion's address, so it can be sent to friends outside the LAN;
+the companion itself stays unreachable for them. The code lets the Mod Manager read the lock and the configs;
+writing needs the admin's gist token, which no invite carries. Custom-scheme links are not clickable in most
+chats, so publish `web/join.html` from the client repository (GitHub Pages) and set `COMPANION_INVITE_URL` to
+its address: the invite becomes an https link whose fragment (`#code=…`) never reaches any server. The admin
+can also copy the same invite from the Mod Manager's publish dialog.
 
 CLI for trying it without the client: `bun run src/gistsync.ts create|publish|read|code …` (see the file
 header). File formats, the client side and the test log: `docs/adr/2026-10-12-sync-through-a-gist.md`.

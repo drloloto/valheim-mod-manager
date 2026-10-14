@@ -60,6 +60,10 @@ export const en = {
 	"home.depOf": "dependency of {mods}",
 	"home.dependency": "dependency",
 	"home.codeHint": "The sync code for “Link server…” is",
+	"home.inviteTitle": "Invite link for players",
+	"home.inviteCopy": "Copy",
+	"home.inviteHint":
+		"Send this to your friends. It holds only the server's sync code and name, no address of this companion. With it the Mod Manager reads the server's mods and configs and can change nothing on the server. Friends need the Mod Manager installed; the code also works pasted into “Link server…”.",
 	"takeover.found": "{n} packages lie in plugins/ by hand and are not in the lock yet: {ids}.",
 	"takeover.none": "Nothing in plugins/ looks like a Thunderstore package (a folder named Namespace-Name).",
 	"takeover.unidentified": "Not identified (no Namespace-Name folder), the first publish from the Mod Manager covers them: {names}.",

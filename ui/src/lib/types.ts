@@ -40,6 +40,8 @@ export interface Status {
 		publicUrl: string | null;
 		/** URL scheme of the "Open in Mod Manager" button (the client's DEV build has its own) */
 		scheme: string;
+		/** https page that forwards an invite to the app; null → the invite is the raw deep link */
+		inviteUrl: string | null;
 		features: Features;
 		authed: boolean;
 	};

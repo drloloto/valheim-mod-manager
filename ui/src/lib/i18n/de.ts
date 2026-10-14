@@ -62,6 +62,10 @@ export const de: Record<MessageKey, string> = {
 	"home.depOf": "Abhängigkeit von {mods}",
 	"home.dependency": "Abhängigkeit",
 	"home.codeHint": "Der Sync-Code für „Server verknüpfen…“ ist",
+	"home.inviteTitle": "Einladungslink für Spieler",
+	"home.inviteCopy": "Kopieren",
+	"home.inviteHint":
+		"Schick das deinen Freunden. Der Link enthält nur Sync-Code und Namen des Servers, keine Adresse dieses Companions. Damit liest der Mod Manager die Mods und Configs des Servers und kann auf dem Server nichts ändern. Freunde brauchen den installierten Mod Manager; der Code funktioniert auch eingefügt unter „Server verknüpfen…“.",
 	"takeover.found": "{n} Pakete liegen von Hand in plugins/ und sind noch nicht im Lock: {ids}.",
 	"takeover.none": "Nichts in plugins/ sieht wie ein Thunderstore-Paket aus (ein Ordner namens Namespace-Name).",
 	"takeover.unidentified": "Nicht zugeordnet (kein Namespace-Name-Ordner), das erste Veröffentlichen aus dem Mod Manager übernimmt sie: {names}.",
