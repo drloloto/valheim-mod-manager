@@ -1,6 +1,6 @@
 // Encryption for the gist mailbox. A gist is "unlisted", not private: whoever knows its id can read it, so
 // every file in it is sealed with a key derived from the sync code's secret. The same parameters are
-// implemented by the Mod Manager (Rust: hkdf + aes-gcm), so keep them stable: see SPEC in spike-sync/.
+// implemented by the Mod Manager (Rust: hkdf + aes-gcm), so keep them stable: docs/adr/2026-10-12-sync-through-a-gist.md.
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "crypto";
 import { gunzipSync, gzipSync } from "zlib";
 

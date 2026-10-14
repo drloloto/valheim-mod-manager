@@ -101,7 +101,7 @@ poller and forgets the file; the gist stays on GitHub. API: `GET/POST/DELETE /ap
 | `COMPANION_DEEPLINK_SCHEME` | URL scheme of the button, default `valheim-mod-manager`; `valheim-mod-manager-dev` opens the client's DEV build |
 
 CLI for trying it without the client: `bun run src/gistsync.ts create|publish|read|code …` (see the file
-header). File formats and the client side: `../spike-sync/CLIENT-SPIKE.md`.
+header). File formats, the client side and the test log: `docs/adr/2026-10-12-sync-through-a-gist.md`.
 
 ### What the companion does to an existing server
 

@@ -28,6 +28,11 @@ the server, can act on it, and never gets in the way when you do things by hand.
 
 ## Next (in order of value for a small friends' server)
 
+- The admin UI moves into the Mod Manager and both apps into one repository; this web UI shrinks to the
+  landing page (button, sync code, sync setup). Design, slices and open decisions:
+  `../modmanager-client/docs/superpowers/specs/2026-10-14-admin-ui-in-client-and-monorepo-design.md`.
+  Decided 2026-10-14: the gist stays the players' transport; HTTP stays the admin surface on the LAN.
+
 2. **Mod updates on the server** — "N updates available" per installed mod (Thunderstore package endpoint
    per mod, no full index), one-click update into the manifest, change log link. Clients see the new lock
    before Play and adopt it.
