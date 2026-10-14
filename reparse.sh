@@ -20,4 +20,9 @@ if ! docker compose ps --status running companion --format '{{.Name}}' 2>/dev/nu
 	echo "the companion container is not running here (docker compose ps companion)" >&2
 	exit 3
 fi
+# The comparison lives in the image, not in this folder: after a git pull the container must be rebuilt first.
+if ! docker compose exec -T companion test -f src/reparse.ts 2>/dev/null; then
+	echo "the running companion is older than this script; rebuild it first: bash companion/install.sh update" >&2
+	exit 4
+fi
 exec docker compose exec -T companion bun run src/reparse.ts "$@"
