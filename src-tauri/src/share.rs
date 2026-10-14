@@ -222,6 +222,7 @@ mod tests {
             source: Source::Local,
             pinned: false,
             implicit: false,
+            managed: false,
             deps: vec![],
         }
     }

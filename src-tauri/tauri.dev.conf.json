@@ -3,5 +3,12 @@
 	"identifier": "io.github.drloloto.valheim-mod-manager.dev",
 	"bundle": {
 		"createUpdaterArtifacts": false
+	},
+	"plugins": {
+		"deep-link": {
+			"desktop": {
+				"schemes": ["valheim-mod-manager-dev"]
+			}
+		}
 	}
 }

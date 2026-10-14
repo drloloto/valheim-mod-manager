@@ -242,6 +242,10 @@
 											>
 										{:else if r.m.source === "local"}
 											<span class="text-muted-foreground text-xs">{t("installed.localMod")}</span>
+										{:else if r.m.managed}
+											<span class="text-muted-foreground truncate text-xs"
+												><span class="text-primary">{t("installed.managed")}</span>{p ? ` · ${p.desc}` : ""}</span
+											>
 										{:else if p}
 											<span class="text-muted-foreground truncate text-xs">{p.desc}</span>
 										{/if}

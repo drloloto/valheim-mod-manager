@@ -91,6 +91,7 @@ export const api = {
 		call<AppState>("adopt_server", { profile, withConfigs, intoNew, install }),
 	publishProfile: (profile: string, withConfigs: boolean) => call<StageResponse>("publish_profile", { profile, withConfigs }),
 	applyRelease: (profile: string, id: string, when: ApplyWhen, at: number | null) => call<ApplyResponse>("apply_release", { profile, id, when, at }),
+	inviteLink: (profile: string) => call<string>("invite_link", { profile }),
 	/** Gist links: seal release.json (lock, configs, apply schedule) into the gist; returns the release id. */
 	publishGist: (profile: string, withConfigs: boolean, when: ApplyWhen, at: number | null) =>
 		call<GistPublishResult>("publish_gist", { profile, withConfigs, when, at }),

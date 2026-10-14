@@ -75,6 +75,8 @@ export interface ProfileMod {
 	/** Skipped by update detection and "Update all"; set when an older version is picked on purpose. */
 	pinned?: boolean;
 	deps?: string[];
+	/** Listed by the linked server: adoption sets its version and removes it when the server drops it. */
+	managed?: boolean;
 }
 
 export interface Plan {
@@ -162,6 +164,8 @@ export interface ServerDiscovery {
 	url: string;
 	/** set when the pasted text held a sync code: the server is reached through its gist */
 	syncCode?: string | null;
+	/** the gist's id, shortened: the server's identity as the companion page shows it */
+	gist?: string | null;
 	name: string;
 	world: string;
 	mods: number;

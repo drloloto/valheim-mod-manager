@@ -145,6 +145,10 @@
 					{#if !store.server?.hasGistToken}
 						<p class="text-destructive-text">{t("server.noGistToken")}</p>
 					{/if}
+					<div class="flex flex-wrap items-center gap-2">
+						<Button variant="outline" size="sm" onclick={() => store.copyInviteLink()}>{t("server.inviteCopy")}</Button>
+						<span class="text-muted-foreground text-xs">{t("server.inviteHint")}</span>
+					</div>
 					<label class="flex items-center gap-2">
 						<Checkbox bind:checked={withConfigs} />
 						{t("server.withConfigs")}
@@ -326,6 +330,7 @@
 						<span class="font-semibold">{discovery.name || discovery.url || discovery.syncCode}</span>
 						{#if discovery.world}· {discovery.world}{/if}
 						· {t("server.discoveredMods", { n: discovery.mods })}
+						{#if discovery.gist}· <span class="font-mono">{t("server.viaGist", { id: discovery.gist })}</span>{/if}
 					</p>
 					{#if discovery.features.modManager === false}<p class="text-destructive-text text-xs">{t("server.noModManager")}</p>{/if}
 				{/if}

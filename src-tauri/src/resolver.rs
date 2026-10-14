@@ -229,6 +229,7 @@ mod tests {
             source: Source::Local,
             pinned: false,
             implicit: false,
+            managed: false,
             deps: vec!["b-B-1.0.0".into()],
         };
         let p = plan(&[local], &idx, &Installed::new());

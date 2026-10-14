@@ -64,6 +64,10 @@ pub struct ProfileMod {
     /// adoption replaces the set.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub implicit: bool,
+    /// Listed by the linked server: set on every entry an adoption writes. The next adoption replaces exactly
+    /// this set (server versions win, what the server dropped goes); the player's own mods are left alone.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub managed: bool,
 }
 
 impl ProfileMod {
@@ -81,6 +85,7 @@ impl ProfileMod {
             pinned: false,
             deps: vec![],
             implicit: false,
+            managed: false,
         }
     }
 }
