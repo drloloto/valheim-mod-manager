@@ -28,11 +28,12 @@ touched and that the companion reads the same world the game runs. A failure in 
 restores `.env` and removes the companion, so the server is as before. It prints the URL and the admin token
 at the end.
 
-| Command                               | What it does                                                                  |
-| ------------------------------------- | ----------------------------------------------------------------------------- |
-| `bash companion/install.sh update`    | after copying a new version: rebuild and restart only the companion           |
-| `bash companion/install.sh status`    | re-run the checks against the running companion                               |
-| `bash companion/install.sh uninstall` | remove container, file and `.env` lines; `config/modmanager`, `backups/` stay |
+| Command                               | What it does                                                                                                                                                                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bash companion/install.sh update`    | after copying a new version: rebuild and restart only the companion                                                                                                                                                                                           |
+| `bash companion/install.sh status`    | re-run the checks against the running companion                                                                                                                                                                                                               |
+| `bash companion/install.sh uninstall` | remove container, file and `.env` lines; `config/modmanager`, `backups/` stay                                                                                                                                                                                 |
+| `bash companion/reparse.sh [--write]` | compare what runs (companion installs, hand-installed folders, loose files) with the lock; `--write` replaces the lock with what is on disk unless a package cannot be resolved, a release is staged or entries would be dropped (`--force` for the last two) |
 
 Options: `--bind <ip>`, `--port <n>`, `--service <game service>`, `--dir <compose dir>`, `--yes`.
 
