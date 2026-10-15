@@ -8,7 +8,7 @@ from the Mod Manager, a config edit in the browser — goes into one **working s
 in one guided release: server now → working state → review (diff) → release.
 It replaces `webapp`. Everything is optional; see the switches below. Where this is heading: [ROADMAP.md](ROADMAP.md).
 
-Design: `modmanager-client/docs/specs/2026-10-10-server-companion-design.md`.
+Design: `docs/specs/2026-10-10-server-companion-design.md` (repository root).
 
 ## Install
 
@@ -235,9 +235,8 @@ the mod list, mod configs. With the admin token: release (the four-step flow), s
   `@git-diff-view/svelte`) → release (backup checkbox, overwrite conflicts, now / when nobody is online / at
   a time).
 
-- **Same look as the client:** `bun run sync` in `ui/` copies the tokens (`theme.css`), the shadcn "vega" style, the
-  shadcn primitives and the kit components unchanged from `../modmanager-client`. Never edit those copies; change
-  the client and sync.
+- **Same look as the client:** the tokens (`theme.css`), the shadcn "vega" style, the shadcn primitives and the shared
+  kit components come from `@vmm/ui` (`packages/ui`), the same package the client uses. There are no copies any more.
 - **Security:** strict CSP per page (scripts only from the server, hashed bootstrap, no `data:` fonts, no
   framing), `nosniff`, `no-referrer`, COOP/CORP; no `{@html}`; the token is sent only as an `Authorization` header
   (the log stream is read with `fetch`, not `EventSource`) and kept in `sessionStorage` unless "remember on this

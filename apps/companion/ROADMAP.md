@@ -30,12 +30,12 @@ the server, can act on it, and never gets in the way when you do things by hand.
 
 - The admin UI moves into the Mod Manager and both apps into one repository; this web UI shrinks to the
   landing page (button, sync code, sync setup). Design, slices and open decisions:
-  `../modmanager-client/docs/specs/2026-10-14-admin-ui-in-client-and-monorepo-design.md`.
+  `docs/specs/2026-10-14-admin-ui-in-client-and-monorepo-design.md`.
   Decided 2026-10-14: the gist stays the players' transport; HTTP stays the admin surface on the LAN.
   Changed 2026-10-15: the companion shrinks to an install agent (apply, lifecycle, backups, logs, self-update),
   shipped as a GHCR image instead of `install.sh`, with device pairing and TLS instead of one raw token; the
   monorepo moves to the Vite+ toolchain. Plan:
-  `../modmanager-client/docs/specs/2026-10-15-monorepo-viteplus-companion-agent-design.md`.
+  `docs/specs/2026-10-15-monorepo-viteplus-companion-agent-design.md`.
 
 2. **Mod updates on the server** — "N updates available" per installed mod (Thunderstore package endpoint
    per mod, no full index), one-click update into the manifest, change log link. Clients see the new lock

@@ -1,4 +1,4 @@
-/* Mirrors modmanager-client/src/app.css (tokens, utilities); base rules adapted for a web page. */
+/* Mirrors apps/client/src/app.css (tokens and styles from @vmm/ui); base rules adapted for a web page. */
 @import "@fontsource-variable/archivo";
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";

@@ -57,7 +57,7 @@ open decision 1 of the old spec, decided here).
 
 ```
 valheim-mod-manager/
-  apps/client/            today's modmanager-client (src/, src-tauri/, dev/, static/, scripts/)
+  apps/client/            the former modmanager-client repository root (src/, src-tauri/, dev/, static/, scripts/)
   apps/companion/         drloloto/companion via git subtree (history kept): the agent + its landing page
   packages/ui/            @vmm/ui: theme.css, style-*.css, components/kit, components/ui (shadcn), utils, format
   packages/companion-api/ @vmm/companion-api: the agent's API as zod schemas + types; client and agent import it
@@ -182,7 +182,7 @@ next starts. No publish in between: the owner cuts one big release at the end.
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | the monorepo move breaks the updater URLs or CI    | stays in `valheim-mod-manager`; release dry run before phase 2                                      |
 | Oxfmt mangles `.svelte` or Tailwind class order    | trial on the whole tree first, Prettier fallback for `.svelte` only                                 |
-| Vite+ caching hides a stale result                 | `cache.input` explicit for cargo and docker tasks; `vp run ci --no-cache` in the release workflow   |
+| Vite+ caching hides a stale result                 | `cache.input` explicit for cargo and docker tasks; `vp run --no-cache ci` in the release workflow   |
 | a self-update kills the agent mid-way              | helper container does the recreate; the old container stays until the new one is healthy            |
 | pairing locks the owner out                        | `docker exec companion pair` always works on the host; revoking the last device needs a new pairing |
 | players' path regresses while the admin side moves | `test/e2e.ps1` (player path) runs in every phase                                                    |
@@ -221,6 +221,19 @@ Findings and decisions made on the way:
   compose file `onboard.ts` writes still says `build: ./companion`. Phase 2 replaces that with the GHCR image.
 - The moved Rust `target/` held absolute paths of the old location and had to be rebuilt once (`cargo clean`).
 
-Still to do outside the repository: the on-disk folder is still called `modmanager-client` (rename it to
-`valheim-mod-manager` when no session is open in it); the old `../companion` repository is archived on GitHub
-in phase 5, after the monorepo is pushed.
+Closed after phase 1 (same day, with Docker running):
+
+- **Lint at zero**: the 47 warnings are fixed (fire-and-forget calls marked `void`, comma expressions written as
+  blocks, unused code removed); `await-thenable` is off only for the companion's bun:test files.
+- **The image builds and runs from the monorepo**: the Dockerfile installs without lifecycle scripts (the root
+  `prepare` needs git) and includes `@vmm/ui`; `test/up.ps1 -SetupSync`, `test/e2e.ps1` (PASS) and
+  `install.sh status` were run against the test stack.
+- **`install.sh` / `onboard`** write a compose file that builds from the repository checkout
+  (`context: ./valheim-mod-manager`, `dockerfile: apps/companion/Dockerfile`) and default to the folder the
+  checkout sits in; the `.env` marker line is unchanged, so existing installations are still recognised.
+- **The companion reports the version from package.json** (it reported a drifted constant, 0.3.0).
+- **The on-disk folder is `valheim-mod-manager`** (renamed from `modmanager-client`); pnpm's links and the Rust
+  `target/` were rebuilt for the new path.
+
+Left on purpose: the companion's tar scenario still runs on Linux only (CI), as decided by the owner; the old
+`../companion` repository is archived on GitHub in phase 5, after the monorepo is pushed.

@@ -42,7 +42,7 @@ jobs:
           echo "tag=$tag package.json=$pkg tauri.conf.json=$conf Cargo.toml=$cargo"
           [ "$tag" = "$pkg" ] && [ "$tag" = "$conf" ] && [ "$tag" = "$cargo" ]
       # A release is built from a fully checked tree, never from a cache.
-      - run: vp run ci --no-cache
+      - run: vp run --no-cache ci
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
