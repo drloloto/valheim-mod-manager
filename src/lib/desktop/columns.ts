@@ -131,9 +131,17 @@ export function requiredWidth(cols: readonly ColumnDef[], prefs: TablePrefs, opt
 	return opts.padding + lead + cols.reduce((sum, c) => sum + minTrackWidth(c, prefs), 0) + Math.max(0, tracks - 1) * opts.gap;
 }
 
+/** Columns the user switched on themselves outrank every default column when space runs out. */
+const CHOSEN = 1000;
+
+function fitPriority(def: ColumnDef, prefs: TablePrefs): number {
+	return (def.priority ?? 0) + (prefs.hidden[def.key] === false ? CHOSEN : 0);
+}
+
 /**
  * The subset of `cols` that fits into `width`: columns are dropped by ascending priority, ties from the
- * right, fixed columns never. Returns the same array when everything fits or the width is unknown (<= 0).
+ * right, fixed columns never; a column the user switched on goes after every default one. Returns the same
+ * array when everything fits or the width is unknown (<= 0).
  */
 export function fitColumns(cols: ColumnDef[], prefs: TablePrefs, width: number, opts: FitOptions): ColumnDef[] {
 	if (width <= 0 || requiredWidth(cols, prefs, opts) <= width) return cols;
@@ -142,7 +150,7 @@ export function fitColumns(cols: ColumnDef[], prefs: TablePrefs, width: number, 
 		let drop = -1;
 		for (let i = 0; i < out.length; i++) {
 			if (out[i].fixed) continue;
-			if (drop < 0 || (out[i].priority ?? 0) <= (out[drop].priority ?? 0)) drop = i;
+			if (drop < 0 || fitPriority(out[i], prefs) <= fitPriority(out[drop], prefs)) drop = i;
 		}
 		if (drop < 0) break;
 		out = out.filter((_, i) => i !== drop);

@@ -3,7 +3,8 @@
 // list, the facet counts and the histograms together cost one pass instead of one per section.
 import type { SlimPkg } from "#lib/api/types.js";
 import { DATE_KEYS, LIST_KEYS, NUM_KEYS, type Criteria, type DateKey, type ListKey, type NumKey } from "./criteria";
-import { listValues, matchesList, normalize, type ProfileFacts, type Skip } from "./filter";
+import { listValues, matchesList, type ProfileFacts, type Skip } from "./filter";
+import { isEmptyQuery, matchesQuery, parseQuery, type SearchKey, type SearchScope } from "./query";
 import { dateActive, matchesDate, matchesNum, numActive } from "./ranges";
 
 export const BIT: Record<ListKey | DateKey | NumKey | "query", number> = {
@@ -24,18 +25,23 @@ export const BIT: Record<ListKey | DateKey | NumKey | "query", number> = {
 };
 export const ALL = (1 << 14) - 1;
 
-/** Search key of a package; compute once per index, not per keystroke. */
-export function searchKey(p: SlimPkg): string {
-	return normalize(`${p.name} ${p.ns} ${p.desc}`);
-}
+export { searchKey } from "./query";
 
 /** Bitmask per package (same order as `pkgs`). Inactive criteria always set their bit. */
-export function evaluate(pkgs: readonly SlimPkg[], c: Criteria, f: ProfileFacts, now: number, keys: readonly string[]): Uint16Array {
+export function evaluate(
+	pkgs: readonly SlimPkg[],
+	c: Criteria,
+	f: ProfileFacts,
+	now: number,
+	keys: readonly SearchKey[],
+	scope: SearchScope = "all",
+): Uint16Array {
 	const out = new Uint16Array(pkgs.length);
 	const lists = LIST_KEYS.filter((k) => Object.keys(c.lists[k]).length);
 	const dates = DATE_KEYS.filter((k) => dateActive(c.dates[k]));
 	const nums = NUM_KEYS.filter((k) => numActive(c.nums[k]));
-	const q = normalize(c.query);
+	const query = parseQuery(c.query, scope);
+	const q = !isEmptyQuery(query);
 	let base = ALL;
 	for (const k of lists) base &= ~BIT[k];
 	for (const k of dates) base &= ~BIT[k];
@@ -48,7 +54,7 @@ export function evaluate(pkgs: readonly SlimPkg[], c: Criteria, f: ProfileFacts,
 		for (const k of lists) if (matchesList(listValues(k, p, f), c.lists[k], k === "cats" ? c.catMode : "any")) m |= BIT[k];
 		for (const k of dates) if (matchesDate(p[k], c.dates[k]!, now)) m |= BIT[k];
 		for (const k of nums) if (matchesNum(p[k], c.nums[k]!)) m |= BIT[k];
-		if (q && keys[i].includes(q)) m |= BIT.query;
+		if (q && matchesQuery(keys[i], query)) m |= BIT.query;
 		out[i] = m;
 	}
 	return out;

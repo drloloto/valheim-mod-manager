@@ -99,6 +99,12 @@ describe("columns", () => {
 			expect(keys(200)).toEqual(["mod"]);
 		});
 
+		it("keeps columns the user switched on over default columns", () => {
+			const p = { ...DEFAULT_PREFS, hidden: { dl: false } };
+			expect(keys(600, p)).toEqual(["mod", "author", "dl", "status"]);
+			expect(keys(400, p)).toEqual(["mod", "dl"]);
+		});
+
 		it("counts user-resized widths", () => {
 			const p = setWidth(DEFAULT_PREFS, cols[1], 300);
 			expect(keys(600, p)).toEqual(["mod", "status"]);

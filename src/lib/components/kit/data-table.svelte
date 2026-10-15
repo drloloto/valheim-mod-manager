@@ -42,6 +42,8 @@
 		onactivate?: (row: T) => void;
 		ondelete?: (ids: string[]) => void;
 		rowClass?: (row: T) => string | undefined;
+		/** Out: keys of columns that are switched on but do not fit the current width. */
+		dropped?: string[];
 		empty?: Snippet;
 		class?: string;
 	}
@@ -62,6 +64,7 @@
 		onactivate,
 		ondelete,
 		rowClass,
+		dropped = $bindable([]),
 		empty,
 		class: className,
 	}: Props = $props();
@@ -83,6 +86,12 @@
 	const all = $derived(orderedColumns(columns, prefs));
 	// Columns the user wants, then only as many of them as the current width can hold (never a horizontal scroll).
 	const visible = $derived(fitColumns(visibleColumns(columns, prefs), prefs, width, { gap: GAP, padding: PADDING, lead: selectable ? LEAD : 0 }));
+	$effect(() => {
+		const keys = visibleColumns(columns, prefs)
+			.filter((c) => !visible.includes(c))
+			.map((c) => c.key);
+		if (keys.join() !== dropped.join()) dropped = keys;
+	});
 	const rh = $derived(prefs.density === "compact" ? compactRowHeight : rowHeight);
 	const order = $derived(rows.map(getId));
 	const range = $derived(visibleRange(scrollTop, height, rh, rows.length));
@@ -267,7 +276,7 @@
 					disabled={c.fixed}
 					onCheckedChange={() => (prefs = { ...prefs, hidden: { ...prefs.hidden, [c.key]: !isHidden(c, prefs) } })}
 				>
-					{c.label}
+					{c.label}{#if dropped.includes(c.key)}<span class="text-subtle-foreground text-meta ml-auto pl-2">{t("table.noRoom")}</span>{/if}
 				</ContextMenu.CheckboxItem>
 			{/each}
 			<ContextMenu.Separator />

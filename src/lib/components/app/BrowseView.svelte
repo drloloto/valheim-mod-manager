@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ArrowDownUp from "@lucide/svelte/icons/arrow-down-up";
+	import ChevronDown from "@lucide/svelte/icons/chevron-down";
 	import Columns3 from "@lucide/svelte/icons/columns-3";
 	import Plus from "@lucide/svelte/icons/plus";
 	import RefreshCw from "@lucide/svelte/icons/refresh-cw";
@@ -18,6 +19,7 @@
 		Resizable,
 		SelectionBar,
 		StatusPill,
+		TagList,
 		toggleColumn,
 		Toolbar,
 		type Column,
@@ -26,6 +28,7 @@
 	import type { SlimPkg } from "#lib/api/types.js";
 	import { DATE_KEYS, fieldLabel, LIST_KEYS, NUM_KEYS } from "#lib/browse/criteria.js";
 	import { SORT_KEYS } from "#lib/browse/filter.js";
+	import { SEARCH_SCOPES, type SearchScope } from "#lib/browse/query.js";
 	import { buildTokens, flipToken, removeToken } from "#lib/browse/tokens.js";
 	import { formatBytes, formatCompact, formatDate, formatDateTime, formatMonth, formatNumber, relativeTime } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
@@ -40,6 +43,9 @@
 	const focus = $derived(f.selection.focus);
 	const selected = $derived([...f.selection.ids]);
 	const compact = $derived(prefs.value.density === "compact");
+	/** Columns switched on that the pane is too narrow for; the column menu says so instead of hiding it silently. */
+	let dropped = $state<string[]>([]);
+	const scopeLabel = (s: SearchScope) => t(`search.scope.${s}`);
 
 	const columns: Column[] = $derived([
 		// priority: what survives when the pane is narrow (the name column always does)
@@ -54,7 +60,7 @@
 		{ key: "ndeps", label: t("col.ndeps"), width: "56px", align: "right", sortable: true, hidden: true },
 		{ key: "ndependants", label: t("col.ndependants"), width: "76px", align: "right", sortable: true, hidden: true },
 		{ key: "nver", label: t("col.nver"), width: "80px", align: "right", sortable: true, hidden: true },
-		{ key: "cats", label: t("col.cats"), width: "180px", hidden: true },
+		{ key: "cats", label: t("col.cats"), width: "220px", hidden: true },
 		{ key: "status", label: t("col.profile"), width: "132px", align: "right", priority: 3 },
 	]);
 	const sortLabel = $derived(f.sort ? `${t(`sort.${f.sort.key}` as Parameters<typeof t>[0])} ${f.sort.dir === "desc" ? "↓" : "↑"}` : t("browse.relevance"));
@@ -103,9 +109,43 @@
 		<div class="relative flex h-full flex-col">
 			<!-- Search and tools without their own line: search field, tokens and header form one block. -->
 			<Toolbar class="border-b-0 pb-0">
-				<div class="relative flex-1">
-					<Input data-search class="pr-16" placeholder={t("browse.search")} bind:value={f.query} />
-					<span class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2"><Kbd>{t("key.ctrl")} K</Kbd></span>
+				<div class="relative min-w-0 flex-1">
+					<Input
+						data-search
+						class="pr-[150px]"
+						placeholder={f.scope === "all" ? t("browse.search") : t("search.placeholderIn", { field: scopeLabel(f.scope) })}
+						bind:value={f.query}
+						title={t("search.syntax")}
+					/>
+					<div class="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-1.5">
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<button
+										{...props}
+										type="button"
+										class={[
+											"hover:bg-hover data-[state=open]:bg-muted flex h-6 items-center gap-1 rounded-[4px] px-1.5 text-xs",
+											f.scope === "all" ? "text-muted-foreground" : "text-primary",
+										]}
+										title={t("search.scopeTitle")}>{scopeLabel(f.scope)}<ChevronDown class="size-3" /></button
+									>
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Content align="end" class="w-72">
+								<DropdownMenu.Label>{t("search.scopeTitle")}</DropdownMenu.Label>
+								<DropdownMenu.RadioGroup value={f.scope} onValueChange={(v) => (f.scope = v as SearchScope)}>
+									{#each SEARCH_SCOPES as s (s)}<DropdownMenu.RadioItem value={s}>{scopeLabel(s)}</DropdownMenu.RadioItem>{/each}
+								</DropdownMenu.RadioGroup>
+								<DropdownMenu.Separator />
+								<div class="text-muted-foreground grid gap-1 px-2 py-1.5 text-xs leading-snug">
+									<span>{t("search.syntaxIntro")}</span>
+									<code class="text-foreground-soft font-mono text-[11.5px]">name:arrow · desc:"fire arrow" · author:azumatt · -word</code>
+								</div>
+							</DropdownMenu.Content>
+						</DropdownMenu.Root>
+						<span class="pointer-events-none"><Kbd>{t("key.ctrl")} K</Kbd></span>
+					</div>
 				</div>
 
 				<DropdownMenu.Root>
@@ -137,7 +177,8 @@
 						<DropdownMenu.Label>{t("browse.columns")}</DropdownMenu.Label>
 						{#each columns.filter((x) => !x.fixed) as col (col.key)}
 							<DropdownMenu.CheckboxItem checked={!isHidden(col, prefs.value)} onCheckedChange={() => prefs.set(toggleColumn(prefs.value, col))}
-								>{col.label}</DropdownMenu.CheckboxItem
+								>{col.label}{#if dropped.includes(col.key)}<span class="text-subtle-foreground text-meta ml-auto pl-2">{t("table.noRoom")}</span
+									>{/if}</DropdownMenu.CheckboxItem
 							>
 						{/each}
 						<DropdownMenu.Separator />
@@ -202,6 +243,7 @@
 				bind:prefs={() => prefs.value, (v) => prefs.set(v)}
 				bind:selection={f.selection}
 				bind:sort={f.sort}
+				bind:dropped
 				onactivate={(p) => store.addMods([p.id])}
 			>
 				{#snippet cell(p, key)}
@@ -238,7 +280,7 @@
 					{:else if key === "nver"}
 						<span class="cell-mono">{p.nver}</span>
 					{:else if key === "cats"}
-						<span class="cell-soft block text-xs" title={p.cats.join(", ")}>{p.cats.join(", ")}</span>
+						<TagList tags={p.cats} lines={compact ? 1 : 2} />
 					{:else if key === "status"}
 						{@const s = store.modStatus(p.id)}
 						{#if s === "none"}

@@ -25,6 +25,7 @@ import {
 import { evaluate, searchKey, select } from "#lib/browse/engine.js";
 import { sortPackages, type ProfileFacts, type Skip } from "#lib/browse/filter.js";
 import { addView, parseViews, removeView, type View } from "#lib/browse/views.js";
+import { parseScope, type SearchScope } from "#lib/browse/query.js";
 import type { SortState } from "#lib/components/kit/types.js";
 import { DEFAULT_PREFS, parsePrefs, type TablePrefs } from "#lib/desktop/columns.js";
 import { Persisted } from "#lib/desktop/persisted.svelte.js";
@@ -86,6 +87,9 @@ const SYNC_CODE = /vmm1\.[0-9a-f]{20,40}\.[A-Za-z0-9_-]{43}/;
 
 const DEFAULT_SECTIONS: Record<string, boolean> = { status: true, cats: true, owners: true, upd: true };
 
+const parseSort = (v: unknown): SortState | null =>
+	isRecord(v) && typeof v.key === "string" && (v.dir === "asc" || v.dir === "desc") ? { key: v.key, dir: v.dir } : null;
+
 const parseSections = (v: unknown): Record<string, boolean> | null =>
 	isRecord(v) ? (Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === "boolean")) as Record<string, boolean>) : null;
 
@@ -94,7 +98,8 @@ class BrowseFilters {
 	#criteria = new Persisted<Criteria>("werkbank.browse.criteria", defaultCriteria(), (v) => parseCriteria(v));
 	#views = new Persisted<View[]>("werkbank.browse.views", [], parseViews);
 	#sections = new Persisted<Record<string, boolean>>("werkbank.browse.sections", DEFAULT_SECTIONS, parseSections);
-	sort = $state<SortState | null>(null);
+	#sort = new Persisted<SortState | null>("werkbank.browse.sort", null, parseSort);
+	#scope = new Persisted<SearchScope>("werkbank.browse.scope", "all", parseScope);
 	selection = $state.raw<Selection>(emptySelection);
 	/** "now" for relative date filters; the page refreshes it periodically. */
 	now = $state(Date.now());
@@ -108,6 +113,20 @@ class BrowseFilters {
 
 	get criteria(): Criteria {
 		return this.#criteria.value;
+	}
+	/** Column sort of the table; null = relevance. Survives restarts like the filters. */
+	get sort(): SortState | null {
+		return this.#sort.value;
+	}
+	set sort(s: SortState | null) {
+		this.#sort.set(s);
+	}
+	/** Where free search text looks: everything, or only name, description or author. */
+	get scope(): SearchScope {
+		return this.#scope.value;
+	}
+	set scope(s: SearchScope) {
+		this.#scope.set(s);
 	}
 	set criteria(c: Criteria) {
 		this.#criteria.set(c);
@@ -250,6 +269,14 @@ class ModManagerStore {
 	updateDialog = $state<string[] | null>(null);
 	/** "Publish as modpack…" for the active profile. */
 	publishDialog = $state(false);
+	/** The profile manager modal (list of profiles, details per profile). */
+	profileManager = $state(false);
+	/** Last comparison of every linked profile with its server, from the start-up check; the manager's cards read it. */
+	serverChecks = $state<Record<string, ServerCheck>>({});
+	/** An external link waiting for the one-time "leaving the app" confirmation. */
+	externalPrompt = $state<string | null>(null);
+	/** The user confirmed once that links open in the system browser; ask again only when they want that. */
+	externalAck = new Persisted<boolean>("werkbank.externalLinksAck", false, (v) => (typeof v === "boolean" ? v : null));
 	updateCount = $derived(Object.keys(this.state.updates).length);
 	otherProfiles = $derived(this.state.profiles.filter((p) => p !== this.state.active));
 	/** Mod ID → other profiles that contain it. */
@@ -274,7 +301,7 @@ class ModManagerStore {
 	/** Search key per package, recomputed only when the index changes. */
 	searchKeys = $derived(this.packages.map(searchKey));
 	/** One evaluation of all criteria per package (bitmask); the result list and the facets read from it. */
-	masks = $derived(evaluate(this.packages, this.browse.criteria, this.facts, this.browse.now, this.searchKeys));
+	masks = $derived(evaluate(this.packages, this.browse.criteria, this.facts, this.browse.now, this.searchKeys, this.browse.scope));
 	/** Results of the Browse page, sorted. */
 	filtered = $derived(sortPackages(select(this.packages, this.masks), this.browse.sort, this.browse.criteria.query));
 
@@ -479,7 +506,12 @@ class ModManagerStore {
 		try {
 			const results = await api.checkAllServers();
 			const updates: Record<string, ServerCheck> = {};
-			for (const r of results) if (r.check.reachable && !r.check.inSync) updates[r.profile] = r.check;
+			const checks: Record<string, ServerCheck> = {};
+			for (const r of results) {
+				checks[r.profile] = r.check;
+				if (r.check.reachable && !r.check.inSync) updates[r.profile] = r.check;
+			}
+			this.serverChecks = checks;
 			this.serverUpdates = updates;
 			const others = Object.keys(updates).filter((p) => p !== this.state.active);
 			if (others.length) this.toast(t("toast.serverUpdates", { profiles: others.join(", ") }), "info");
@@ -767,28 +799,47 @@ class ModManagerStore {
 
 	async deleteActiveProfile() {
 		const active = this.state.active;
-		if (!active) return;
-		if (await this.applyState(() => api.deleteProfile(active), t("toast.deleteFailed"))) {
-			this.toast(t("toast.profileDeleted", { name: active }), "ok");
-		}
+		if (active) await this.deleteProfile(active);
+	}
+
+	async deleteProfile(name: string): Promise<boolean> {
+		const ok = await this.applyState(() => api.deleteProfile(name), t("toast.deleteFailed"));
+		if (ok) this.toast(t("toast.profileDeleted", { name }), "ok");
+		return ok;
 	}
 
 	async renameActive(to: string): Promise<boolean> {
 		const active = this.state.active;
-		return !!active && this.applyState(() => api.renameProfile(active, to), t("toast.renameFailed"));
+		return !!active && this.renameProfile(active, to);
+	}
+
+	async renameProfile(from: string, to: string): Promise<boolean> {
+		const ok = await this.applyState(() => api.renameProfile(from, to), t("toast.renameFailed"));
+		if (ok && from in this.serverChecks) {
+			const { [from]: check, ...rest } = this.serverChecks;
+			this.serverChecks = { ...rest, [to]: check };
+		}
+		return ok;
 	}
 
 	async cloneActive(to: string): Promise<boolean> {
 		const active = this.state.active;
-		const ok = !!active && (await this.applyState(() => api.cloneProfile(active, to), t("toast.cloneFailed")));
+		return !!active && this.cloneProfile(active, to);
+	}
+
+	async cloneProfile(from: string, to: string): Promise<boolean> {
+		const ok = await this.applyState(() => api.cloneProfile(from, to), t("toast.cloneFailed"));
 		if (ok) this.toast(t("toast.profileCreated", { name: to }), "ok");
 		return ok;
 	}
 
 	async repair() {
 		const active = this.state.active;
-		if (!active) return;
-		if (await this.applyState(() => api.repairProfile(active), t("toast.repairFailed"))) {
+		if (active) await this.repairProfile(active);
+	}
+
+	async repairProfile(name: string) {
+		if (await this.applyState(() => api.repairProfile(name), t("toast.repairFailed"))) {
 			this.toast(t("toast.repairing"), "info");
 		}
 	}
@@ -869,11 +920,10 @@ class ModManagerStore {
 		}
 	}
 
-	async exportCode(): Promise<string | null> {
-		const active = this.state.active;
-		if (!active) return null;
+	async exportCode(profile = this.state.active): Promise<string | null> {
+		if (!profile) return null;
 		try {
-			const r = await api.exportProfileCode(active);
+			const r = await api.exportProfileCode(profile);
 			this.warnSkipped(r);
 			return r.code;
 		} catch (e) {
@@ -882,11 +932,10 @@ class ModManagerStore {
 		}
 	}
 
-	async exportFile(path: string) {
-		const active = this.state.active;
-		if (!active) return;
+	async exportFile(path: string, profile = this.state.active) {
+		if (!profile) return;
 		try {
-			this.warnSkipped(await api.exportProfileFile(active, path));
+			this.warnSkipped(await api.exportProfileFile(profile, path));
 			this.toast(t("toast.exported"), "ok");
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.exportFailed")), "err");
@@ -960,8 +1009,27 @@ class ModManagerStore {
 		}
 	}
 
-	/** Open an external link without letting an error escape as an unhandled rejection. */
+	/**
+	 * Open a link in the system browser, never in the app window. The first time (and every time, if the user
+	 * asked for that) a dialog says where the link leads and that the app has no say over the page.
+	 */
 	async openExternal(url: string) {
+		if (!this.externalAck.value) {
+			this.externalPrompt = url;
+			return;
+		}
+		await this.launchExternal(url);
+	}
+
+	/** The answer of the external-link dialog; `askAgain` keeps the dialog for the next link. */
+	async confirmExternal(askAgain: boolean) {
+		const url = this.externalPrompt;
+		this.externalPrompt = null;
+		this.externalAck.set(!askAgain);
+		if (url) await this.launchExternal(url);
+	}
+
+	private async launchExternal(url: string) {
 		try {
 			await openUrl(url);
 		} catch (e) {

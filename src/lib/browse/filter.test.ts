@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SlimPkg } from "#lib/api/types.js";
 import { defaultCriteria, withDate, withList, withNum, type Criteria } from "./criteria";
-import { countBy, depsState, listValues, matchesCriteria, matchesList, sortPackages, type ProfileFacts } from "./filter";
+import { countBy, depsState, facetCounts, listValues, matchesCriteria, matchesList, sortPackages, type ProfileFacts } from "./filter";
 
 const NOW = Date.UTC(2026, 9, 8);
 const DAY = 86_400_000;
@@ -123,5 +123,34 @@ describe("countBy", () => {
 		const m = countBy([pkg({ cats: ["X", "Y"] }), pkg({ cats: ["X"] })], (p) => p.cats);
 		expect(m.get("X")).toBe(2);
 		expect(m.get("Y")).toBe(1);
+	});
+});
+
+describe("facetCounts", () => {
+	const pkgs = [
+		pkg({ id: "a", cats: ["Gear", "Tweaks"] }),
+		pkg({ id: "b", cats: ["Gear"] }),
+		pkg({ id: "c", cats: ["Tweaks", "Audio"] }),
+		pkg({ id: "d", cats: ["Audio"] }),
+	];
+	const run = (map: Record<string, 1 | -1>, mode: "any" | "all") => {
+		const result = pkgs.filter((p) => matchesList(p.cats, map, mode));
+		const m = facetCounts("cats", map, mode, pkgs, result, none);
+		return Object.fromEntries([...m].map(([k, v]) => [k, `${v.additive ? "+" : ""}${v.count}`]));
+	};
+
+	it("counts every value among the other sections' results while nothing is included", () => {
+		expect(run({}, "any")).toEqual({ Gear: "2", Tweaks: "2", Audio: "2" });
+		expect(run({ Audio: -1 }, "any")).toEqual({ Gear: "2", Tweaks: "2", Audio: "2" });
+	});
+
+	it("shows what other values would add in any mode", () => {
+		expect(run({ Gear: 1 }, "any")).toEqual({ Gear: "2", Tweaks: "+1", Audio: "+2" });
+		expect(run({ Gear: 1, Audio: -1 }, "any")).toEqual({ Gear: "2", Audio: "2" });
+	});
+
+	it("narrows within the current results in all mode", () => {
+		expect(run({ Gear: 1 }, "all")).toEqual({ Gear: "2", Tweaks: "1" });
+		expect(run({ Gear: 1, Tweaks: 1 }, "all")).toEqual({ Gear: "1", Tweaks: "1" });
 	});
 });

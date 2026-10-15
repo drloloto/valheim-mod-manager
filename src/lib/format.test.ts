@@ -21,11 +21,24 @@ describe("numbers and sizes", () => {
 	it("formats full and compact numbers per locale", () => {
 		expect(formatNumber(3_102_455)).toBe("3.102.455");
 		expect(formatCompact(980)).toBe("980");
-		expect(formatCompact(41_230)).toBe("41,2k");
+		expect(formatCompact(41_230)).toBe("41K");
 		expect(formatCompact(3_102_455)).toBe("3,1M");
 		setLocaleSource(() => "en");
 		expect(formatNumber(3_102_455)).toBe("3,102,455");
-		expect(formatCompact(41_230)).toBe("41.2k");
+		expect(formatCompact(41_230)).toBe("41K");
+	});
+
+	it("keeps compact numbers at three digits", () => {
+		setLocaleSource(() => "en");
+		expect(formatCompact(9_940)).toBe("9.9K");
+		expect(formatCompact(9_960)).toBe("10K");
+		expect(formatCompact(561_149)).toBe("561K");
+		expect(formatCompact(565_600)).toBe("566K");
+		expect(formatCompact(999_700)).toBe("1M");
+		expect(formatCompact(1_540_000)).toBe("1.5M");
+		expect(formatCompact(1_000)).toBe("1K");
+		expect(formatCompact(15_400_000)).toBe("15M");
+		expect(formatCompact(2_300_000_000)).toBe("2.3B");
 	});
 
 	it("formats bytes with a unit that fits", () => {

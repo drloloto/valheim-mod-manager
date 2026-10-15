@@ -5,6 +5,7 @@ import type { SortState } from "#lib/components/kit/types.js";
 import { DATE_KEYS, LIST_KEYS, NUM_KEYS, type Criteria, type DateKey, type ListKey, type NumKey, type TriMap } from "./criteria";
 import { collator } from "#lib/format.js";
 import { dateActive, matchesDate, matchesNum, numActive } from "./ranges";
+import { isEmptyQuery, matchesQuery, nameNeedle, normalize, parseQuery, searchKey, type SearchScope } from "./query";
 
 export const SORT_KEYS = ["dl", "rating", "upd", "created", "mod", "author", "size", "ndeps", "ndependants", "nver"] as const;
 
@@ -17,9 +18,7 @@ export interface ProfileFacts {
 	profilesOf(id: string): readonly string[];
 }
 
-export function normalize(s: string): string {
-	return s.toLowerCase().replace(/[\s_-]/g, "");
-}
+export { normalize } from "./query";
 
 export function depsState(p: SlimPkg, f: ProfileFacts): "none" | "inProfile" | "missing" {
 	if (!p.deps.length) return "none";
@@ -76,7 +75,7 @@ export interface Skip {
 	num?: NumKey;
 }
 
-export function matchesCriteria(p: SlimPkg, c: Criteria, f: ProfileFacts, now: number, skip: Skip = {}): boolean {
+export function matchesCriteria(p: SlimPkg, c: Criteria, f: ProfileFacts, now: number, skip: Skip = {}, scope: SearchScope = "all"): boolean {
 	for (const k of LIST_KEYS) {
 		if (k === skip.list) continue;
 		const map = c.lists[k];
@@ -92,7 +91,8 @@ export function matchesCriteria(p: SlimPkg, c: Criteria, f: ProfileFacts, now: n
 		const r = c.nums[k];
 		if (numActive(r) && !matchesNum(p[k], r)) return false;
 	}
-	if (c.query && !normalize(`${p.name} ${p.ns} ${p.desc}`).includes(normalize(c.query))) return false;
+	const q = parseQuery(c.query, scope);
+	if (!isEmptyQuery(q) && !matchesQuery(searchKey(p), q)) return false;
 	return true;
 }
 
@@ -117,7 +117,7 @@ export function sortPackages(list: SlimPkg[], sort: SortState | null, query: str
 		const dir = sort!.dir === "asc" ? 1 : -1;
 		return out.sort((a, b) => dir * cmp(a, b) || b.rating - a.rating);
 	}
-	const q = normalize(query);
+	const q = nameNeedle(parseQuery(query));
 	return out.sort((a, b) => {
 		if (q) {
 			const d = Number(normalize(b.name) === q) - Number(normalize(a.name) === q);
@@ -131,4 +131,49 @@ export function countBy(list: Iterable<SlimPkg>, keys: (p: SlimPkg) => Iterable<
 	const m = new Map<string, number>();
 	for (const p of list) for (const k of keys(p)) m.set(k, (m.get(k) ?? 0) + 1);
 	return m;
+}
+
+export interface FacetCount {
+	count: number;
+	/** "+N": rows that adding this value would bring in, not rows that have it among the current results. */
+	additive: boolean;
+}
+
+/**
+ * Counts of a list section that follow its own selection, not only the other sections:
+ * - nothing included: rows per value among the results of the other sections (classic facets);
+ * - "all" mode (categories): rows per value among the current results, so every count shrinks as you narrow;
+ * - "any" mode with an inclusion: included and excluded values count what they bring or hide, every other
+ *   value counts the rows it would add ("+N"), so a picked "Not in profile" no longer shows "In profile 28".
+ */
+export function facetCounts(
+	key: ListKey,
+	map: TriMap,
+	mode: "any" | "all",
+	context: readonly SlimPkg[],
+	result: readonly SlimPkg[],
+	f: ProfileFacts,
+): Map<string, FacetCount> {
+	const out = new Map<string, FacetCount>();
+	const add = (v: string, additive: boolean) => {
+		const cur = out.get(v);
+		if (cur) cur.count++;
+		else out.set(v, { count: 1, additive });
+	};
+	const hasInc = Object.values(map).some((x) => x === 1);
+	if (!hasInc || mode === "all") {
+		for (const p of hasInc ? result : context) for (const v of listValues(key, p, f)) add(v, false);
+		return out;
+	}
+	const inResult = new Set(result);
+	for (const p of context) {
+		const values = listValues(key, p, f);
+		const hit = inResult.has(p);
+		const blocked = values.some((v) => map[v] === -1);
+		for (const v of values) {
+			if (v in map) add(v, false);
+			else if (!hit && !blocked) add(v, true);
+		}
+	}
+	return out;
 }

@@ -9,6 +9,7 @@
 	import TopBar from "#lib/components/shell/top-bar.svelte";
 	import StatusBar from "#lib/components/shell/status-bar.svelte";
 	import UpdateDialog from "#lib/components/app/UpdateDialog.svelte";
+	import ExternalLinkDialog from "#lib/components/app/ExternalLinkDialog.svelte";
 	import { store } from "#lib/api/store.svelte.js";
 	import { installDesktopGuards } from "#lib/desktop/guards.js";
 	import { bindShortcuts } from "#lib/desktop/shortcuts.js";
@@ -31,7 +32,7 @@
 	}
 
 	onMount(() => {
-		const offGuards = installDesktopGuards();
+		const offGuards = installDesktopGuards(import.meta.env.DEV, (url) => store.openExternal(url));
 		const offKeys = bindShortcuts({
 			"Mod+K": focusSearch,
 			"Mod+F": focusSearch,
@@ -41,6 +42,7 @@
 			"Mod+4": () => goto(resolve("logs")),
 			"Mod+,": () => goto(resolve("settings")),
 			"Mod+N": () => topBar?.newProfile(),
+			"Mod+P": () => (store.profileManager = true),
 			"Mod+Enter": () => store.state.active && store.requestLaunch(true),
 			F5: (e) => {
 				if (e.repeat) return;
@@ -75,4 +77,5 @@
 </div>
 
 <UpdateDialog />
+<ExternalLinkDialog />
 <Toaster theme="dark" position="bottom-right" offset={{ bottom: 40, right: 16 }} />

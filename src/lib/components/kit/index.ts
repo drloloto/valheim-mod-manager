@@ -29,6 +29,9 @@ export { default as Histogram } from "./histogram.svelte";
 export { default as DateRangeFilter } from "./date-range-filter.svelte";
 export { default as NumRangeFilter } from "./num-range-filter.svelte";
 export { default as FilterToken } from "./filter-token.svelte";
+export { default as TagList } from "./tag-list.svelte";
+export { default as InstallState } from "./install-state.svelte";
+export { default as SourceBadge } from "./source-badge.svelte";
 
 // Re-exports of the shadcn primitives so app code knows a single import path.
 export { Button } from "#lib/components/ui/button/index.js";

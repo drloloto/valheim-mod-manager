@@ -140,6 +140,10 @@
 	const inProfile = slim.slice(2, 40).map((p) => p.id);
 	const updates = Object.fromEntries(inProfile.slice(0, 5).map((id) => [id, "9.9.9"]));
 	const resolved = Object.fromEntries([BEP, JOT, ...inProfile].map((id) => [id, { version: byId.get(id).ver, requiredBy: [] }]));
+	// Jotunn is needed by one of the player's mods; one library is required by the server on its own.
+	resolved[JOT].requiredBy = [inProfile[5]];
+	const SERVER_LIB = slim[60].id;
+	resolved[SERVER_LIB] = { version: slim[60].ver, requiredBy: [] };
 	const state = {
 		profiles: ["Hardcore", "Vanilla+", "Bauen"],
 		active: "Hardcore",
@@ -151,15 +155,17 @@
 			enabled: i % 9 !== 0,
 			source: "thunderstore",
 			pinned: i === 7,
+			// every fourth mod is listed by the linked server (Installed shows "Server" as its source)
+			managed: i % 4 === 1,
 		})),
 		// Jotunn is resolved as a dependency but not installed: shows the readiness banner and the Play gate.
-		installed: Object.fromEntries([BEP, ...inProfile].map((id) => [id, byId.get(id).ver])),
+		installed: Object.fromEntries([BEP, SERVER_LIB, ...inProfile].map((id) => [id, byId.get(id).ver])),
 		plan: { resolved, toInstall: [{ id: JOT, to: byId.get(JOT).ver }], toRemove: [], errors: [] },
 		updates,
 		indexAge: 240000,
 		sync: { running: false, queued: false },
 		game: { valheimDir: "C:\\Steam\\steamapps\\common\\Valheim", found: true, lastUpdated: NOW - 30 * DAY, buildId: "25730771" },
-		implicitMods: [],
+		implicitMods: [SERVER_LIB],
 		profileMods: { Hardcore: inProfile, "Vanilla+": slim.slice(30, 60).map((p) => p.id), Bauen: slim.slice(100, 110).map((p) => p.id) },
 		health: [
 			{ kind: "duplicate", ids: [inProfile[0], inProfile[1]], detail: "Shared.dll" },

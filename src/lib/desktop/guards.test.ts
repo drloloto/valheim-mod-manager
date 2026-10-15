@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldBlockKey } from "./guards";
+import { externalHref, shouldBlockKey } from "./guards";
 
 const k = (key: string, ctrl = false, shift = false) => ({ key, ctrlKey: ctrl, metaKey: false, shiftKey: shift, altKey: false });
 
@@ -16,5 +16,19 @@ describe("shouldBlockKey", () => {
 	});
 	it("does not block editing shortcuts", () => {
 		for (const c of ["a", "c", "v", "x", "z", "y"]) expect(shouldBlockKey(k(c, true), false)).toBe(false);
+	});
+});
+
+describe("externalHref", () => {
+	const origin = "http://localhost:1420";
+	it("returns links that leave the app", () => {
+		expect(externalHref("https://thunderstore.io/c/valheim/", origin)).toBe("https://thunderstore.io/c/valheim/");
+		expect(externalHref("mailto:a@b.c", origin)).toBe("mailto:a@b.c");
+	});
+	it("keeps in-app routes, anchors and odd schemes in the app", () => {
+		expect(externalHref("/installed", origin)).toBeNull();
+		expect(externalHref("#top", origin)).toBeNull();
+		expect(externalHref("javascript:alert(1)", origin)).toBeNull();
+		expect(externalHref("", origin)).toBeNull();
 	});
 });

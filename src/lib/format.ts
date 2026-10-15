@@ -19,13 +19,28 @@ export function formatNumber(n: number): string {
 	return memo("int", () => new Intl.NumberFormat(tag(getLocale()), { maximumFractionDigits: 0 })).format(n);
 }
 
-/** Compact with one decimal and a short suffix: 980 · 41.2k · 3.1M. For table cells. */
+/**
+ * Compact with at most three digits and a short suffix: 980 · 9.9K · 566K · 1.6M. One decimal only below 10
+ * of a unit, so a cell never reads "561.1K"; a value that rounds up to 1000 moves to the next unit. For table cells.
+ */
 export function formatCompact(n: number): string {
 	const abs = Math.abs(n);
-	const one = memo("one", () => new Intl.NumberFormat(tag(getLocale()), { maximumFractionDigits: 1 }));
 	if (abs < 1_000) return formatNumber(n);
-	if (abs < 1_000_000) return `${one.format(n / 1_000)}k`;
-	return `${one.format(n / 1_000_000)}M`;
+	const one = memo("one", () => new Intl.NumberFormat(tag(getLocale()), { maximumFractionDigits: 1 }));
+	const units: [number, string][] = [
+		[1_000, "K"],
+		[1_000_000, "M"],
+		[1_000_000_000, "B"],
+	];
+	for (let i = 0; i < units.length; i++) {
+		const [size, suffix] = units[i];
+		const v = abs / size;
+		const rounded = v < 9.95 ? Math.round(v * 10) / 10 : Math.round(v);
+		if (rounded >= 1000 && i < units.length - 1) continue;
+		const sign = n < 0 ? "-" : "";
+		return `${sign}${rounded < 10 ? one.format(rounded) : formatNumber(rounded)}${suffix}`;
+	}
+	return formatNumber(n);
 }
 
 /** Bytes with a fitting unit: 12 B · 640 KB · 15.6 MB · 1.2 GB. KB without, MB/GB with one decimal. */

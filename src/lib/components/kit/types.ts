@@ -22,4 +22,6 @@ export interface FilterItem {
 	value: string;
 	label: string;
 	count: number;
+	/** The count is what picking this value would add ("+N"), not how many results have it. */
+	additive?: boolean;
 }

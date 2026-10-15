@@ -4,8 +4,7 @@
 	import { store } from "#lib/api/store.svelte.js";
 	import { t } from "#lib/i18n/index.svelte.js";
 
-	let { open = $bindable(false) }: { open?: boolean } = $props();
-	let mode = $state<"code" | "file">("code");
+	let { open = $bindable(false), mode = $bindable("code") }: { open?: boolean; mode?: "code" | "file" } = $props();
 	let code = $state("");
 	let file = $state<string | null>(null);
 	let name = $state("");
