@@ -43,7 +43,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 	} catch (e) {
 		if (e && typeof e === "object" && "message" in e) {
 			const err = e as { message: unknown; kind?: unknown };
-			throw new ApiError(String(err.message), String(err.kind ?? "unknown"));
+			throw new ApiError(String(err.message), typeof err.kind === "string" ? err.kind : "unknown");
 		}
 		throw new ApiError(String(e));
 	}

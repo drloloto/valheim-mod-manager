@@ -16,7 +16,7 @@ describe("sync setup", () => {
 		dir = await mkdtemp(join(tmpdir(), "syncsetup-"));
 	});
 	afterAll(async () => {
-		fake.stop();
+		void fake.stop();
 		await rm(dir, { recursive: true, force: true });
 	});
 

@@ -69,7 +69,7 @@ class Session {
 		} catch {
 			/* nothing stored */
 		}
-		this.refresh();
+		void this.refresh();
 	}
 }
 

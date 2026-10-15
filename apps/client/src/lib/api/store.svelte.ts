@@ -251,7 +251,7 @@ class ModManagerStore {
 
 	/** The click on the server state, same for the chip and the status bar (see server-view.ts). */
 	serverAct(action: ServerAction) {
-		if (action === "refresh") this.refreshServerStatus();
+		if (action === "refresh") void this.refreshServerStatus();
 		else this.showServer(action);
 	}
 
@@ -337,14 +337,14 @@ class ModManagerStore {
 			listen<SyncDone>("sync://done", (e) => this.onSyncDone(e.payload)),
 			listen("index://updated", () => {
 				this.packageCache.clear();
-				this.loadIndex();
-				this.loadState();
+				void this.loadIndex();
+				void this.loadState();
 			}),
 		]);
 		await Promise.all([this.loadState(), this.loadIndex(), this.loadSettings()]);
-		if (this.autoUpdate.value && !this.state.app.portable) this.checkUpdate();
-		this.refreshServerStatus();
-		this.checkAllServers();
+		if (this.autoUpdate.value && !this.state.app.portable) void this.checkUpdate();
+		void this.refreshServerStatus();
+		void this.checkAllServers();
 		// The linked server is re-checked every five minutes while the app is open (gist reads are ETag-cached).
 		const serverClock = setInterval(() => this.refreshServerStatus(), 300_000);
 		// `valheim-mod-manager://import?…` from a companion page, at startup or while running.
@@ -352,8 +352,8 @@ class ModManagerStore {
 			for (const u of urls) {
 				const d = parseDeepLink(u);
 				if (!d) this.toast(t("toast.deepLinkInvalid"), "err");
-				else if (d.code) this.addServerByCode(d.code, d.name);
-				else if (d.url) this.importFromUrl(d.url, d.name, d.link);
+				else if (d.code) void this.addServerByCode(d.code, d.name);
+				else if (d.url) void this.importFromUrl(d.url, d.name, d.link);
 			}
 		};
 		try {
@@ -376,11 +376,11 @@ class ModManagerStore {
 		if (r.removed.length) parts.push(t("toast.removedN", { n: r.removed.length }));
 		if (parts.length) this.toast(`${r.profile}: ${parts.join(", ")}`, "ok");
 		for (const err of r.errors) this.toast(err, "err");
-		this.loadState().then(() => {
-			this.refreshServerStatus();
+		void this.loadState().then(() => {
+			void this.refreshServerStatus();
 			if (this.launchAfterSync && r.profile === this.state.active) {
 				this.launchAfterSync = false;
-				if (!r.errors.length) this.launch(true);
+				if (!r.errors.length) void this.launch(true);
 			}
 		});
 	}
@@ -390,7 +390,7 @@ class ModManagerStore {
 		try {
 			this.state = await fn();
 			this.loaded = true;
-			if (`${this.state.active}|${this.state.server?.url}` !== before) this.refreshServerStatus();
+			if (`${this.state.active}|${this.state.server?.url}` !== before) void this.refreshServerStatus();
 			return true;
 		} catch (e) {
 			this.toast(errorMessage(e, fallback), "err");
@@ -460,7 +460,7 @@ class ModManagerStore {
 			this.toast(intoNew ? t("toast.adoptedInto", { name: this.state.active ?? intoNew }) : t("toast.adopted"), "ok");
 			delete this.serverUpdates[active];
 			// The chip and the status bar say "in sync" now, not once the download has finished.
-			this.refreshServerStatus();
+			void this.refreshServerStatus();
 		} else this.launchAfterSync = false;
 		return ok;
 	}
@@ -497,7 +497,7 @@ class ModManagerStore {
 		if (!(await this.applyState(() => api.setServerLink(name, { url: "", name: d.name, syncCode: d.syncCode }), fail))) return false;
 		if (!(await this.applyState(() => api.adoptServer(name, withConfigs, null, installAll), fail))) return false;
 		this.toast(t("toast.adoptedInto", { name }), "ok");
-		this.refreshServerStatus();
+		void this.refreshServerStatus();
 		return true;
 	}
 
@@ -528,7 +528,7 @@ class ModManagerStore {
 			const r = await api.publishProfile(active, withConfigs);
 			this.staged = r;
 			if (r.skippedLocal.length) this.toast(t("toast.localSkipped", { names: r.skippedLocal.join(", ") }), "info");
-			this.refreshServerStatus();
+			void this.refreshServerStatus();
 			return r;
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.publishFailed")), "err");
@@ -544,7 +544,7 @@ class ModManagerStore {
 			const r = await api.publishGist(active, withConfigs, when, at);
 			this.toast(t("toast.gistPublished", { id: r.id }), "ok");
 			if (r.skippedLocal.length) this.toast(t("toast.localSkipped", { names: r.skippedLocal.join(", ") }), "info");
-			this.refreshServerStatus();
+			void this.refreshServerStatus();
 			return true;
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.publishFailed")), "err");
@@ -578,7 +578,7 @@ class ModManagerStore {
 			} else {
 				this.toast(when === "idle" ? t("toast.scheduledIdle") : t("toast.scheduledAt", { time: formatDateTime(at ?? Date.now()) }), "ok");
 			}
-			this.refreshServerStatus();
+			void this.refreshServerStatus();
 			return true;
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.applyFailed")), "err");
@@ -593,7 +593,7 @@ class ModManagerStore {
 			await api.discardRelease(active, id);
 			this.staged = null;
 			this.toast(t("toast.releaseDiscarded"), "ok");
-			this.refreshServerStatus();
+			void this.refreshServerStatus();
 			return true;
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.applyFailed")), "err");
@@ -604,7 +604,7 @@ class ModManagerStore {
 	async importFromUrl(url: string, name: string, link: string | null, installAll = true, withConfigs = true): Promise<boolean> {
 		try {
 			this.onImported(await api.importProfileUrl(url, name, withConfigs, installAll, link ? { url: link, name, token: null } : null));
-			this.refreshServerStatus();
+			void this.refreshServerStatus();
 			return true;
 		} catch (e) {
 			this.toast(errorMessage(e, t("toast.importFailed")), "err");

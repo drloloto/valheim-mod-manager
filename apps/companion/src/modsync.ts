@@ -122,7 +122,11 @@ export async function configSyncInfo(configFiles: string[], bepinexDir = BEPINEX
 		}
 		cache[rel] = entry;
 	}
-	for (const rel of Object.keys(cache)) if (!dlls.includes(rel)) ((dirty = true), delete cache[rel]);
+	for (const rel of Object.keys(cache))
+		if (!dlls.includes(rel)) {
+			dirty = true;
+			delete cache[rel];
+		}
 	if (dirty) await writeAtomic(CACHE_FILE, JSON.stringify(cache, null, 2)).catch(() => {});
 
 	const installed = await loadInstalled();

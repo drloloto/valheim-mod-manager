@@ -74,7 +74,7 @@ export interface SyncManagerDeps {
 	/** starts a poller for the config; the real one is `startGistSync` */
 	start(cfg: GistSyncEnv): SyncHandle | null;
 	/** verifies a token (and an existing gist id when joining) against the API; the real one asks GitHub */
-	createGist?(token: string, api: string): Promise<string>;
+	createGist?: (token: string, api: string) => Promise<string>;
 	file?: string;
 	stateFile?: string;
 	env?: NodeJS.ProcessEnv;

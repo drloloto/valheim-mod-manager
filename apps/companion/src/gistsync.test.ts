@@ -136,7 +136,7 @@ describe("gist sync", () => {
 			await expect(box.fetch()).rejects.toThrow("gist_update");
 			expect(hits).toBe(2);
 		} finally {
-			srv.stop(true);
+			void srv.stop(true);
 		}
 	});
 

@@ -133,13 +133,13 @@ export function format(kind: Kind, value: unknown): string {
 		case "number":
 			return num(value as number);
 		case "enum":
-			return String(value ?? "");
+			return (value as string | undefined) ?? "";
 		case "flags": {
 			const list = (value as string[]).filter(Boolean);
 			return list.length ? list.join(", ") : kind.options.includes("None") ? "None" : "0";
 		}
 		case "color":
-			return String(value ?? "").toUpperCase();
+			return ((value as string | undefined) ?? "").toUpperCase();
 		case "vector": {
 			const o = value as Record<string, number>;
 			return JSON.stringify(Object.fromEntries(kind.axes.map((a) => [a, o[a]])));
@@ -151,7 +151,7 @@ export function format(kind: Kind, value: unknown): string {
 		case "records":
 			return (value as string[][]).map((f) => f.map((x) => x.trim()).join(":")).join(",");
 		case "text":
-			return String(value ?? "");
+			return (value as string | undefined) ?? "";
 	}
 }
 
@@ -199,7 +199,10 @@ export function check(kind: Kind, raw: string): Problem | null {
 	if (r.success) return null;
 	const key = (r.error.issues[0]?.message ?? "cfg.err.number") as ProblemKey;
 	const vars: Record<string, string | number> = {};
-	if (kind.kind === "number") ((vars.min = kind.min ?? ""), (vars.max = kind.max ?? ""));
+	if (kind.kind === "number") {
+		vars.min = kind.min ?? "";
+		vars.max = kind.max ?? "";
+	}
 	if (kind.kind === "enum" || kind.kind === "flags") vars.options = kind.options.slice(0, 8).join(", ") + (kind.options.length > 8 ? ", …" : "");
 	if (kind.kind === "records") vars.fields = kind.fields;
 	return { key, vars };

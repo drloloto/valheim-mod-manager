@@ -96,7 +96,7 @@ export function linearBuckets(cap = 8): Bucket[] {
 }
 
 export function countBuckets(values: Iterable<number>, buckets: Bucket[]): number[] {
-	const counts = new Array<number>(buckets.length).fill(0);
+	const counts = Array.from({ length: buckets.length }, () => 0);
 	for (const v of values) {
 		for (let i = buckets.length - 1; i >= 0; i--) {
 			if (v >= buckets[i].from) {

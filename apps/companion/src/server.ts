@@ -257,7 +257,7 @@ api.get("/manifest", async (c) => {
 	return c.json({ ...m, features: { publish: FEATURES.publish, modManager: FEATURES.modManager } }, 200, { ETag: `"${m.hash}"`, "Cache-Control": "no-cache" });
 });
 
-api.get("/profile.r2z", requireFeature("modManager"), async (c) => {
+api.get("/profile.r2z", requireFeature("modManager"), async () => {
 	const m = await currentManifest();
 	const bytes = await buildR2z(m);
 	const name = (m.server.name || "server").replace(/[^\w.-]+/g, "_");

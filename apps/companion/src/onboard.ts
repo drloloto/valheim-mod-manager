@@ -135,12 +135,16 @@ export function planCompanion(cfg: ComposeConfig, o: PlanOptions): Plan {
 	if (plan.errors.length) return plan;
 
 	const url = `http://${o.bind}:${o.port}`;
+	// The image builds from the repository root (workspace lockfile, shared packages), not from the companion folder.
+	const repo = o.companionDir.replace(/[\\/]+$/, "").replace(/[\\/]apps[\\/]companion$/, "") || ".";
 	const lines = [
-		"# Valheim companion, added by companion/install.sh. Your own compose file is unchanged; .env loads this",
-		"# file through COMPOSE_FILE. Remove both with: bash companion/install.sh uninstall",
+		"# Valheim companion, added by apps/companion/install.sh. Your own compose file is unchanged; .env loads this",
+		"# file through COMPOSE_FILE. Remove both with: bash apps/companion/install.sh uninstall",
 		"services:",
 		`  ${COMPANION_SERVICE}:`,
-		`    build: ${yamlStr(o.companionDir)}`,
+		"    build:",
+		`      context: ${yamlStr(repo)}`,
+		`      dockerfile: ${yamlStr("apps/companion/Dockerfile")}`,
 		"    image: valheim-companion:local",
 		"    volumes:",
 		`      - ${yamlStr(`${configSource}:/config`)}`,
@@ -230,7 +234,7 @@ async function cliPlan() {
 	const cfg = JSON.parse(await Bun.stdin.text()) as ComposeConfig;
 	const plan = planCompanion(cfg, {
 		projectDir: arg("project-dir"),
-		companionDir: arg("companion-dir", "./companion"),
+		companionDir: arg("companion-dir", "./valheim-mod-manager/apps/companion"),
 		bind: arg("bind", "127.0.0.1"),
 		port: Number(arg("port", "9002")),
 		dockerSock: arg("docker-sock", "/var/run/docker.sock"),

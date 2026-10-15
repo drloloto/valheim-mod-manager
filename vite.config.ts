@@ -39,6 +39,10 @@ export default defineConfig({
 		rules: { "vite-plus/prefer-vite-plus-imports": "error" },
 		options: { typeAware: true, typeCheck: true },
 		ignorePatterns: IGNORED,
+		overrides: [
+			// bun:test types `expect(promise).rejects` as not thenable; at run time it is a promise and must be awaited
+			{ files: ["apps/companion/src/**/*.test.ts"], rules: { "typescript/await-thenable": "off" } },
+		],
 	},
 	fmt: {
 		useTabs: true,

@@ -1,5 +1,4 @@
 import type { ModStatus } from "#lib/api/status.js";
-import type { ColumnDef } from "#lib/desktop/columns.js";
 
 export type TriState = 1 | -1 | 0 | "mixed";
 export type { ModStatus };

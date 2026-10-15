@@ -10,9 +10,8 @@
 // show up as a difference), opens the publish dialog, publishes a release and waits for the companion to
 // report it back. Screenshots: spike-1-main.png, spike-2-publish.png, spike-3-result.png (spike-4-added.png).
 // Exit code 1 when any step fails; console errors of the page are printed at the end.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const [when = "none", outDir = "."] = process.argv.slice(2);
 const port = Number(process.env.CDP_PORT ?? 9229);

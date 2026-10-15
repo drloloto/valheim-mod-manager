@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Adds the Valheim companion to an existing valheim-server compose project, without touching the game.
 #
-#   ./companion/install.sh              check only: what would happen (changes nothing)
-#   ./companion/install.sh install      add the companion; the game keeps running, players stay connected
-#   ./companion/install.sh update       rebuild and restart only the companion (after copying a new version)
-#   ./companion/install.sh status       check the running companion against the game
-#   ./companion/install.sh uninstall    remove the companion; its data (config/modmanager, backups/) stays
+# Run it from a checkout of the repository next to your compose file (git clone …/valheim-mod-manager):
 #
-# Options: --dir <compose dir>   default: the folder this companion folder sits in
+#   valheim-mod-manager/apps/companion/install.sh              check only: what would happen (changes nothing)
+#   valheim-mod-manager/apps/companion/install.sh install      add the companion; the game keeps running, players stay connected
+#   valheim-mod-manager/apps/companion/install.sh update       rebuild and restart only the companion (after a git pull)
+#   valheim-mod-manager/apps/companion/install.sh status       check the running companion against the game
+#   valheim-mod-manager/apps/companion/install.sh uninstall    remove the companion; its data (config/modmanager, backups/) stays
+#
+# Options: --dir <compose dir>   default: the folder the repository checkout sits in
 #          --bind <ip>           default: the server's LAN address (only loopback/private addresses are accepted)
 #          --port <n>            default: 9002
 #          --service <name>      the game service, when it is not found by its image
@@ -30,7 +32,7 @@ while [ $# -gt 0 ]; do
 	--port) PORT=${2:?--port needs a value}; shift ;;
 	--service) SERVICE=${2:?--service needs a value}; shift ;;
 	--yes | -y) YES=1 ;;
-	-h | --help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h | --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	*) echo "unknown argument: $1 (see --help)" >&2; exit 2 ;;
 	esac
 	shift
@@ -76,7 +78,7 @@ preflight() {
 	[ "${v%%.*}" -ge 2 ] 2>/dev/null || fail "Docker Compose $v is too old, v2 is needed"
 	ok "Docker and Compose $v"
 
-	DIR=${DIR:-$(dirname "$SCRIPT_DIR")}
+	DIR=${DIR:-$(cd "$SCRIPT_DIR/../../.." && pwd)} # apps/companion → the checkout → the folder it sits in
 	cd "$DIR" || fail "cannot enter $DIR"
 	BASE=""
 	for f in compose.yaml compose.yml docker-compose.yaml docker-compose.yml; do [ -f "$f" ] && { BASE=$f; break; }; done

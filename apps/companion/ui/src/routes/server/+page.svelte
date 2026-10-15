@@ -21,7 +21,10 @@
 
 	async function loadEnv() {
 		const r = await attempt(() => api<{ entries: EnvEntry[] }>("/env"));
-		if (r) ((env = r.entries), (envEdits = {}));
+		if (r) {
+			env = r.entries;
+			envEdits = {};
+		}
 	}
 
 	function ask(c: NonNullable<typeof confirm>) {

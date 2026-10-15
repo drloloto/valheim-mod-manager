@@ -16,7 +16,13 @@ const prod: ComposeConfig = {
 		playit: { image: "ghcr.io/playit-cloud/playit-agent:1.0", network_mode: "host", environment: { SECRET_KEY: "${PLAYIT_SECRET_KEY}" } },
 	},
 };
-const opts = { projectDir: "/home/u/docker/valheim-server", companionDir: "./companion", bind: "10.10.10.123", port: 9002, dockerSock: "/var/run/docker.sock" };
+const opts = {
+	projectDir: "/home/u/docker/valheim-server",
+	companionDir: "./valheim-mod-manager/apps/companion",
+	bind: "10.10.10.123",
+	port: 9002,
+	dockerSock: "/var/run/docker.sock",
+};
 
 describe("planCompanion", () => {
 	it("writes a companion service that mounts what the game mounts", () => {
@@ -24,6 +30,9 @@ describe("planCompanion", () => {
 		expect(p.errors).toEqual([]);
 		expect(p.service).toBe("valheim");
 		expect(p.yaml).toContain('- "./config:/config"');
+		// built from the repository checkout next to the compose file, with the workspace lockfile
+		expect(p.yaml).toContain('context: "./valheim-mod-manager"');
+		expect(p.yaml).toContain('dockerfile: "apps/companion/Dockerfile"');
 		expect(p.yaml).toContain('- "./valheim.env:/env/valheim.env"');
 		expect(p.yaml).toContain('- "VALHEIM_SERVICE=valheim"');
 		expect(p.yaml).toContain('- "10.10.10.123:9002:9002"');
