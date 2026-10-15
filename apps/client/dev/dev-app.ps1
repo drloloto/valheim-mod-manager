@@ -7,7 +7,7 @@ keeps its data in %APPDATA%\io.github.drloloto.valheim-mod-manager.dev. Nothing 
 app's folder; settings, the index cache and the source profile are only copied from it.
 
 The sync code comes from the companion itself (GET /api/sync), never from a file; the admin's gist token for
-publish tests is the throwaway COMPANION_GIST_TOKEN in ..\test\.env.
+publish tests is the throwaway COMPANION_GIST_TOKEN in test\.env at the repository root.
 
 .PARAMETER Build      Build the dev app first (npm run build:dev-app; a few minutes).
 .PARAMETER Reset      Wipe the dev data dir before seeding.
@@ -25,7 +25,8 @@ param([switch]$Build, [switch]$Reset, [switch]$Cdp, [switch]$NoSeed, [string]$Co
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$ws = (Resolve-Path (Join-Path $root "..")).Path
+# the repository root (apps/client/dev → ../..), where test/ lives
+$ws = (Resolve-Path (Join-Path $root "..\..")).Path
 $prod = Join-Path $env:APPDATA "io.github.drloloto.valheim-mod-manager"
 $dev = Join-Path $env:APPDATA "io.github.drloloto.valheim-mod-manager.dev"
 $exe = Join-Path $root "src-tauri\target\debug\valheim-mod-manager.exe"

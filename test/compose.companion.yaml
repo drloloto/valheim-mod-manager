@@ -1,0 +1,23 @@
+# Test stack: the companion is built from its source in this repository (apps/companion), never from a copy.
+# `pwsh test/up.ps1` builds and starts it; .env loads this file through COMPOSE_FILE.
+services:
+  companion:
+    build: "../apps/companion"
+    image: valheim-companion:local
+    volumes:
+      - "./config:/config"
+      - "./backups:/backups"
+      - "./valheim.env:/env/valheim.env"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      - "VALHEIM_SERVICE=valheim"
+      - "PUBLIC_URL=http://127.0.0.1:9002"
+      # gist sync is set up on the landing page (admin sign-in → "Sync without an open port"); the result lives in
+      # config/modmanager/sync.json. COMPANION_SYNC_CODE / COMPANION_GIST_TOKEN from test/.env would override it.
+      - "COMPANION_GIST_POLL=60"
+      # the button opens the client's DEV build (own scheme, own data dir), never the installed app
+      - "COMPANION_DEEPLINK_SCHEME=valheim-mod-manager-dev"
+      - "COMPANION_DEBUG=1"
+    ports:
+      - "127.0.0.1:9002:9002"
+    restart: unless-stopped

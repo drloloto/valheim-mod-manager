@@ -49,3 +49,6 @@ test/backups/
 /.ds-sync/
 /ds-bundle/
 /.design-sync/.cache/
+test/valheim.env
+test/frpc.toml
+test/e2e/out/
