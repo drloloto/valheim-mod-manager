@@ -1,6 +1,8 @@
 # The admin UI moves into the Mod Manager, and both apps move into one repository
 
-Date: 2026-10-14. Status: design, not started. Owner's decisions so far: the gist stays the players'
+Date: 2026-10-14. Status: Part A superseded, Part B changed by
+`2026-10-15-monorepo-viteplus-companion-agent-design.md` (Vite+ monorepo; the companion becomes an install
+agent, server management moves into the client). Read that one first. Owner's decisions so far: the gist stays the players'
 transport (a self-hosted mailbox behind the game tunnel is the only alternative worth having and can be
 added later behind the same sync code); HTTP is the admin surface and stays on the LAN/VPN; the companion
 keeps all server-side logic; the client keeps its design, and everything imported from the companion must
