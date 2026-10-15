@@ -1,13 +1,13 @@
 {
-	"name": "valheim-companion",
+	"name": "@vmm/companion",
 	"version": "0.3.1",
 	"private": true,
 	"type": "module",
 	"scripts": {
 		"start": "bun run src/server.ts",
 		"test": "bun test src",
-		"build:ui": "cd ui && bun install && bun run build",
-		"check:ui": "cd ui && bun run check"
+		"build:ui": "pnpm --filter @vmm/companion-ui build",
+		"check:ui": "pnpm --filter @vmm/companion-ui check"
 	},
 	"dependencies": {
 		"fflate": "^0.8.2",

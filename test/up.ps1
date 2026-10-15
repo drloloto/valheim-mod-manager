@@ -23,7 +23,7 @@ $base = "http://127.0.0.1:9002"
 
 if (-not $NoBuild) {
 	Write-Host "building valheim-companion:local from $repo\apps\companion"
-	docker build -q -t valheim-companion:local (Join-Path $repo "apps\companion") | Out-Null
+	docker build -q -t valheim-companion:local -f (Join-Path $repo "apps\companion\Dockerfile") $repo | Out-Null
 	if ($LASTEXITCODE) { throw "docker build failed" }
 }
 if ($Reset) {

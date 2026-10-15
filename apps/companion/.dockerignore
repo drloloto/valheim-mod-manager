@@ -1,6 +1,0 @@
-node_modules
-*.log
-dev
-ui/node_modules
-ui/.svelte-kit
-ui/build

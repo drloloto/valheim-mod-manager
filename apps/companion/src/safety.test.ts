@@ -12,7 +12,13 @@ describe("stop timeout", () => {
 	});
 });
 
-describe("data safety scenarios (own process, real tar)", async () => {
+// The companion only runs in its Linux image. On a Windows host, GNU tar from Git reads "C:\…" as a remote host
+// ("Cannot connect to C:"), so this scenario runs on Linux only (CI, the container), not on a Windows checkout.
+// (Not describe.skipIf: Bun still runs the body of a skipped describe, and the scenario starts right there.)
+const linux = process.platform !== "win32";
+(linux ? describe : describe.skip)("data safety scenarios (own process, real tar)", linux ? scenarios : () => {});
+
+async function scenarios() {
 	const root = await mkdtemp(join(tmpdir(), "companion-safety-"));
 	const proc = Bun.spawn([process.execPath, "run", join(import.meta.dir, "testing", "safety-scenario.ts")], {
 		env: { ...process.env, CONFIG_DIR: join(root, "config"), BACKUP_DIR: join(root, "backups"), ENV_FILE: join(root, "valheim.env"), HOSTNAME: "" },
@@ -77,4 +83,4 @@ describe("data safety scenarios (own process, real tar)", async () => {
 	it("proceeds on a fresh server without a world", () => {
 		expect(out.freshServer).toEqual({ value: "ok", backup: null });
 	});
-});
+}

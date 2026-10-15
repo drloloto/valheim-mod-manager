@@ -137,7 +137,8 @@ build_image() {
 	step "Building the companion image (does not touch the game)"
 	local log
 	log=$(mktemp)
-	if ! docker build -t "$IMAGE" "$SCRIPT_DIR_NATIVE" >"$log" 2>&1; then
+	# The image builds from the repository root (workspace lockfile); this script lives in apps/companion.
+	if ! docker build -t "$IMAGE" -f "$SCRIPT_DIR_NATIVE/Dockerfile" "$SCRIPT_DIR_NATIVE/../.." >"$log" 2>&1; then
 		tail -n 30 "$log" >&2
 		rm -f "$log"
 		fail "the image did not build; nothing was changed"

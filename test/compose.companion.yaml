@@ -2,7 +2,9 @@
 # `pwsh test/up.ps1` builds and starts it; .env loads this file through COMPOSE_FILE.
 services:
   companion:
-    build: "../apps/companion"
+    build:
+      context: ".."
+      dockerfile: "apps/companion/Dockerfile"
     image: valheim-companion:local
     volumes:
       - "./config:/config"
