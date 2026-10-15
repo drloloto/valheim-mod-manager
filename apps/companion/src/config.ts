@@ -3,6 +3,7 @@
 import { join } from "path";
 import { writeAtomic } from "./fsutil";
 import { MM_DIR } from "./paths";
+import pkg from "../package.json" with { type: "json" };
 
 const flag = (name: string, def: boolean): boolean => {
 	const v = process.env[name]?.trim().toLowerCase();
@@ -44,7 +45,8 @@ export const DEEPLINK_SCHEME =
  *  With it the invite link is clickable in any chat; without it the invite is the raw `scheme://import?code=…`
  *  link. The code travels in the URL fragment, which browsers never send to the page's server. */
 export const INVITE_URL = (process.env.COMPANION_INVITE_URL || "").trim().replace(/\/$/, "");
-export const VERSION = "0.3.0";
+// From package.json (next to src/ in the repository and in the image), so it never drifts from the release.
+export const VERSION: string = pkg.version;
 
 const TOKEN_FILE = join(MM_DIR, "companion-token");
 let token = process.env.COMPANION_TOKEN?.trim() || "";

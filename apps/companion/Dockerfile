@@ -10,7 +10,12 @@ WORKDIR /repo
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/companion/package.json apps/companion/
 COPY apps/companion/ui/package.json apps/companion/ui/
-RUN pnpm install --frozen-lockfile --filter @vmm/companion --filter @vmm/companion-ui
+COPY packages/ui/package.json packages/ui/
+# No lifecycle scripts: the root's `prepare` installs git hooks (needs git, pointless in an image). Only esbuild
+# needs its postinstall (it fetches the platform binary).
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter @vmm/companion --filter "@vmm/companion-ui..." \
+    && pnpm rebuild esbuild
+COPY packages/ui packages/ui
 COPY apps/companion apps/companion
 RUN pnpm --filter @vmm/companion-ui exec vp run build \
     && pnpm --filter @vmm/companion deploy --prod /out
