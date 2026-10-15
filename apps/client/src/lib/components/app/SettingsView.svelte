@@ -9,7 +9,7 @@
 	import { debounce } from "#lib/desktop/debounce.js";
 	import { formatBytes, formatNumber, relativeTime } from "#lib/format.js";
 	import { localeSetting, setLocaleSetting, t, type LocaleSetting } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	const SECTIONS = $derived([
 		{ id: "game", label: t("settings.game") },

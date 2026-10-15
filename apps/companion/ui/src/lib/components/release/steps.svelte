@@ -1,6 +1,6 @@
 <script lang="ts">
 	import CheckIcon from "@lucide/svelte/icons/check";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	// The four stations of a release as a horizontal rail. A step is clickable when it is reachable; the
 	// current one is highlighted, done ones carry a check, blocked ones stay dim with the reason as a hint.

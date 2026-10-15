@@ -1,7 +1,7 @@
 <script lang="ts">
 	import X from "@lucide/svelte/icons/x";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	let {
 		field,

@@ -27,7 +27,13 @@ let r = await stageConfigChanges("Mod.Alpha.cfg", [{ section: "General", key: "S
 out.stagedFiles = r.configs;
 out.liveAfterEdit = await readFile(bep("Mod.Alpha.cfg"), "utf-8");
 out.working = (await workingConfig("Mod.Alpha.cfg")).text;
-out.plan1 = { changed: r.plan.configsChanged, restart: r.plan.restartRequired, effect: r.plan.effects["Mod.Alpha.cfg"], empty: summary(r).empty, modsFrom: r.modsFrom };
+out.plan1 = {
+	changed: r.plan.configsChanged,
+	restart: r.plan.restartRequired,
+	effect: r.plan.effects["Mod.Alpha.cfg"],
+	empty: summary(r).empty,
+	modsFrom: r.modsFrom,
+};
 
 // 2. editing back to the live value drops the copy; the working state stays (empty)
 r = await stageConfigChanges("Mod.Alpha.cfg", [{ section: "General", key: "Speed", value: "1" }], info);
@@ -53,7 +59,13 @@ out.refused = refused;
 r = (await revertConfig("Other.cfg"))!;
 r = await stageConfigChanges("Mod.Alpha.cfg", [{ section: "General", key: "Speed", value: "7" }], info);
 const report = await applyRelease(r.id, () => {}, { backup: false });
-out.report = { written: report.configsWritten, stayedUp: report.stayedUp, restartRequired: report.restartRequired, backup: report.backup, nothingToDo: report.nothingToDo };
+out.report = {
+	written: report.configsWritten,
+	stayedUp: report.stayedUp,
+	restartRequired: report.restartRequired,
+	backup: report.backup,
+	nothingToDo: report.nothingToDo,
+};
 out.liveAfterRelease = await readFile(bep("Mod.Alpha.cfg"), "utf-8");
 out.pendingAfterRelease = await pendingRelease();
 out.manifestConfigs = Object.keys(JSON.parse(await readFile(join(CONFIG, "modmanager", "manifest.json"), "utf-8")).configs);

@@ -24,7 +24,15 @@ const release = (id: string, manifestMods: unknown[] = []): Release => ({
 	configMeta: {},
 	manifest: { ...manifest(1), mods: manifestMods as Manifest["mods"] },
 	configs: ["a.cfg"],
-	plan: { install: [{ id: "a-A", from: null, to: "1.0.0" }], remove: [], configsChanged: [], configsNew: ["a.cfg"], conflicts: [], restartRequired: true, effects: {} },
+	plan: {
+		install: [{ id: "a-A", from: null, to: "1.0.0" }],
+		remove: [],
+		configsChanged: [],
+		configsNew: ["a.cfg"],
+		conflicts: [],
+		restartRequired: true,
+		effects: {},
+	},
 	problems: [],
 	schedule: null,
 	lastError: null,
@@ -114,7 +122,10 @@ describe("gist sync", () => {
 			hostname: "127.0.0.1",
 			fetch: () => {
 				hits++;
-				return new Response("{}", { status: 403, headers: { "x-ratelimit-remaining": "0", "x-ratelimit-resource": "gist_update", "x-ratelimit-limit": "100", "x-ratelimit-reset": reset } });
+				return new Response("{}", {
+					status: 403,
+					headers: { "x-ratelimit-remaining": "0", "x-ratelimit-resource": "gist_update", "x-ratelimit-limit": "100", "x-ratelimit-reset": reset },
+				});
 			},
 		});
 		try {
@@ -131,7 +142,15 @@ describe("gist sync", () => {
 
 	it("stages and applies a release written by the admin, exactly once", async () => {
 		const h = harness();
-		await h.publish({ v: 1, id: "rel-1", createdAt: 5, message: "hi", mods: [{ id: "b-B", version: "2.0.0" }], configs: [{ path: "a.cfg", contentBase64: "YQ==" }], apply: { when: "now" } });
+		await h.publish({
+			v: 1,
+			id: "rel-1",
+			createdAt: 5,
+			message: "hi",
+			mods: [{ id: "b-B", version: "2.0.0" }],
+			configs: [{ path: "a.cfg", contentBase64: "YQ==" }],
+			apply: { when: "now" },
+		});
 		expect((await syncOnce(h.deps)).handled).toBe("rel-1");
 		expect(h.calls.filter((c) => !c.startsWith("log"))).toEqual(['stage:[{"id":"b-B","version":"2.0.0"}]:1', "apply:r1"]);
 		const s = await h.serverFile();

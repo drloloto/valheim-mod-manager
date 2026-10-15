@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { formatNumber } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	let {
 		counts,

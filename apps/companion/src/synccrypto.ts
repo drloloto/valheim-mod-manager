@@ -97,5 +97,5 @@ export function isEnvelope(text: string): boolean {
 	}
 }
 
-export const sealJson =(key: Buffer, name: string, value: unknown) => JSON.stringify(seal(key, name, JSON.stringify(value)));
+export const sealJson = (key: Buffer, name: string, value: unknown) => JSON.stringify(seal(key, name, JSON.stringify(value)));
 export const openJson = <T = unknown>(key: Buffer, name: string, text: string): T => JSON.parse(open(key, name, JSON.parse(text)).toString("utf-8")) as T;

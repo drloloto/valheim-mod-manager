@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 import { de } from "./de";
 import { en } from "./en";
 import { getLocale, pickLocale, setLocaleSource, t, tn } from "./t";

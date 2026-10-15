@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { defaultCriteria, withList } from "./criteria";
 import { activeView, addView, builtinViews, parseViews, removeView } from "./views";
 

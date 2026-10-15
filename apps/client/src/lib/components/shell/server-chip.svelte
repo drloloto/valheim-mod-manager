@@ -6,7 +6,7 @@
 	import { serverView, type ServerTone } from "#lib/api/server-view.js";
 	import { store } from "#lib/api/store.svelte.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	// The linked server of the active profile, in the toolbar: how it is reached, what it is called, the
 	// state (one reading shared with the status bar, see server-view.ts), and whether this machine may

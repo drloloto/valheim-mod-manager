@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import type { ProfileMod } from "#lib/api/types.js";
 import { buildRows, countSources, sortRows, type RowsInput } from "./installed";
 

@@ -33,7 +33,11 @@ export class RateLimited extends Error {
 function rateLimited(res: Response): RateLimited | null {
 	if (res.status !== 403 || res.headers.get("x-ratelimit-remaining") !== "0") return null;
 	const reset = Number(res.headers.get("x-ratelimit-reset")) * 1000;
-	return new RateLimited(res.headers.get("x-ratelimit-resource") ?? "api", res.headers.get("x-ratelimit-limit") ?? "?", reset > 0 ? reset : Date.now() + 3600_000);
+	return new RateLimited(
+		res.headers.get("x-ratelimit-resource") ?? "api",
+		res.headers.get("x-ratelimit-limit") ?? "?",
+		reset > 0 ? reset : Date.now() + 3600_000,
+	);
 }
 
 interface GistFile {

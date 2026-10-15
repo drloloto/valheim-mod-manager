@@ -3,7 +3,7 @@
 // scrolls sideways by accident. The generated shadcn components are exempt (they are hardened in CSS).
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 const root = join(__dirname, "..", "..");
 

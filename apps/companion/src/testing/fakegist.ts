@@ -15,7 +15,13 @@ export function startFakeGist(port = 0, hostname = "::") {
 		files: Object.fromEntries(
 			Object.entries(files).map(([name, f]) => [
 				name,
-				{ filename: name, content: f.content.length > 1_000_000 ? f.content.slice(0, 1_000_000) : f.content, truncated: f.content.length > 1_000_000, size: f.content.length, raw_url: `http://${via}/raw/${id}/${name}` },
+				{
+					filename: name,
+					content: f.content.length > 1_000_000 ? f.content.slice(0, 1_000_000) : f.content,
+					truncated: f.content.length > 1_000_000,
+					size: f.content.length,
+					raw_url: `http://${via}/raw/${id}/${name}`,
+				},
 			]),
 		),
 	});
@@ -36,7 +42,7 @@ export function startFakeGist(port = 0, hostname = "::") {
 				if (!req.headers.get("authorization")) return Response.json({ message: "Requires authentication" }, { status: 401 });
 				const body = (await req.json()) as { files?: Files };
 				const id = randomBytes(16).toString("hex");
-				gists.set(id, { ...(body.files ?? {}) });
+				gists.set(id, { ...body.files });
 				return Response.json(view(id, gists.get(id)!, via), { status: 201 });
 			}
 			if (!m) return new Response("not found", { status: 404 });

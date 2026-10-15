@@ -60,7 +60,10 @@ const cb = await createBackup("C");
 await rm(world("C"), { recursive: true });
 await restoreFiles(cb.id, { world: "C", configs: false });
 out.chunked = {
-	members: (await Bun.$`tar -tzf ${join(BACKUPS, cb.id)}`.text()).split(/\r?\n/).filter((m) => m.startsWith("worlds_local/")).sort(),
+	members: (await Bun.$`tar -tzf ${join(BACKUPS, cb.id)}`.text())
+		.split(/\r?\n/)
+		.filter((m) => m.startsWith("worlds_local/"))
+		.sort(),
 	main: await read(world("C/_main.1.db2")),
 	auto: await read(world("C_backup_auto-20261011-091040/_main.0.db2")),
 };

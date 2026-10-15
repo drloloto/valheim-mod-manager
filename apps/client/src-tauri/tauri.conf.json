@@ -4,8 +4,8 @@
 	"version": "0.3.1",
 	"identifier": "io.github.drloloto.valheim-mod-manager",
 	"build": {
-		"beforeDevCommand": "npm run dev",
-		"beforeBuildCommand": "npm run build",
+		"beforeDevCommand": "vp dev",
+		"beforeBuildCommand": "vp run build",
 		"devUrl": "http://localhost:1420",
 		"frontendDist": "../build"
 	},

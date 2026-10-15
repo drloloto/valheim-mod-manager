@@ -52,3 +52,7 @@ test/backups/
 test/valheim.env
 test/frpc.toml
 test/e2e/out/
+
+# Vite+: generated hook shims (vp config) and Vitest's cache
+.vite-hooks/_/
+.vitest/

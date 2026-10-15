@@ -67,7 +67,12 @@ describe("planCompanion", () => {
 
 describe("verifyCompanion", () => {
 	const ok: VerifyInput = {
-		status: { server: { world: "PetersWelte" }, container: { state: "running", id: "05cc1274d752" }, world: { name: "PetersWelte", size: 18e6, lastSave: 1 }, manifest: { mods: 0 } },
+		status: {
+			server: { world: "PetersWelte" },
+			container: { state: "running", id: "05cc1274d752" },
+			world: { name: "PetersWelte", size: 18e6, lastSave: 1 },
+			manifest: { mods: 0 },
+		},
 		worlds: [{ name: "PetersWelte" }],
 		configs: ["BepInEx.cfg"],
 		gameWorld: "PetersWelte",

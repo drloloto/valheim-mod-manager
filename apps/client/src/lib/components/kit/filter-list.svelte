@@ -2,8 +2,8 @@
 	import type { Tri, TriMap } from "#lib/browse/criteria.js";
 	import { formatNumber } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
-	import { Input } from "#lib/components/ui/input/index.js";
+	import { cn } from "@vmm/ui/utils.js";
+	import { Input } from "@vmm/ui/components/ui/input/index.js";
 	import TriCheckbox from "./tri-checkbox.svelte";
 	import type { FilterItem } from "./types";
 

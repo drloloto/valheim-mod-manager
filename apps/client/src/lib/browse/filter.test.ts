@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import type { SlimPkg } from "#lib/api/types.js";
 import { defaultCriteria, withDate, withList, withNum, type Criteria } from "./criteria";
 import { countBy, depsState, facetCounts, listValues, matchesCriteria, matchesList, sortPackages, type ProfileFacts } from "./filter";

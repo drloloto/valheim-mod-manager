@@ -13,7 +13,7 @@
 	import { check, isDefault, kindOf, searchSettings } from "#lib/configmeta.js";
 	import { relative } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 	import type { ConfigFile, ConfigSaved, ConfigSetting, ConfigsIndex } from "#lib/types.js";
 
 	let index = $state<ConfigsIndex | null>(null);

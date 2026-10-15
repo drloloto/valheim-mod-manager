@@ -3,7 +3,7 @@
 	import Settings from "@lucide/svelte/icons/settings";
 	import { resolve } from "$app/paths";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 	import NavTabs from "./nav-tabs.svelte";
 	import PlayButton from "./play-button.svelte";
 	import ProfileSwitcher from "./profile-switcher.svelte";

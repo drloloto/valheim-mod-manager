@@ -1,6 +1,6 @@
 <script lang="ts">
-	import * as Select from "#lib/components/ui/select/index.js";
-	import { cn } from "#lib/utils.js";
+	import * as Select from "@vmm/ui/components/ui/select/index.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	let {
 		value = $bindable(),

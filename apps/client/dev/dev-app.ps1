@@ -2,14 +2,14 @@
 .SYNOPSIS
 Starts the DEV app with its own data dir, optionally seeded with a profile linked to the test companion.
 
-The DEV app (npm run build:dev-app, identifier ...valheim-mod-manager.dev, scheme valheim-mod-manager-dev)
+The DEV app (pnpm run build:dev-app, identifier ...valheim-mod-manager.dev, scheme valheim-mod-manager-dev)
 keeps its data in %APPDATA%\io.github.drloloto.valheim-mod-manager.dev. Nothing here writes to the installed
 app's folder; settings, the index cache and the source profile are only copied from it.
 
 The sync code comes from the companion itself (GET /api/sync), never from a file; the admin's gist token for
 publish tests is the throwaway COMPANION_GIST_TOKEN in test\.env at the repository root.
 
-.PARAMETER Build      Build the dev app first (npm run build:dev-app; a few minutes).
+.PARAMETER Build      Build the dev app first (pnpm run build:dev-app; a few minutes).
 .PARAMETER Reset      Wipe the dev data dir before seeding.
 .PARAMETER Cdp        Open WebView2 remote debugging on port 9229 so dev/drive.mjs and test/e2e/app.mjs can steer the app.
 .PARAMETER NoSeed     No profile: the app starts empty (the end-to-end test lets the companion's button create one).
@@ -41,8 +41,8 @@ Start-Sleep -Milliseconds 500
 if ($Build) {
 	Push-Location $root
 	try {
-		npm run build:dev-app
-		if ($LASTEXITCODE) { throw "npm run build:dev-app failed" }
+		pnpm run build:dev-app
+		if ($LASTEXITCODE) { throw "pnpm run build:dev-app failed" }
 	} finally { Pop-Location }
 }
 if (-not (Test-Path $exe)) { throw "no dev app at $exe; run with -Build" }

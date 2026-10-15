@@ -1,6 +1,6 @@
 // Screenshot + layout audit of the mock preview in headless Edge over CDP. No dependencies.
 //
-//   VITE_MOCK_TAURI=1 npm run dev                      # in another terminal
+//   VITE_MOCK_TAURI=1 pnpm dev                          # in another terminal
 //   node dev/screenshot.mjs 1100 680 /installed out.png  # viewport, route, output
 //
 // Environment:

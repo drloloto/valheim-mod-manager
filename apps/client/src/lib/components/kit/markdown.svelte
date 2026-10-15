@@ -2,7 +2,7 @@
 	// Sanitized markdown (see lib/markdown.ts). Links never navigate the WebView: every click on an
 	// anchor is handed to `onlink`, broken images are hidden instead of showing a frame.
 	import { renderMarkdown } from "#lib/markdown.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	let { source, onlink, class: className }: { source: string; onlink: (href: string) => void; class?: string } = $props();
 

@@ -1,6 +1,1 @@
-export interface SegmentOption {
-	value: string;
-	label: string;
-	badge?: string | number;
-	tone?: "default" | "primary";
-}
+export type { SegmentOption } from "@vmm/ui/components/kit/types.js";

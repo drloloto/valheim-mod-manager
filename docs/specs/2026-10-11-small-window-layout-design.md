@@ -32,7 +32,7 @@ These apply to every kit component and every app page; a static test enforces th
    element (not on an inline span), `shrink-0` on icons, badges and counts next to it. Groups of buttons
    `flex-wrap` instead of overflowing.
 4. **Scroll containers reserve their gutter.** The `scroll-y` utility (`overflow-y: auto; overflow-x: hidden;
-scrollbar-gutter: stable`) replaces raw `overflow-y-auto`; a scrollbar that appears no longer moves
+   scrollbar-gutter: stable`) replaces raw `overflow-y-auto`; a scrollbar that appears no longer moves
    content, and horizontal scrollbars cannot appear by accident.
 5. **shadcn primitives are hardened in `style-desktop.css`, not edited.** Dialog content is capped at the
    viewport height and scrolls; dialog footers wrap; select triggers truncate their value.

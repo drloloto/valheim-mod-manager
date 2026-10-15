@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import type { SlimPkg } from "#lib/api/types.js";
 import { isEmptyQuery, matchesQuery, nameNeedle, parseQuery, parseScope, searchKey } from "./query";
 

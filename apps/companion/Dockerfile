@@ -12,7 +12,7 @@ COPY apps/companion/package.json apps/companion/
 COPY apps/companion/ui/package.json apps/companion/ui/
 RUN pnpm install --frozen-lockfile --filter @vmm/companion --filter @vmm/companion-ui
 COPY apps/companion apps/companion
-RUN pnpm --filter @vmm/companion-ui build \
+RUN pnpm --filter @vmm/companion-ui exec vp run build \
     && pnpm --filter @vmm/companion deploy --prod /out
 
 # Stage 2: the companion server (Hono on Bun) with its runtime dependencies and the built UI.

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { readJson, removeKey, writeJson } from "./storage";
 
 // vitest runs in Node: a tiny in-memory stand-in with the Storage interface

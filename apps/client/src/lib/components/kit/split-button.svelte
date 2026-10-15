@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import ChevronDown from "@lucide/svelte/icons/chevron-down";
-	import { Button } from "#lib/components/ui/button/index.js";
-	import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+	import { Button } from "@vmm/ui/components/ui/button/index.js";
+	import * as DropdownMenu from "@vmm/ui/components/ui/dropdown-menu/index.js";
 
 	let {
 		children,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { externalHref, shouldBlockKey } from "./guards";
 
 const k = (key: string, ctrl = false, shift = false) => ({ key, ctrlKey: ctrl, metaKey: false, shiftKey: shift, altKey: false });

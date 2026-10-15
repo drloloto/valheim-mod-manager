@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Button } from "#lib/components/ui/button/index.js";
-	import { Input } from "#lib/components/ui/input/index.js";
+	import { Button } from "@vmm/ui/components/ui/button/index.js";
+	import { Input } from "@vmm/ui/components/ui/input/index.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	let {
 		value = $bindable(),

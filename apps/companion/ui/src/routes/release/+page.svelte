@@ -9,7 +9,7 @@
 	import { api, attempt, session } from "#lib/api.svelte.js";
 	import { dateTime, relative } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 	import type { ApplyResponse, ConfigDiff as Diff, PendingDiff, Release, ReleaseSummary } from "#lib/types.js";
 
 	// The release as four stations: the server now → the working state → the review → the release itself.

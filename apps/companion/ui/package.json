@@ -4,12 +4,7 @@
 	"version": "0.3.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"test": "bun test src",
-		"sync": "bun run scripts/sync-from-client.ts",
-		"format": "prettier --write ."
+		"dev": "vp dev"
 	},
 	"devDependencies": {
 		"@fontsource-variable/archivo": "catalog:",
@@ -22,9 +17,6 @@
 		"@types/bun": "^1.4.3",
 		"bits-ui": "catalog:",
 		"clsx": "catalog:",
-		"prettier": "catalog:",
-		"prettier-plugin-svelte": "catalog:",
-		"prettier-plugin-tailwindcss": "catalog:",
 		"shadcn-svelte": "catalog:",
 		"svelte": "catalog:",
 		"svelte-check": "catalog:",
@@ -34,7 +26,8 @@
 		"tailwindcss": "catalog:",
 		"tw-animate-css": "catalog:",
 		"typescript": "catalog:",
-		"vite": "catalog:"
+		"vite": "catalog:",
+		"vite-plus": "catalog:"
 	},
 	"imports": {
 		"#lib": "./src/lib/index.js",
@@ -43,6 +36,7 @@
 	"dependencies": {
 		"@git-diff-view/file": "^0.1.7",
 		"@git-diff-view/svelte": "^0.1.7",
-		"zod": "^4.6.7"
+		"zod": "^4.6.7",
+		"@vmm/ui": "workspace:*"
 	}
 }

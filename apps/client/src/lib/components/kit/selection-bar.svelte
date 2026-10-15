@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import X from "@lucide/svelte/icons/x";
-	import { Button } from "#lib/components/ui/button/index.js";
+	import { Button } from "@vmm/ui/components/ui/button/index.js";
 	import { t } from "#lib/i18n/index.svelte.js";
 
 	let { count, onclear, hint, children }: { count: number; onclear: () => void; hint?: string; children: Snippet } = $props();

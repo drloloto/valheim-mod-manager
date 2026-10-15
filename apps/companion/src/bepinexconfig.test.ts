@@ -29,8 +29,20 @@ describe("BepInEx config parser", () => {
 	it("extracts type, default, acceptable values, the multiple-values hint and the sync tags", () => {
 		const s = parseConfigText(text);
 		expect(s.map((x) => x.key)).toEqual(["Lock Configuration", "LogLevels", "Crafting Costs"]);
-		expect(s[0]).toMatchObject({ section: "General", type: "Toggle", defaultValue: "On", acceptableValues: "Off, On", synced: true, description: "Lock configuration" });
-		expect(s[1]).toMatchObject({ type: "LogLevel", multiple: true, acceptableValues: "None, Fatal, Error, Debug, All", description: "Which log levels to show." });
+		expect(s[0]).toMatchObject({
+			section: "General",
+			type: "Toggle",
+			defaultValue: "On",
+			acceptableValues: "Off, On",
+			synced: true,
+			description: "Lock configuration",
+		});
+		expect(s[1]).toMatchObject({
+			type: "LogLevel",
+			multiple: true,
+			acceptableValues: "None, Fatal, Error, Debug, All",
+			description: "Which log levels to show.",
+		});
 		expect(s[1].synced).toBeUndefined();
 		expect(s[2]).toMatchObject({ synced: false, description: "Item costs", value: "BjornMeat:1,Honey:1" });
 	});

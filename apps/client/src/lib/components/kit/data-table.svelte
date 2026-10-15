@@ -1,6 +1,6 @@
 <script lang="ts" generics="T">
 	import type { Snippet } from "svelte";
-	import * as ContextMenu from "#lib/components/ui/context-menu/index.js";
+	import * as ContextMenu from "@vmm/ui/components/ui/context-menu/index.js";
 	import {
 		DEFAULT_PREFS,
 		fitColumns,
@@ -19,7 +19,7 @@
 	import * as sel from "#lib/desktop/selection.js";
 	import { matches } from "#lib/desktop/shortcuts.js";
 	import { scrollToReveal, visibleRange } from "#lib/desktop/virtual.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 	import TriCheckbox from "./tri-checkbox.svelte";
 	import { t } from "#lib/i18n/index.svelte.js";
 	import type { SortState, TriState } from "./types";

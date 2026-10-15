@@ -147,7 +147,13 @@ export async function configSyncInfo(configFiles: string[], bepinexDir = BEPINEX
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
-const tokens = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((x) => x.length >= 3 && x !== "mods" && x !== "valheim"));
+const tokens = (s: string) =>
+	new Set(
+		s
+			.toLowerCase()
+			.split(/[^a-z0-9]+/)
+			.filter((x) => x.length >= 3 && x !== "mods" && x !== "valheim"),
+	);
 
 /** How much a config name (BepInEx GUID) looks like the mod id from installed.json or the DLL's file name. */
 export function resemblance(configName: string, modId: string | null, dll: string): number {

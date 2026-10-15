@@ -5,7 +5,7 @@ Spec: [2026-10-11-small-window-layout-design.md](../specs/2026-10-11-small-windo
 ## Tasks
 
 1. **Columns that fit** — `desktop/columns.ts`: `priority`, flexible `minWidth`, `fitColumns(defs, prefs, width,
-opts)`; tests first. `DataTable` measures width, renders the fitted set, viewport `scroll-y`.
+   opts)`; tests first. `DataTable` measures width, renders the fitted set, viewport `scroll-y`.
 2. **Utilities and primitive hardening** — `app.css`: `@utility scroll-y`. `style-desktop.css`: dialog content
    `max-h` + scroll, footer wrap, select trigger value truncation.
 3. **Kit** — `Segmented` (items `min-w-0 truncate`, group `max-w-full`), `Choice` (value in a truncating span),

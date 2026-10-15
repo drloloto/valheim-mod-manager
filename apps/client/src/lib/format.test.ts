@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { setLocaleSource } from "#lib/i18n/t.js";
 import { formatBytes, formatCompact, formatMonth, formatNumber, formatUnit, initials, relativeTime } from "./format";
 

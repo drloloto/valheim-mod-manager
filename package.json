@@ -5,5 +5,11 @@
 	"packageManager": "pnpm@12.9.1",
 	"engines": {
 		"node": ">=22.18.0"
+	},
+	"devDependencies": {
+		"vite-plus": "catalog:"
+	},
+	"scripts": {
+		"prepare": "vp config"
 	}
 }

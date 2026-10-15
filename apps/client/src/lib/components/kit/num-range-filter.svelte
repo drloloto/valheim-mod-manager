@@ -2,10 +2,10 @@
 	import type { NumOp, NumRange } from "#lib/browse/criteria.js";
 	import { bucketInNum, bucketNumRange, extendNumRange, NUM_OPS, numActive, numOpLabel, type Bucket } from "#lib/browse/ranges.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { Input } from "#lib/components/ui/input/index.js";
-	import { Button } from "#lib/components/ui/button/index.js";
+	import { Input } from "@vmm/ui/components/ui/input/index.js";
+	import { Button } from "@vmm/ui/components/ui/button/index.js";
 	import Histogram from "./histogram.svelte";
-	import Segmented from "./segmented.svelte";
+	import Segmented from "@vmm/ui/components/kit/segmented.svelte";
 
 	let {
 		value,

@@ -94,7 +94,9 @@ export function planCompanion(cfg: ComposeConfig, o: PlanOptions): Plan {
 
 	const games = Object.entries(services).filter(([name, s]) => (o.service ? name === o.service : GAME_IMAGE.test(s.image ?? "")));
 	if (!games.length) {
-		plan.errors.push(o.service ? `service "${o.service}" not found` : "no service runs the valheim-server image (community-valheim-tools or lloesche); pass --service <name>");
+		plan.errors.push(
+			o.service ? `service "${o.service}" not found` : "no service runs the valheim-server image (community-valheim-tools or lloesche); pass --service <name>",
+		);
 		return plan;
 	}
 	if (games.length > 1) {
@@ -103,7 +105,8 @@ export function planCompanion(cfg: ComposeConfig, o: PlanOptions): Plan {
 	}
 	const [name, game] = games[0];
 	plan.service = name;
-	if (!GAME_IMAGE.test(game.image ?? "")) plan.warnings.push(`"${name}" runs ${game.image ?? "a custom build"}; the companion is made for the valheim-server image's layout`);
+	if (!GAME_IMAGE.test(game.image ?? ""))
+		plan.warnings.push(`"${name}" runs ${game.image ?? "a custom build"}; the companion is made for the valheim-server image's layout`);
 
 	const config = (game.volumes ?? []).find((v) => v.target === "/config");
 	if (!config?.source) {
@@ -123,9 +126,7 @@ export function planCompanion(cfg: ComposeConfig, o: PlanOptions): Plan {
 	// The companion reads the world name from the env file; one in the compose file wins in the game. verify
 	// compares both after the start and rolls back on a mismatch, so a matching duplicate is fine.
 	if (plan.composeWorld !== null)
-		plan.warnings.push(
-			`WORLD_NAME is set in the compose file ("${plan.composeWorld}"); the companion reads ${envFile ?? "the env file"}, keep both the same`,
-		);
+		plan.warnings.push(`WORLD_NAME is set in the compose file ("${plan.composeWorld}"); the companion reads ${envFile ?? "the env file"}, keep both the same`);
 
 	if (!isPrivateBind(o.bind)) plan.errors.push(`${o.bind} is not a loopback or private LAN address; the companion must never be reachable from the internet`);
 	if (!Number.isInteger(o.port) || o.port < 1 || o.port > 65535) plan.errors.push(`invalid port ${o.port}`);
@@ -156,7 +157,12 @@ export function planCompanion(cfg: ComposeConfig, o: PlanOptions): Plan {
 		"",
 	];
 	plan.yaml = lines.join("\n");
-	plan.info.push(`game service: ${name}`, `config folder: ${configSource}`, `env file: ${envFile ? hostPath(envFile, o.projectDir) : "none"}`, `companion URL: ${url}`);
+	plan.info.push(
+		`game service: ${name}`,
+		`config folder: ${configSource}`,
+		`env file: ${envFile ? hostPath(envFile, o.projectDir) : "none"}`,
+		`companion URL: ${url}`,
+	);
 	return plan;
 }
 
@@ -194,10 +200,15 @@ export function verifyCompanion(v: VerifyInput): { errors: string[]; warnings: s
 		if (v.worlds.length) errors.push(`world "${s.server.world}" is not in worlds_local, but ${v.worlds.map((w) => w.name).join(", ")} is; check WORLD_NAME`);
 		else warnings.push("no world on disk yet (fresh server): the first backup happens once the game has saved");
 	} else {
-		info.push(`world: ${s.world.name}, ${(s.world.size / 1e6).toFixed(1)} MB, last saved ${s.world.lastSave ? new Date(s.world.lastSave).toISOString() : "unknown"}`);
+		info.push(
+			`world: ${s.world.name}, ${(s.world.size / 1e6).toFixed(1)} MB, last saved ${s.world.lastSave ? new Date(s.world.lastSave).toISOString() : "unknown"}`,
+		);
 	}
 	const mods = s.manifest?.mods ?? 0;
-	info.push(`configs: ${v.configs.length} .cfg files`, mods ? `mods in the lock: ${mods}` : "no mods in the lock yet: the first publish from the Mod Manager takes over hand-installed mods");
+	info.push(
+		`configs: ${v.configs.length} .cfg files`,
+		mods ? `mods in the lock: ${mods}` : "no mods in the lock yet: the first publish from the Mod Manager takes over hand-installed mods",
+	);
 	if (!v.configs.length && s.world) warnings.push("no .cfg files found in config/bepinex; is BEPINEX=true?");
 	return { errors, warnings, info };
 }

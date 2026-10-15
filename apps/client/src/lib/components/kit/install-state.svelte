@@ -2,7 +2,7 @@
 	// Install state of a row on the Installed page: always dot + word, the same shape for every state.
 	// An available update is the only clickable one, still dot + word, so the column reads as one list.
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 	import type { InstallState } from "#lib/installed.js";
 
 	let { state, version, onupdate }: { state: InstallState; version?: string | null; onupdate?: (e: MouseEvent) => void } = $props();

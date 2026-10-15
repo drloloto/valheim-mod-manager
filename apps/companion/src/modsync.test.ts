@@ -25,9 +25,9 @@ describe("config → plugin matching", () => {
 		expect(resemblance("Therzie.Warfare", "Therzie-Warfare", "plugins/Therzie-Warfare/Warfare.dll")).toBeGreaterThan(
 			resemblance("Therzie.Warfare", "Therzie-Monstrum", "plugins/Therzie-Monstrum/Monstrum.dll"),
 		);
-		expect(resemblance("goldenrevolver.quick_stack_store", "Goldenrevolver-Quick_Stack_Store_Sort_Trash_Restock", "plugins/QuickStackStore.dll")).toBeGreaterThan(
-			resemblance("goldenrevolver.quick_stack_store", "Tenemo-EpicLoot_ProgressionFix", "plugins/EpicLootProgressionFix.dll"),
-		);
+		expect(
+			resemblance("goldenrevolver.quick_stack_store", "Goldenrevolver-Quick_Stack_Store_Sort_Trash_Restock", "plugins/QuickStackStore.dll"),
+		).toBeGreaterThan(resemblance("goldenrevolver.quick_stack_store", "Tenemo-EpicLoot_ProgressionFix", "plugins/EpicLootProgressionFix.dll"));
 		expect(resemblance("randyknapp.mods.epicloot", "RandyKnapp-EpicLoot", "plugins/EpicLoot.dll")).toBeGreaterThan(
 			resemblance("randyknapp.mods.epicloot", "ValheimModding-Jotunn", "plugins/Jotunn.dll"),
 		);

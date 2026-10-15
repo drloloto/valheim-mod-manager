@@ -5,12 +5,7 @@ export type TriState = 1 | -1 | 0 | "mixed";
 export type { ModStatus };
 export type { ColumnDef as Column, Density, TablePrefs } from "#lib/desktop/columns.js";
 
-export interface SegmentOption {
-	value: string;
-	label: string;
-	badge?: string | number;
-	tone?: "default" | "primary";
-}
+export type { SegmentOption } from "@vmm/ui/components/kit/types.js";
 
 export interface SortState {
 	key: string;

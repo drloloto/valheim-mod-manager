@@ -4,9 +4,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn-svelte/tailwind.css";
-@import "./lib/style-vega.css" layer(base);
-@import "./lib/style-desktop.css" layer(base);
-@import "./lib/theme.css";
+@import "@vmm/ui/style-vega.css" layer(base);
+@import "@vmm/ui/style-desktop.css" layer(base);
+@import "@vmm/ui/theme.css";
+/* the shared components live in packages/ui; Tailwind only scans the app by default */
+@source "../../../../packages/ui/src";
 
 @custom-variant style-vega (&:where(.style-vega *));
 @custom-variant dark (&:is(.dark *));

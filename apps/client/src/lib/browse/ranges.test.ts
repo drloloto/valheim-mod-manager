@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { setLocaleSource } from "#lib/i18n/t.js";
 import type { DateRange, NumRange } from "./criteria";
 import {

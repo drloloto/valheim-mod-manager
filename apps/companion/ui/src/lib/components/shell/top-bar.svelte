@@ -4,7 +4,7 @@
 	import { BrandMark, Button } from "#lib/components/kit/index.js";
 	import { session } from "#lib/api.svelte.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 	import TokenDialog from "./token-dialog.svelte";
 
 	let tokenOpen = $state(false);

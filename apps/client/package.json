@@ -4,17 +4,12 @@
 	"version": "0.3.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
-		"preview": "vite preview",
+		"dev": "vp dev",
+		"preview": "vp preview",
 		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"tauri": "tauri",
 		"dev:app": "tauri dev --config src-tauri/tauri.dev.conf.json",
 		"build:dev-app": "tauri build --debug --no-bundle --config src-tauri/tauri.dev.conf.json",
-		"test": "vitest run",
-		"format": "prettier --write .",
-		"lint": "prettier --check .",
 		"tauri:build:local": "tauri build --config src-tauri/tauri.local.conf.json",
 		"tauri:build:portable": "tauri build --config src-tauri/tauri.local.conf.json --no-bundle && node scripts/portable.mjs"
 	},
@@ -29,16 +24,13 @@
 		"esbuild": "^0.28.2",
 		"jsdom": "^30.1.2",
 		"paneforge": "^1.0.2",
-		"prettier": "catalog:",
-		"prettier-plugin-svelte": "catalog:",
-		"prettier-plugin-tailwindcss": "catalog:",
 		"shadcn-svelte": "catalog:",
 		"svelte": "catalog:",
 		"svelte-check": "catalog:",
 		"tw-animate-css": "catalog:",
 		"typescript": "catalog:",
 		"vite": "catalog:",
-		"vitest": "catalog:"
+		"vite-plus": "catalog:"
 	},
 	"dependencies": {
 		"@fontsource-variable/archivo": "catalog:",
@@ -59,7 +51,8 @@
 		"svelte-sonner": "catalog:",
 		"tailwind-merge": "catalog:",
 		"tailwind-variants": "catalog:",
-		"tailwindcss": "catalog:"
+		"tailwindcss": "catalog:",
+		"@vmm/ui": "workspace:*"
 	},
 	"description": "Fast, standalone mod manager for Valheim on Windows (Thunderstore, BepInEx, r2modman-compatible profiles).",
 	"license": "MIT",

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { parseDeepLink } from "./deeplink";
 
 const CODE = "vmm1.5f2964a03b693a8655578dfdcbd4b6b6.4okNMk4QDw6NEzsno2auxfX_CZ3Xs-XnfjeD0LCFp-M";

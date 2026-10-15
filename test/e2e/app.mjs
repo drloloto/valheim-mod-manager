@@ -38,5 +38,9 @@ await send("Page.enable");
 const shot = await send("Page.captureScreenshot", { format: "png" });
 writeFileSync(out, Buffer.from(shot.data, "base64"));
 const text = await send("Runtime.evaluate", { expression: "document.body.innerText", returnByValue: true });
-console.log(String(text.result.value).replace(/vmm1\.[^\s]+/g, "<code>").slice(0, 2500));
+console.log(
+	String(text.result.value)
+		.replace(/vmm1\.[^\s]+/g, "<code>")
+		.slice(0, 2500),
+);
 ws.close();

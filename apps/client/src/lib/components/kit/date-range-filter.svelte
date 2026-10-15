@@ -2,11 +2,11 @@
 	import type { DateOp, DateRange, DateUnit } from "#lib/browse/criteria.js";
 	import { bucketDateRange, bucketInDate, dateActive, DATE_OPS, DATE_UNITS, dateOpLabel, extendDateRange, unitLabel, type Bucket } from "#lib/browse/ranges.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import * as Select from "#lib/components/ui/select/index.js";
-	import { Input } from "#lib/components/ui/input/index.js";
-	import { Button } from "#lib/components/ui/button/index.js";
+	import * as Select from "@vmm/ui/components/ui/select/index.js";
+	import { Input } from "@vmm/ui/components/ui/input/index.js";
+	import { Button } from "@vmm/ui/components/ui/button/index.js";
 	import Histogram from "./histogram.svelte";
-	import Segmented from "./segmented.svelte";
+	import Segmented from "@vmm/ui/components/kit/segmented.svelte";
 
 	let {
 		value,

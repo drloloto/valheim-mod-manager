@@ -2,7 +2,7 @@
 	// Who put a mod into the profile. Server and dependency rows are managed for the player and say so in
 	// colour; their own mods stay neutral.
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 	import type { Source } from "#lib/installed.js";
 
 	let { source, title }: { source: Source; title?: string } = $props();

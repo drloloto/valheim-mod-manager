@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Small tags (categories) on at most `lines` rows; whatever does not fit becomes "+N" with the full list
 	// as tooltip. A hidden copy measures where the rows break, so the visible copy never clips a tag.
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	let { tags, lines = 2, class: className }: { tags: readonly string[]; lines?: number; class?: string } = $props();
 

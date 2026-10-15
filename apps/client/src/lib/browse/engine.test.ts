@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { defaultCriteria, withList, withNum } from "./criteria";
 import { ALL, BIT, evaluate, searchKey, select } from "./engine";
 import { matchesCriteria, type ProfileFacts } from "./filter";

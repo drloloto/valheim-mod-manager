@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { initials } from "#lib/format.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 
 	let { name, icon, size = "sm" }: { name: string; icon?: string; size?: "sm" | "md" | "lg" } = $props();
 	let failed = $state(false);

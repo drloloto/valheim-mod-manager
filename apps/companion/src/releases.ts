@@ -272,7 +272,7 @@ export async function stageConfigChanges(rel: string, changes: ConfigChange[], i
 		r.configMeta[rel] = { source, at: Date.now(), baseHash: await liveHash(rel) };
 	}
 	const next = applyConfigChanges(base, changes);
-	const live = await Bun.file(liveFile(rel)).exists() ? await readFile(liveFile(rel), "utf-8") : null;
+	const live = (await Bun.file(liveFile(rel)).exists()) ? await readFile(liveFile(rel), "utf-8") : null;
 	if (next === live) {
 		await rm(path, { force: true });
 		r.configs = r.configs.filter((x) => x !== rel);
@@ -410,7 +410,9 @@ export async function applyRelease(id: string, log: (l: string) => void = () => 
 		return { backup: null, stopped: null, result: emptyResult(), configsWritten: [], started: null, restartRequired: false, stayedUp: true, nothingToDo: true };
 	}
 	if (r.plan.conflicts.length && !opts.force)
-		throw new Error(`${r.plan.conflicts.length} staged file(s) changed on the server meanwhile: ${r.plan.conflicts.join(", ")}. Review them, revert or release with force.`);
+		throw new Error(
+			`${r.plan.conflicts.length} staged file(s) changed on the server meanwhile: ${r.plan.conflicts.join(", ")}. Review them, revert or release with force.`,
+		);
 	const restart = r.plan.restartRequired;
 	try {
 		const { value, ...report } = await withServerStopped(

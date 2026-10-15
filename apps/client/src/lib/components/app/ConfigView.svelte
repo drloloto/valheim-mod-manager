@@ -4,7 +4,7 @@
 	import { store } from "#lib/api/store.svelte.js";
 	import type { ConfigSetting } from "#lib/api/types.js";
 	import { t } from "#lib/i18n/index.svelte.js";
-	import { cn } from "#lib/utils.js";
+	import { cn } from "@vmm/ui/utils.js";
 	import RotateCcw from "@lucide/svelte/icons/rotate-ccw";
 	import { parseRange } from "#lib/config-range.js";
 

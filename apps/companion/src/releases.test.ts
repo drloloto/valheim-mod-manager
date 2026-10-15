@@ -26,7 +26,14 @@ describe("release summary", () => {
 			modsAt: 1,
 			configs: ["A.cfg", "B.cfg"],
 			configMeta: {},
-			plan: plan({ install: [{ id: "a-A", from: null, to: "1.0.0" }], remove: ["b-B"], configsChanged: ["A.cfg"], configsNew: ["B.cfg"], conflicts: ["A.cfg"], restartRequired: true }),
+			plan: plan({
+				install: [{ id: "a-A", from: null, to: "1.0.0" }],
+				remove: ["b-B"],
+				configsChanged: ["A.cfg"],
+				configsNew: ["B.cfg"],
+				conflicts: ["A.cfg"],
+				restartRequired: true,
+			}),
 			problems: ["Download failed (c-C 1.0.0): HTTP 404"],
 			schedule: { when: "idle", setAt: 2 },
 			lastError: null,
@@ -96,7 +103,9 @@ describe("working state (own process, real files)", async () => {
 	it("needs a restart for every config change and flags a hand edit as a conflict", () => {
 		expect(out.plan3).toEqual({ restart: true, effect: "unknown", conflicts: [] });
 		expect(out.conflicts).toEqual(["Other.cfg"]);
-		expect(out.diff).toEqual([{ path: "Other.cfg", status: "changed", conflict: true, before: "[X]\nA = 3\n", changes: [{ section: "X", key: "A", from: "3", to: "2" }] }]);
+		expect(out.diff).toEqual([
+			{ path: "Other.cfg", status: "changed", conflict: true, before: "[X]\nA = 3\n", changes: [{ section: "X", key: "A", from: "3", to: "2" }] },
+		]);
 		expect(out.refused).toContain("changed on the server meanwhile");
 	});
 	it("releases the staged file, records it in the manifest and clears the working state", () => {

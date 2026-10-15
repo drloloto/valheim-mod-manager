@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { clear, click, emptySelection, forContext, move, prune, selectAll } from "./selection";
 
 const order = ["a", "b", "c", "d", "e"];

@@ -22,7 +22,11 @@ mkdirSync(outDir, { recursive: true });
 const port = 9333 + Math.floor(Math.random() * 500);
 const edgePath = process.env.EDGE ?? "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 const profile = mkdtempSync(join(tmpdir(), "edge-cdp-"));
-const edge = spawn(edgePath, ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, "--window-size=1200,900", "--no-first-run", "about:blank"], { stdio: "ignore" });
+const edge = spawn(
+	edgePath,
+	["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, "--window-size=1200,900", "--no-first-run", "about:blank"],
+	{ stdio: "ignore" },
+);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function targets() {
 	for (let i = 0; i < 50; i++) {
@@ -57,7 +61,11 @@ const send = (method, params = {}) =>
 		ws.send(JSON.stringify({ id: i, method, params }));
 	});
 async function evaluate(expr) {
-	const r = await send("Runtime.evaluate", { expression: `(async () => JSON.parse(JSON.stringify(await (${expr}) ?? null)))()`, awaitPromise: true, returnByValue: true });
+	const r = await send("Runtime.evaluate", {
+		expression: `(async () => JSON.parse(JSON.stringify(await (${expr}) ?? null)))()`,
+		awaitPromise: true,
+		returnByValue: true,
+	});
 	if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
 	return r.result.value;
 }
@@ -96,9 +104,13 @@ try {
 		await shot("page-2-admin.png");
 		const on = await evaluate(`${q("[data-testid=sync-code]")} !== null`);
 		if (!on && gistToken) {
-			await evaluate(`(() => { const i = ${q("#gist-token")}; i.focus(); i.value = ${JSON.stringify(gistToken)}; i.dispatchEvent(new Event("input", { bubbles: true })); return true; })()`);
+			await evaluate(
+				`(() => { const i = ${q("#gist-token")}; i.focus(); i.value = ${JSON.stringify(gistToken)}; i.dispatchEvent(new Event("input", { bubbles: true })); return true; })()`,
+			);
 			await sleep(300);
-			await evaluate(`(() => { const b = ${q("[data-testid=sync-setup] form button[type=submit]")}; if (b.disabled) throw new Error("submit disabled"); b.click(); return true; })()`);
+			await evaluate(
+				`(() => { const b = ${q("[data-testid=sync-setup] form button[type=submit]")}; if (b.disabled) throw new Error("submit disabled"); b.click(); return true; })()`,
+			);
 			await waitFor(`${q("[data-testid=sync-code]")} !== null`, "sync code on the page", 60000);
 			console.error("sync set up through the page");
 		}
