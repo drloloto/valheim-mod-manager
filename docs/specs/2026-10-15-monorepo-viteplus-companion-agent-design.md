@@ -1,6 +1,7 @@
 # One repository on Vite+, and the companion becomes an install agent
 
-Date: 2026-10-15. Status: design, not started. Replaces Part A of
+Date: 2026-10-15. Status: phase 1 done (branch `feat/monorepo-viteplus`, see section 8), phases 2–5 open.
+Replaces Part A of
 `2026-10-14-admin-ui-in-client-and-monorepo-design.md` and changes its Part B: the companion no longer keeps
 the server-side logic; the Mod Manager takes over server management, the companion shrinks to an agent that
 installs, applies and reports. Implementation follows in separate sessions, phase by phase.
@@ -186,9 +187,40 @@ next starts. No publish in between: the owner cuts one big release at the end.
 | pairing locks the owner out                        | `docker exec companion pair` always works on the host; revoking the last device needs a new pairing |
 | players' path regresses while the admin side moves | `test/e2e.ps1` (player path) runs in every phase                                                    |
 
-## 7. Open decisions for the owner
+## 7. Decisions (owner, 2026-10-15: "go" on the recommendations)
 
-1. TLS with a pinned self-signed certificate (recommended) or LAN/VPN-only HTTP with device tokens.
-2. Agent runtime after phase 4: Node with `vp test` (recommended, one runtime) or stay on Bun.
-3. Folder names `apps/client` + `apps/companion` (recommended, Vite+'s convention) or `client/` + `companion/`
-   as in the old spec.
+1. TLS with a pinned self-signed certificate.
+2. Agent runtime after phase 4: Node with `vp test`.
+3. Folder names `apps/client` + `apps/companion`.
+
+## 8. Phase 1 result (2026-10-15)
+
+Done, in this order of commits: client into `apps/client`, docs into `docs/`; companion as a git subtree
+(history kept); the test stack into `test/` (secrets and runtime state ignored, `*.example` committed); one pnpm
+workspace with a catalog; `vp migrate`; `@vmm/ui`; CI, release, Dependabot and the agent rules.
+
+Findings and decisions made on the way:
+
+- **Oxfmt replaces Prettier completely.** `vp migrate` reformatted the existing tree with Oxfmt (Svelte and
+  Tailwind class sorting on) and the only diffs were the rewritten imports, so there is no Prettier fallback.
+  The files no formatter had seen before (companion sources, old docs, test scripts) got one formatting-only
+  change.
+- **Lint starts at 0 errors, 47 warnings.** The code never had a linter. Most warnings are fire-and-forget
+  promises in the client store (`no-floating-promises`), unused imports and test `await`s on values; they are a
+  follow-up (mark the intentional ones with `void`, fix the rest), not blockers.
+- **pnpm 12** stores build-script approvals as `allowBuilds:` in `pnpm-workspace.yaml` (esbuild only).
+- **Task caching needs the generated paths excluded**: SvelteKit writes `.svelte-kit/`, `build/` and
+  `node_modules/$app` while it runs, Vite's scan touches `src-tauri/target`, and Kit stamps
+  `build/_app/version.json`; with those excluded an unchanged tree replays all 12 tasks from the cache.
+- **`svelte-check` needs a Svelte config next to the shared components** (`packages/ui/svelte.config.js`).
+- **The companion's tar scenario runs on Linux only** (GNU tar on Windows reads `C:` as a host); CI runs it in
+  the Linux job.
+- **The companion image builds from the repository root** (workspace lockfile, `pnpm deploy` for the two
+  runtime dependencies). Not built locally in phase 1 (Docker Desktop was off); the CI Linux job builds it.
+  Until phase 2, `install.sh update` on a real server only works from a full repository checkout, because the
+  compose file `onboard.ts` writes still says `build: ./companion`. Phase 2 replaces that with the GHCR image.
+- The moved Rust `target/` held absolute paths of the old location and had to be rebuilt once (`cargo clean`).
+
+Still to do outside the repository: the on-disk folder is still called `modmanager-client` (rename it to
+`valheim-mod-manager` when no session is open in it); the old `../companion` repository is archived on GitHub
+in phase 5, after the monorepo is pushed.
