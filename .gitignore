@@ -1,18 +1,23 @@
+# Dependencies and build output, at any depth (apps/*, packages/*)
+node_modules/
+.svelte-kit/
+**/src-tauri/target/
+**/src-tauri/gen/
+apps/*/build/
+apps/*/ui/build/
+packages/*/dist/
+dist/
+dist-ssr/
+*.local
+*.tsbuildinfo
+
 # Logs
-/logs
+logs/
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# Editors
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -23,19 +28,24 @@ dist-ssr
 *.sln
 *.sw?
 
-# Tauri
-src-tauri/target
-src-tauri/gen
-
-# SvelteKit
-.svelte-kit
-/build
-
-# Bun lockfiles (npm is the canonical package manager, see CI)
+# Lockfiles of other package managers (pnpm is the workspace's package manager)
+package-lock.json
 bun.lock
 bun.lockb
+yarn.lock
 
-# Spike artifacts (semantic search PoC)
-spike/semantic-search/.model-cache
-spike/semantic-search/index*.json
-spike/semantic-search/dlls.json
+# Vite+ task cache
+.vite-task/
+node_modules/.vite-task/
+
+# The docker test stack: secrets and runtime state stay local
+test/.env
+test/config/
+test/data/
+test/backups/
+
+# Local experiments and design-sync scratch
+/spike/
+/.ds-sync/
+/ds-bundle/
+/.design-sync/.cache/
