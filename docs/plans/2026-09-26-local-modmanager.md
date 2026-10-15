@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 1.98, Tauri 2.11, tokio, reqwest 0.12 (native-tls), zip 8, serde/serde_json/serde_yaml_ng, winreg; SvelteKit 2 + Svelte 5 (Runes), Vite, Tailwind 4, shadcn-svelte, bits-ui.
 
-**Spec:** `docs/superpowers/specs/2026-09-26-local-modmanager-design.md`
+**Spec:** `docs/specs/2026-09-26-local-modmanager-design.md`
 
 ## Global Constraints
 

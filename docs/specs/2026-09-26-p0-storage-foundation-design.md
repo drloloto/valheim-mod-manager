@@ -5,8 +5,8 @@ Status: **Zurückgestellt** (2026-10-02, git-Hybrid wird vorerst nicht umgesetzt
 Bezug:
 
 - Vision: `docs/vision/2026-09-26-mod-platform-vision.md`
-- Analyse: `docs/superpowers/specs/2026-09-26-vision-impact-analysis.md` (F1–F3, F5, F6)
-- Vorgänger-Spec: `docs/superpowers/specs/2026-09-26-local-modmanager-design.md` (v1)
+- Analyse: `docs/specs/2026-09-26-vision-impact-analysis.md` (F1–F3, F5, F6)
+- Vorgänger-Spec: `docs/specs/2026-09-26-local-modmanager-design.md` (v1)
 
 ## 1. Ziel
 

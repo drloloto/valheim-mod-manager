@@ -34,10 +34,6 @@ bun.lock
 bun.lockb
 yarn.lock
 
-# Vite+ task cache
-.vite-task/
-node_modules/.vite-task/
-
 # The docker test stack: secrets and runtime state stay local
 test/.env
 test/config/

@@ -1,6 +1,6 @@
 # P0 Speicher-Fundament — Implementation Plan
 
-> **ZURÜCKGESTELLT (2026-10-02):** Dieser Plan wird nicht ausgeführt. Der git-Hybrid-Ansatz ist verworfen, bis er neu bewertet wird. Aktueller Plan: `docs/superpowers/plans/2026-10-02-ui-foundation.md`.
+> **ZURÜCKGESTELLT (2026-10-02):** Dieser Plan wird nicht ausgeführt. Der git-Hybrid-Ansatz ist verworfen, bis er neu bewertet wird. Aktueller Plan: `docs/plans/2026-10-02-ui-foundation.md`.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -16,7 +16,7 @@
 
 **Tech Stack:** Rust (Tauri 2, git2 0.21 mit vendored libgit2, blake3, postcard, uuid), SvelteKit/Svelte 5.
 
-**Spec:** `docs/superpowers/specs/2026-09-26-p0-storage-foundation-design.md` (Kontext: `docs/vision/2026-09-26-mod-platform-vision.md`, `docs/superpowers/specs/2026-09-26-vision-impact-analysis.md`)
+**Spec:** `docs/specs/2026-09-26-p0-storage-foundation-design.md` (Kontext: `docs/vision/2026-09-26-mod-platform-vision.md`, `docs/specs/2026-09-26-vision-impact-analysis.md`)
 
 ## Global Constraints
 
@@ -56,7 +56,7 @@ src-tauri/src/localmod.rs, share.rs   (T4)
 src-tauri/src/commands.rs, lib.rs     (T1 Anpassung; T4 Neufassung)
 src/lib/api/{types,client}.ts, store.svelte.ts, routes/+layout.svelte,
 src/lib/components/app/{ProfileView,SettingsView}.svelte   (T5)
-README.md, docs/superpowers/specs/2026-09-26-p0-storage-foundation-design.md (T6: Messwerte)
+README.md, docs/specs/2026-09-26-p0-storage-foundation-design.md (T6: Messwerte)
 ```
 
 ---

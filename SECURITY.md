@@ -21,4 +21,4 @@ game is outside this project's control.
 
 Installers are built by GitHub Actions from tagged commits and are currently not code-signed. Verify that you
 download from this repository's Releases page. Update packages are signed with the project's minisign key
-(public key in `src-tauri/tauri.conf.json`) and verified by the updater before installation.
+(public key in `apps/client/src-tauri/tauri.conf.json`) and verified by the updater before installation.

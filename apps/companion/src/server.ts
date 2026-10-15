@@ -1,6 +1,6 @@
 // Valheim server companion: publishes the mod lock, shows configs, manages worlds/backups/env/players and
 // the game container. Everything is optional: see config.ts for the COMPANION_* switches. Contract with the
-// Mod Manager: docs/superpowers/specs/2026-10-10-server-companion-design.md in the client repo.
+// Mod Manager: docs/specs/2026-10-10-server-companion-design.md in the client repo.
 import { Hono, type Context } from "hono";
 import { join } from "path";
 import { isAuthed, requireFeature, requireToken } from "./auth";

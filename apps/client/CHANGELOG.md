@@ -18,7 +18,7 @@ All notable changes to this project are documented here. The format follows
   server" in the list) in the server's versions, removes what the server dropped and leaves everything
   else alone. "In sync" means every server mod is there in the server's version; a player's extra mods
   are no difference and no longer prompt. Profiles adopted by 0.3.0 are read as the server's full list
-  once, so their next adoption behaves as before (`docs/superpowers/specs/2026-10-14-server-managed-mods.md`).
+  once, so their next adoption behaves as before (`docs/specs/2026-10-14-server-managed-mods.md`).
 
 ### Changed
 
@@ -67,7 +67,7 @@ All notable changes to this project are documented here. The format follows
 
 - Installation readiness: a persistent banner, a red status-bar marker and a "start anyway?" question on
   Play when mods of the active profile are not installed; dependency rows show the missing state too.
-- Linked servers (companion container, see `docs/superpowers/specs/2026-10-10-server-companion-design.md`):
+- Linked servers (companion container, see `docs/specs/2026-10-10-server-companion-design.md`):
   "Add server…" from an address, deep link `valheim-mod-manager://import?…` from the companion's page,
   comparison with the server before Play and at app start ("adopt and start", "into a new profile", "start
   anyway", optionally with the server's configs), publishing as a staged release (pull and check on the

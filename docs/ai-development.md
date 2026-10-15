@@ -18,10 +18,10 @@ is disciplined: designs before code, pure logic with tests, strict gates, and a 
    ("the filters are not good enough", "the header is too busy").
 2. **Exploration.** The agent reads the relevant code and docs before proposing anything.
 3. **Design.** For anything non-trivial the agent writes a short design into
-   `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`: goal, decisions, architecture, tests. Early
+   `docs/specs/YYYY-MM-DD-<topic>-design.md`: goal, decisions, architecture, tests. Early
    specs and plans in that folder are in German; later ones are English.
-4. **Implementation.** Pure logic first, with Vitest or `cargo test`, then components. The agent runs
-   `npm run check`, `npm test`, `npm run build`, `cargo clippy`, `cargo test` and, for UI work, looks at the
+4. **Implementation.** Pure logic first, with Vitest (through Vite+) or `cargo test`, then components. The agent
+   runs `vp run ci` (format, lint, type checks, svelte-check, tests, builds, clippy, cargo test) and, for UI work, looks at the
    result in the browser preview (`VITE_MOCK_TAURI=1`) by driving a headless browser.
 5. **Review.** The owner reads the summary, checks the result in the app and pushes back. Changes land as
    conventional commits with a `Co-Authored-By` line naming the model.

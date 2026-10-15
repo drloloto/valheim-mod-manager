@@ -1,4 +1,4 @@
-// Mechanical half of the layout rules (docs/superpowers/specs/2026-10-11-small-window-layout-design.md):
+// Mechanical half of the layout rules (docs/specs/2026-10-11-small-window-layout-design.md):
 // scroll containers use the `scroll-y` utility so an appearing scrollbar never shifts content and nothing
 // scrolls sideways by accident. The generated shadcn components are exempt (they are hardened in CSS).
 import { readdirSync, readFileSync } from "node:fs";

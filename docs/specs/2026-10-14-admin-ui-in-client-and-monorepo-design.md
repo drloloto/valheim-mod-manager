@@ -58,7 +58,7 @@ Tasks:
    `.env`, `config/`, `data/`, `backups/` are git-ignored.
 5. CI: tauri-action with `projectPath: client`; `bun test` and `docker build` for the companion; Dependabot
    paths. Verify with a DEV build and a release dry run before anything else moves.
-6. Docs: `client/docs/superpowers/*` and `companion/docs/*` into `docs/`; root `CLAUDE.md` is today's
+6. Docs: `client/docs/*` and `companion/docs/*` into `docs/`; root `CLAUDE.md` is today's
    workspace file plus the client's rules; AGENTS.md per app keeps the commands.
 7. The old companion repository gets a README pointer and is archived. Claude memory: the two per-folder
    memories (workspace root, `modmanager-client/`) are read once, what is still true goes into the root

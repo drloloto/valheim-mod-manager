@@ -114,4 +114,4 @@ v1 ist funktionsfähig und getestet. P0 ersetzt dessen Datenablage, bevor echte 
 ## 8. Entscheidungen
 
 - **2026-09-26 — Fundament: git-Hybrid** (Entscheidung des Projektinhabers). Ein Pack ist ein git-Repository mit Manifest, Lock und Configs. Mod-Binärdateien liegen im inhaltsadressierten Store mit Hardlinks und werden im Lock per Hash referenziert. Snapshots sind Commits, Forks sind Git-Forks, und das Hosting ist anfangs über jeden Git-Host möglich.
-- **2026-10-02 — git-Hybrid zurückgestellt** (Entscheidung des Projektinhabers). Der Ansatz überzeugt noch nicht und wird vorerst nicht umgesetzt. Spec und Plan zu P0 bleiben als Referenz erhalten. Vorrang hat jetzt das UI-Fundament (`docs/superpowers/plans/2026-10-02-ui-foundation.md`).
+- **2026-10-02 — git-Hybrid zurückgestellt** (Entscheidung des Projektinhabers). Der Ansatz überzeugt noch nicht und wird vorerst nicht umgesetzt. Spec und Plan zu P0 bleiben als Referenz erhalten. Vorrang hat jetzt das UI-Fundament (`docs/plans/2026-10-02-ui-foundation.md`).

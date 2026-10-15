@@ -27,8 +27,8 @@
 - Design: `docs/design/2026-10-02-mod-manager-designs.html` (Kopie des Claude-Design-Projekts „Mod Manager Designs“).
   - Maßgeblich ist **1a „Werkbank“** mit Durchsuchen und Einstellungen.
   - Aus **2a** übernimmt dieser Plan nur die Bausteine: Drei-Zustands-Checkbox, Mehrfachauswahl, Auswahlleiste und Kontextmenü.
-- Vorgänger-Spec (Funktionsumfang v1): `docs/superpowers/specs/2026-09-26-local-modmanager-design.md`
-- Zurückgestellt: P0/git-Hybrid (`docs/superpowers/plans/2026-09-28-p0-storage-foundation.md`)
+- Vorgänger-Spec (Funktionsumfang v1): `docs/specs/2026-09-26-local-modmanager-design.md`
+- Zurückgestellt: P0/git-Hybrid (`docs/plans/2026-09-28-p0-storage-foundation.md`)
 
 ## Entscheidungen
 

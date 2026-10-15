@@ -79,26 +79,25 @@ See [docs/architecture.md](docs/architecture.md) for the module map, the IPC sur
 
 ## Development
 
-Prerequisites: Node.js 22+, Rust (stable, via rustup), the Tauri prerequisites for Windows (MSVC Build
-Tools, WebView2).
+This repository is a pnpm workspace on the Vite+ toolchain: the Mod Manager in `apps/client`, the server
+companion in `apps/companion`, the shared design system in `packages/ui`. Prerequisites: Node.js 22.18+, pnpm
+(`corepack enable`), Rust (stable, via rustup), Bun (companion tests), the Tauri prerequisites for Windows
+(MSVC Build Tools, WebView2).
 
 ```bash
-npm install
-npm run tauri dev      # desktop app with hot reload
-npm run tauri:build:local  # installer (.msi / .exe) in src-tauri/target/release/bundle, unsigned, no updater artifacts
-npm run check          # svelte-check
-npm test               # vitest
-npm run lint           # prettier --check
-cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
+pnpm install                              # the whole workspace
+pnpm -C apps/client tauri dev             # desktop app with hot reload
+pnpm -C apps/client tauri:build:local     # installer (.msi / .exe) in apps/client/src-tauri/target/release/bundle, unsigned
+pnpm exec vp run ci                       # every check, test and build, Rust included (cached)
 ```
 
-**Signed builds:** `npm run tauri build` additionally produces the updater artifacts and therefore needs the
+**Signed builds:** `pnpm -C apps/client tauri build` additionally produces the updater artifacts and therefore needs the
 updater private key: set `TAURI_SIGNING_PRIVATE_KEY` to the content of the key file (and
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if it has a password; the `_PATH` variant is not honored by the current CLI). CI does this through repository secrets; for a
 local installer use `tauri:build:local`.
 
-**Browser preview without Tauri:** `VITE_MOCK_TAURI=1 npm run dev` and open `http://localhost:1420`. A mock
-backend (`dev/mock-tauri.js`) serves 3,000 sample packages and a fake profile. Good for UI work; it is never
+**Browser preview without Tauri:** `VITE_MOCK_TAURI=1 pnpm -C apps/client dev` and open `http://localhost:1420`. A mock
+backend (`apps/client/dev/mock-tauri.js`) serves 3,000 sample packages and a fake profile. Good for UI work; it is never
 part of a build.
 
 **Component showcase:** `/dev/kit` in the dev server shows every kit component with sample data.

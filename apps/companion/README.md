@@ -8,7 +8,7 @@ from the Mod Manager, a config edit in the browser — goes into one **working s
 in one guided release: server now → working state → review (diff) → release.
 It replaces `webapp`. Everything is optional; see the switches below. Where this is heading: [ROADMAP.md](ROADMAP.md).
 
-Design: `modmanager-client/docs/superpowers/specs/2026-10-10-server-companion-design.md`.
+Design: `modmanager-client/docs/specs/2026-10-10-server-companion-design.md`.
 
 ## Install
 

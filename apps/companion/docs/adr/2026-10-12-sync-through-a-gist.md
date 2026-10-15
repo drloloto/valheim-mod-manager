@@ -291,7 +291,7 @@ companion page's button still went the HTTP/r2z way. Now (companion uncommitted,
 ## Status 2026-10-13
 
 Client side merged into `modmanager-client` `main` (merge commit `b625952`; spec
-`docs/superpowers/specs/2026-10-12-gist-sync-integration.md`): toolbar chip with transport, state and
+`docs/specs/2026-10-12-gist-sync-integration.md`): toolbar chip with transport, state and
 role, enabled-only server view, sync code recognised in any field, DEV build and scripted scenario as the
 regression check. Open on the companion side: the rate-limit back-off and hash fix are still uncommitted
 in `../companion`, and the companion UI for creating the gist and handing out the sync code does not exist

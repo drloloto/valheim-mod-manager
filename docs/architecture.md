@@ -82,7 +82,7 @@ launches pass `--doorstop-enabled false`.
 (`get_package_doc`, `get_package_wiki`, `get_wiki_page`). Readme and changelog are immutable per version
 and cached under `cache/docs/`; the wiki is fetched per request. The UI renders with `marked`, sanitizes
 with DOMPurify (`lib/markdown.ts`) and routes every link through `openExternal`. Spec:
-`docs/superpowers/specs/2026-10-11-mod-docs-and-import-install.md`.
+`docs/specs/2026-10-11-mod-docs-and-import-install.md`.
 
 **Publish as modpack.** `publish.rs` turns a profile into a Thunderstore package: `manifest.json` with every
 resolved package as a versioned dependency, the README the author edited in the dialog, a 256×256 icon (the
@@ -99,7 +99,7 @@ anyway". `publish_profile` stages a release on the companion (`POST /api/release
 checks the local plan plus config files, nothing changes live); `apply_release` then applies it now, when
 nobody is online, or at a time, and `discard_release` drops it. `valheim-mod-manager://import?url=…&name=…&link=…` (deep-link + single-instance
 plugins) downloads the companion's `.r2z`, imports it like any other and stores the link. Spec:
-`docs/superpowers/specs/2026-10-10-server-companion-design.md`.
+`docs/specs/2026-10-10-server-companion-design.md`.
 
 **Gist transport.** The same link can point at a sealed GitHub gist instead of a companion URL
 (`sync_code` + optional `gist_token`, gistsync.rs): the companion writes `server.json` (lock, configs,
@@ -109,7 +109,7 @@ and the pre-play gate are shared; `publish_gist` seals and PATCHes one release a
 back through `server.json`. A sync code is recognised wherever it is pasted (`find_sync_code`), the server
 only sees enabled mods (`server_mods`), and the toolbar chip (`shell/server-chip.svelte`) shows transport,
 state and role (admin = a token is stored). Spec:
-`docs/superpowers/specs/2026-10-12-gist-sync-integration.md`.
+`docs/specs/2026-10-12-gist-sync-integration.md`.
 
 ## Frontend
 
