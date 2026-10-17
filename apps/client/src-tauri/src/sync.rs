@@ -5,7 +5,7 @@ use crate::models::{InstalledEntry, Source, ToInstall};
 use crate::paths::Paths;
 use crate::profiles;
 use crate::resolver;
-use crate::thunderstore::{download_url, Index};
+use crate::thunderstore::{download_url_of, Index};
 use futures::StreamExt;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -102,7 +102,7 @@ pub async fn run_sync(job: SyncJob, progress: ProgressFn) -> Result<SyncResult> 
         let dest = job.paths.zip_cache(&id, &version);
         async move {
             let r = match pkg {
-                Some(p) => download(&client, &download_url(&p.ns, &p.name, &version), &dest).await,
+                Some(p) => download(&client, &download_url_of(&p, &version), &dest).await,
                 None => Err(AppError::NotFound(format!("{id} not in index"))),
             };
             (id, r)
@@ -240,7 +240,7 @@ mod tests {
     use crate::install::tests::make_zip;
     use crate::models::{test_pkg, ProfileMod, Source};
     use crate::resolver::BEPINEX_PACK_ID;
-    use crate::thunderstore::build;
+    use crate::thunderstore::{build, Parts};
 
     fn fixture() -> (tempfile::TempDir, Paths, Arc<Index>) {
         let d = tempfile::tempdir().unwrap();
@@ -257,7 +257,7 @@ mod tests {
         );
         make_zip(&paths.downloads(), "a-A-1.0.0.zip", &[("A.dll", "1.0.0")]);
         make_zip(&paths.downloads(), "a-A-2.0.0.zip", &[("A.dll", "2.0.0")]);
-        let idx = build(0, vec![test_pkg(BEPINEX_PACK_ID, &[("5.4.2351", &[])]), test_pkg("a-A", &[("2.0.0", &[]), ("1.0.0", &[])])]);
+        let idx = build(0, Parts::thunderstore(vec![test_pkg(BEPINEX_PACK_ID, &[("5.4.2351", &[])]), test_pkg("a-A", &[("2.0.0", &[]), ("1.0.0", &[])])]));
         crate::profiles::create(&paths, "p").unwrap();
         (d, paths, Arc::new(idx))
     }
@@ -322,7 +322,7 @@ mod tests {
         let (_d, paths, idx) = fixture();
         set_mods(&paths, vec![a("1.0.0", true)]);
         run_sync(job(&paths, Some(idx), false), noop()).await.unwrap();
-        let without_a = Arc::new(build(0, vec![test_pkg(BEPINEX_PACK_ID, &[("5.4.2351", &[])])]));
+        let without_a = Arc::new(build(0, Parts::thunderstore(vec![test_pkg(BEPINEX_PACK_ID, &[("5.4.2351", &[])])])));
         let r = run_sync(job(&paths, Some(without_a), false), noop()).await.unwrap();
         assert!(r.removed.is_empty());
         assert!(r.errors.iter().any(|e| e.contains("a-A")));

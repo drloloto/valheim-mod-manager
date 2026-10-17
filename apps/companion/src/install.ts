@@ -125,15 +125,35 @@ export async function removeFiles(files: string[], bepinexDir = BEPINEX_DIR): Pr
 	for (const d of [...dirs].sort((a, b) => b.length - a.length)) await pruneEmptyDir(d, bepinexDir);
 }
 
-export function splitId(id: string): { ns: string; name: string } {
-	const i = id.indexOf("-");
-	return { ns: id.slice(0, i), name: id.slice(i + 1) };
+/** The stored pair when the lock carries it, otherwise the id split at its first hyphen. */
+export function splitId(mod: { id: string; ns?: string; name?: string }): { ns: string; name: string } {
+	if (mod.ns && mod.name) return { ns: mod.ns, name: mod.name };
+	const i = mod.id.indexOf("-");
+	return { ns: mod.id.slice(0, i), name: mod.id.slice(i + 1) };
 }
 
-export const downloadUrl = (id: string, version: string) => {
-	const { ns, name } = splitId(id);
-	return `https://thunderstore.io/package/download/${ns}/${name}/${version}/`;
+type Download = { id: string; version: string; ns?: string; name?: string; source?: string };
+
+/** Thunderstore derives the file from the id; Hexium's CDN pattern redirects to the stored file. */
+export const downloadUrl = (mod: Download) => {
+	const { ns, name } = splitId(mod);
+	return mod.source === "hexium"
+		? `https://cdn.hexium.gg/uploads/${ns}/${name}/${mod.version}.zip`
+		: `https://thunderstore.io/package/download/${ns}/${name}/${mod.version}/`;
 };
+
+const UA = { "user-agent": "valheim-companion/0.2" };
+
+/** The zip of a release. When Hexium's CDN pattern does not resolve, its package API names the file. */
+async function fetchZip(mod: Download): Promise<Response> {
+	const res = await fetch(downloadUrl(mod), { headers: UA });
+	if (res.ok || mod.source !== "hexium") return res;
+	const { ns, name } = splitId(mod);
+	const api = await fetch(`https://valheim.hexium.gg/api/experimental/package/${ns}/${name}/${mod.version}/`, { headers: UA }).catch(() => null);
+	if (!api?.ok) return res;
+	const body = (await api.json()) as { download_url?: string };
+	return body.download_url ? fetch(body.download_url, { headers: UA }) : res;
+}
 
 export interface ApplyResult {
 	installed: string[];
@@ -214,9 +234,7 @@ export async function prefetch(mods: ManifestMod[], log: (line: string) => void 
 			const zip = zipPath(mod);
 			try {
 				if (!(await Bun.file(zip).exists())) {
-					const res = await fetch(downloadUrl(mod.id, mod.version), {
-						headers: { "user-agent": "valheim-companion/0.2" },
-					});
+					const res = await fetchZip(mod);
 					if (!res.ok) throw new Error(`HTTP ${res.status}`);
 					await Bun.write(`${zip}.part`, res);
 					await rename(`${zip}.part`, zip);

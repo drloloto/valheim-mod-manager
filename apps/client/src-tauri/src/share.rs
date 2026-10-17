@@ -3,12 +3,13 @@
 use crate::config::list_files_with_ext;
 use crate::error::{AppError, Result};
 use crate::install::zip_entry_parts;
-use crate::models::{Profile, ProfileMod, Source};
+use crate::models::{Pkg, Profile, ProfileMod, Source, Store};
 use crate::paths::Paths;
 use crate::profiles;
 use crate::util::safe_join;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 use std::path::Path;
 
@@ -28,6 +29,10 @@ struct R2x {
     mods: Vec<R2xMod>,
 }
 
+fn is_thunderstore(s: &Store) -> bool {
+    *s == Store::Thunderstore
+}
+
 #[derive(Serialize, Deserialize)]
 struct R2xMod {
     name: String,
@@ -35,6 +40,10 @@ struct R2xMod {
     version: R2xVersion,
     #[serde(default = "yes")]
     enabled: bool,
+    /// Gale's field: the store a release comes from. Written for Hexium-only releases, read for nothing
+    /// (the import resolves by id against the merged index); r2modman ignores it.
+    #[serde(default, skip_serializing_if = "is_thunderstore")]
+    source: Store,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -47,7 +56,8 @@ struct R2xVersion {
     patch: u32,
 }
 
-pub fn to_r2x(profile: &Profile) -> Result<(String, Vec<String>)> {
+/// `by_id`: the index, to mark releases only Hexium has; None writes every entry as Thunderstore's.
+pub fn to_r2x(profile: &Profile, by_id: Option<&HashMap<String, Pkg>>) -> Result<(String, Vec<String>)> {
     let mut skipped = vec![];
     let mut mods = vec![];
     for m in &profile.mods {
@@ -56,10 +66,12 @@ pub fn to_r2x(profile: &Profile) -> Result<(String, Vec<String>)> {
             continue;
         }
         let n: Vec<u32> = m.version.split('.').map(|x| x.parse().unwrap_or(0)).collect();
+        let source = by_id.and_then(|i| i.get(&m.id())).and_then(|p| p.versions.iter().find(|v| v.v == m.version)).map(|v| v.src).unwrap_or_default();
         mods.push(R2xMod {
             name: m.id(),
             version: R2xVersion { major: n.first().copied().unwrap_or(0), minor: n.get(1).copied().unwrap_or(0), patch: n.get(2).copied().unwrap_or(0) },
             enabled: m.enabled,
+            source,
         });
     }
     let yaml = serde_yaml_ng::to_string(&R2x { profile_name: profile.name.clone(), mods }).map_err(|e| AppError::Invalid(format!("Export failed: {e}")))?;
@@ -87,8 +99,8 @@ pub fn parse_r2x(text: &str) -> Result<(String, Vec<ProfileMod>, Vec<String>)> {
     Ok((r.profile_name, mods, skipped))
 }
 
-pub fn build_r2z(profile: &Profile, config_dir: &Path) -> Result<(Vec<u8>, Vec<String>)> {
-    let (yaml, skipped) = to_r2x(profile)?;
+pub fn build_r2z(profile: &Profile, config_dir: &Path, by_id: Option<&HashMap<String, Pkg>>) -> Result<(Vec<u8>, Vec<String>)> {
+    let (yaml, skipped) = to_r2x(profile, by_id)?;
     let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
     let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     w.start_file("export.r2x", opts)?;
@@ -242,10 +254,18 @@ mod tests {
         let mut off = ProfileMod::thunderstore("a", "B-C", "1.2.3");
         off.enabled = false;
         let p = Profile { name: "X".into(), mods: vec![off.clone(), local()], server: None };
-        let (yaml, skipped) = to_r2x(&p).unwrap();
+        let (yaml, skipped) = to_r2x(&p, None).unwrap();
         assert_eq!(skipped, vec!["local-Mine"]);
+        assert!(!yaml.contains("source"), "Thunderstore releases carry no source line");
         let (name, mods, _) = parse_r2x(&yaml).unwrap();
-        assert_eq!((name.as_str(), mods), ("X", vec![off]));
+        assert_eq!((name.as_str(), mods), ("X", vec![off.clone()]));
+        // A release only Hexium has is marked (Gale's field); the import still resolves it by id.
+        let mut pkg = crate::models::test_pkg("a-B-C", &[("1.2.3", &[])]);
+        pkg.versions[0].src = Store::Hexium;
+        let by_id = HashMap::from([("a-B-C".to_string(), pkg)]);
+        let (yaml, _) = to_r2x(&p, Some(&by_id)).unwrap();
+        assert!(yaml.contains("source: hexium"), "{yaml}");
+        assert_eq!(parse_r2x(&yaml).unwrap().1, vec![off]);
     }
 
     #[test]
@@ -256,7 +276,7 @@ mod tests {
         std::fs::write(d.path().join("sub/b.json"), "{}").unwrap();
         std::fs::write(d.path().join("skip.dll"), "x").unwrap();
         let p = Profile { name: "X".into(), mods: vec![ProfileMod::thunderstore("a", "B", "1.0.0")], server: None };
-        let (bytes, _) = build_r2z(&p, d.path()).unwrap();
+        let (bytes, _) = build_r2z(&p, d.path(), None).unwrap();
         let c = read_r2z(&bytes).unwrap();
         assert_eq!(c.profile_name, "X");
         assert_eq!(c.mods.len(), 1);

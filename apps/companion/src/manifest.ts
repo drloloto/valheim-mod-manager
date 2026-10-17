@@ -16,6 +16,12 @@ export interface ManifestMod {
 	/** In the profile itself, as opposed to a resolved dependency. */
 	explicit: boolean;
 	requiredBy: string[];
+	/** Namespace and name as the store knows them, when the client sent them: `id` alone cannot be split
+	 *  when the team name has a hyphen (`LVH-IT-UseEquipmentInWater`). */
+	ns?: string;
+	name?: string;
+	/** The store the release is downloaded from; missing means Thunderstore. */
+	source?: "thunderstore" | "hexium";
 }
 
 export interface ServerInfo {
@@ -80,12 +86,18 @@ function cleanMod(raw: unknown): ManifestMod | null {
 	const r = raw as Record<string, unknown>;
 	const id = typeof r.id === "string" ? r.id.trim() : "";
 	const version = typeof r.version === "string" ? r.version.trim() : "";
-	if (!/^[A-Za-z0-9_]+-[A-Za-z0-9_]+$/.test(id) || !/^\d+(\.\d+)*$/.test(version)) return null;
+	// Team and package names may themselves contain hyphens; versions may carry a semver pre-release tag.
+	if (!/^[A-Za-z0-9_]+(-[A-Za-z0-9_]+)+$/.test(id) || !/^\d+(\.\d+)*(-[A-Za-z0-9.]+)?$/.test(version)) return null;
+	const part = (v: unknown) => (typeof v === "string" && /^[A-Za-z0-9_-]+$/.test(v) ? v : "");
+	const ns = part(r.ns);
+	const name = part(r.name);
 	return {
 		id,
 		version,
 		explicit: r.explicit !== false,
 		requiredBy: Array.isArray(r.requiredBy) ? r.requiredBy.filter((x): x is string => typeof x === "string") : [],
+		...(ns && name && `${ns}-${name}` === id ? { ns, name } : {}),
+		...(r.source === "hexium" ? { source: "hexium" as const } : {}),
 	};
 }
 

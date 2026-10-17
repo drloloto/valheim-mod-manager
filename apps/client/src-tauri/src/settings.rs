@@ -13,11 +13,21 @@ pub struct Settings {
     pub show_nsfw: bool,
     /// Thunderstore team service-account token (`tss_…`) for publishing modpacks; stored locally only.
     pub thunderstore_token: Option<String>,
+    /// Merge Hexium's package list into the index (second store, same API). Off: Thunderstore only.
+    pub hexium: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { valheim_dir: None, steam_exe: None, download_concurrency: 4, index_ttl_minutes: 30, show_nsfw: false, thunderstore_token: None }
+        Settings {
+            valheim_dir: None,
+            steam_exe: None,
+            download_concurrency: 4,
+            index_ttl_minutes: 30,
+            show_nsfw: false,
+            thunderstore_token: None,
+            hexium: true,
+        }
     }
 }
 
@@ -35,6 +45,7 @@ pub fn save(paths: &Paths, s: &Settings) -> Result<Settings> {
         index_ttl_minutes: s.index_ttl_minutes.max(5),
         show_nsfw: s.show_nsfw,
         thunderstore_token: blank(&s.thunderstore_token),
+        hexium: s.hexium,
     };
     write_json(&paths.settings_file(), &clean)?;
     Ok(clean)
@@ -57,5 +68,6 @@ mod tests {
         std::fs::write(paths.settings_file(), r#"{"showNsfw":true}"#).unwrap();
         assert_eq!(load(&paths).download_concurrency, 4);
         assert!(load(&paths).show_nsfw);
+        assert!(load(&paths).hexium, "an older settings file keeps the second store on");
     }
 }

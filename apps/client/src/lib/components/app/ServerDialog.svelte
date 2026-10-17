@@ -115,7 +115,9 @@
 						{:else}
 							<ul class="text-foreground-soft grid gap-1 text-xs">
 								{#each check.diff.changed as c (c.id)}<li>{t("server.changed", { id: nameOf(c.id), local: c.local, server: c.server })}</li>{/each}
-								{#each check.diff.onlyLocal as m (m.id)}<li>{t("server.willInstall", { id: nameOf(m.id), version: m.version })}</li>{/each}
+								{#each [...check.diff.onlyLocal, ...check.diff.dropped] as m (m.id)}<li>
+										{t("server.willInstall", { id: nameOf(m.id), version: m.version })}
+									</li>{/each}
 								{#each check.diff.onlyServer as m (m.id)}<li>{t("server.willRemove", { id: nameOf(m.id), version: m.version })}</li>{/each}
 							</ul>
 						{/if}
@@ -236,7 +238,9 @@
 						{:else}
 							<ul class="text-foreground-soft grid gap-1 text-xs">
 								{#each check.diff.changed as c (c.id)}<li>{t("server.changed", { id: nameOf(c.id), local: c.local, server: c.server })}</li>{/each}
-								{#each check.diff.onlyLocal as m (m.id)}<li>{t("server.willInstall", { id: nameOf(m.id), version: m.version })}</li>{/each}
+								{#each [...check.diff.onlyLocal, ...check.diff.dropped] as m (m.id)}<li>
+										{t("server.willInstall", { id: nameOf(m.id), version: m.version })}
+									</li>{/each}
 								{#each check.diff.onlyServer as m (m.id)}<li>{t("server.willRemove", { id: nameOf(m.id), version: m.version })}</li>{/each}
 							</ul>
 						{/if}
@@ -282,6 +286,7 @@
 						{#if side(m.id) === "client"}<span class="text-muted-foreground">· {t("server.clientSideHint")}</span>{/if}
 					</li>
 				{/each}
+				{#each check.diff.dropped as m (m.id)}<li>{t("server.dropped", { id: nameOf(m.id), version: m.version })}</li>{/each}
 				{#each check.diff.onlyLocal as m (m.id)}
 					<li class={side(m.id) === "server" ? "text-primary" : ""}>
 						{t("server.onlyLocal", { id: nameOf(m.id), version: m.version })}

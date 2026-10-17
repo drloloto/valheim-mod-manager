@@ -3,7 +3,16 @@ import { mkdtemp, readFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { strToU8, zipSync } from "fflate";
-import { detectLayout, extractZip, mapTarget, moveAside, planChanges, removeFiles, untrackedFiles, zipEntryParts } from "./install";
+import { detectLayout, downloadUrl, extractZip, mapTarget, moveAside, planChanges, removeFiles, splitId, untrackedFiles, zipEntryParts } from "./install";
+
+describe("splitId", () => {
+	it("prefers the pair the lock carries over splitting at the first hyphen", () => {
+		expect(splitId({ id: "LVH-IT-UseEquipmentInWater" })).toEqual({ ns: "LVH", name: "IT-UseEquipmentInWater" });
+		expect(splitId({ id: "LVH-IT-UseEquipmentInWater", ns: "LVH-IT", name: "UseEquipmentInWater" })).toEqual({ ns: "LVH-IT", name: "UseEquipmentInWater" });
+		expect(downloadUrl({ id: "a-B", version: "1.0.0" })).toBe("https://thunderstore.io/package/download/a/B/1.0.0/");
+		expect(downloadUrl({ id: "a-B", version: "1.0.0", source: "hexium" })).toBe("https://cdn.hexium.gg/uploads/a/B/1.0.0.zip");
+	});
+});
 
 const zip = (files: Record<string, string>) => zipSync(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, strToU8(v)])));
 

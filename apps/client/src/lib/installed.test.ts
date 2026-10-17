@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ProfileMod } from "#lib/api/types.js";
-import { buildRows, countSources, sortRows, type RowsInput } from "./installed";
+import { buildRows, countSources, LOADER_ID, sortRows, type RowsInput } from "./installed";
 
 const mod = (namespace: string, name: string, o: Partial<ProfileMod> = {}): ProfileMod => ({
 	namespace,
@@ -18,6 +18,7 @@ const input = (o: Partial<RowsInput> = {}): RowsInput => ({
 			"b-Zeta": { version: "1.0.0", requiredBy: [] },
 			"x-Lib": { version: "2.0.0", requiredBy: ["b-Zeta"] },
 			"y-ServerLib": { version: "3.0.0", requiredBy: [] },
+			[LOADER_ID]: { version: "5.4.0", requiredBy: [] },
 		},
 		toInstall: [],
 		toRemove: [],
@@ -41,6 +42,7 @@ describe("installed rows", () => {
 			"d-Off": "own/disabled",
 			"x-Lib": "dependency/ok",
 			"y-ServerLib": "server/ok",
+			[LOADER_ID]: "dependency/ok",
 		});
 	});
 
@@ -51,20 +53,29 @@ describe("installed rows", () => {
 		expect(buildRows(input({ missing, syncing: true })).find((r) => r.id === "x-Lib")?.state).toBe("installing");
 	});
 
-	it("sorts by source, then name, independent of the install order", () => {
+	it("sorts the loader first, then by source, then name, independent of the install order", () => {
 		const a = sortRows(buildRows(input()), null).map((r) => r.name);
 		const shuffled = input();
 		const b = sortRows(buildRows({ ...shuffled, mods: [...shuffled.mods].reverse() }), null).map((r) => r.name);
-		expect(a).toEqual(["Alpha", "ServerLib", "Off", "Zeta", "Local", "Lib"]);
+		expect(a).toEqual(["BepInExPack_Valheim", "Alpha", "ServerLib", "Off", "Zeta", "Local", "Lib"]);
 		expect(b).toEqual(a);
 	});
 
-	it("sorts by a column with the name as tie breaker", () => {
-		expect(sortRows(buildRows(input()), { key: "status", dir: "asc" }).map((r) => r.name)).toEqual(["Zeta", "Off", "Alpha", "Lib", "Local", "ServerLib"]);
-		expect(sortRows(buildRows(input()), { key: "mod", dir: "desc" })[0].name).toBe("Zeta");
+	it("sorts by a column with the name as tie breaker, the loader staying on top", () => {
+		expect(sortRows(buildRows(input()), { key: "status", dir: "asc" }).map((r) => r.name)).toEqual([
+			"BepInExPack_Valheim",
+			"Zeta",
+			"Off",
+			"Alpha",
+			"Lib",
+			"Local",
+			"ServerLib",
+		]);
+		const byNameDesc = sortRows(buildRows(input()), { key: "mod", dir: "desc" }).map((r) => r.name);
+		expect(byNameDesc.slice(0, 2)).toEqual(["BepInExPack_Valheim", "Zeta"]);
 	});
 
 	it("counts sources", () => {
-		expect(countSources(buildRows(input()))).toEqual({ server: 2, own: 2, local: 1, dependency: 1 });
+		expect(countSources(buildRows(input()))).toEqual({ server: 2, own: 2, local: 1, dependency: 2 });
 	});
 });

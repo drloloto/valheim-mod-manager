@@ -54,15 +54,22 @@ profile, so switching profiles does not move files. Doorstop v3 and v4 argument 
 
 ## Core flows
 
-**Index.** `index_worker` loads `cache/index.json` at startup and refreshes from Thunderstore when older
-than the configured TTL (default 30 minutes), with a 5-minute backoff after failures. The source is the
-`package-listing-index`: a redirect to a gzip blob of chunk URLs on the CDN, chunks fetched four at a time
-with one retry, the same package shape as the deprecated `/api/v1/package/`, which stays as the fallback.
-The blob URL carries the content hash and is saved with the cache, so a refresh that lands on the same
-blob skips the download. `build()` also counts dependants per package for "Used by". `build()` keeps
-the full packages in a `HashMap` for lookups and pre-serializes a slim JSON (one entry per package: latest
-version, counts, dependency ids) that `get_index` hands to the UI unchanged. The UI sends `since` and gets an
-empty body when nothing changed.
+**Index.** `index_worker` loads `cache/index.json` at startup and refreshes from the stores when older
+than the configured TTL (default 30 minutes), with a 5-minute backoff after failures. Two stores speak the
+same API: Thunderstore (`thunderstore.io/c/valheim`) and, unless turned off in the settings, Hexium
+(`valheim.hexium.gg`). Each is fetched through its `package-listing-index`: a gzip blob of chunk URLs on the
+CDN (Thunderstore reaches it through a redirect), chunks fetched four at a time with one retry, the same
+package shape as the deprecated `/api/v1/package/`, which stays as the fallback. The blob URL carries the
+content hash and is saved with the cache per store, so a refresh that lands on the same blob reuses that
+store's list; Hexium failing keeps its last list and never costs the Thunderstore refresh. `merge()` joins
+the two lists by package id (`owner-name`): versions are the union, newest first, a release on both stores
+is downloaded from Thunderstore (`Version::src`, `dl`), Hexium's category names are mapped onto
+Thunderstore's, and `Pkg::stores` says which stores list the package. `build()` also counts dependants per
+package for "Used by", keeps the full packages in a `HashMap` for lookups and pre-serializes a slim JSON
+(one entry per package: latest version, counts, dependency ids, stores) that `get_index` hands to the UI
+unchanged. The UI sends `since` and gets an empty body when nothing changed. A profile does not record the
+store: it names id and version, the resolver takes the version's store into the plan, and the lock
+published to a companion carries it as `source` so the companion downloads from the same place.
 
 **Sync.** Any profile change (`set_mods`, import, repair, local mods) enqueues a sync. One worker processes
 the queue; per profile, requests are merged. `run_sync` resolves the plan, downloads missing zips in
@@ -155,4 +162,6 @@ template reactive to language changes. Formatters in `format.ts` are cached per 
 - **Signed updates.** `tauri-plugin-updater` checks `releases/latest/download/latest.json` once at startup
   (opt-out in Settings); packages are verified against the public key in `tauri.conf.json`.
 - **Mock backend for the browser.** `dev/mock-tauri.js` fakes `window.__TAURI_INTERNALS__` so the whole UI
-  runs in a normal browser with sample data (dev server only, `VITE_MOCK_TAURI=1`).
+  runs in a normal browser with sample data (dev server only, `VITE_MOCK_TAURI=1`). It steps aside when the
+  real internals exist, so `bun run mock` serves the DEV app window and the browser from one dev server, and
+  it reports a dev build so the preview wears the DEV colors too.

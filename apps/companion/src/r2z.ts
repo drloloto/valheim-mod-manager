@@ -9,11 +9,13 @@ import { isConfigFile, type Manifest } from "./manifest";
 
 const yamlStr = (s: string) => JSON.stringify(s);
 
-export function buildR2x(profileName: string, mods: { id: string; version: string }[]): string {
+export function buildR2x(profileName: string, mods: { id: string; version: string; source?: string }[]): string {
 	const lines = [`profileName: ${yamlStr(profileName)}`, "mods:"];
 	for (const m of mods) {
 		const [major = 0, minor = 0, patch = 0] = m.version.split(".").map((x) => Number.parseInt(x, 10) || 0);
 		lines.push(`  - name: ${yamlStr(m.id)}`, "    version:", `      major: ${major}`, `      minor: ${minor}`, `      patch: ${patch}`, "    enabled: true");
+		// Gale's field for a release only Hexium has; r2modman and the Mod Manager's import ignore it.
+		if (m.source === "hexium") lines.push("    source: hexium");
 	}
 	return lines.join("\n") + "\n";
 }

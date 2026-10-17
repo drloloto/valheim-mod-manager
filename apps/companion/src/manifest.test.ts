@@ -55,5 +55,25 @@ describe("normalizeManifest", () => {
 		expect(() => normalizeManifest({ mods: "x" }, server, {})).toThrow();
 		expect(() => normalizeManifest({ mods: [{ id: "../x", version: "1" }] }, server, {})).toThrow();
 		expect(() => normalizeManifest({ mods: [{ id: "a-A", version: "v1" }] }, server, {})).toThrow();
+		expect(() => normalizeManifest({ mods: [{ id: "noteam", version: "1.0.0" }] }, server, {})).toThrow();
+	});
+	it("keeps hyphenated teams, pre-release versions and the stored namespace/name pair", () => {
+		const m = normalizeManifest(
+			{
+				mods: [
+					{ id: "LVH-IT-UseEquipmentInWater", version: "0.2.4", ns: "LVH-IT", name: "UseEquipmentInWater" },
+					{ id: "Wubarrk-BetterContinents", version: "0.10.6-rc.1", ns: "other", name: "pair" },
+					{ id: "x-Only", version: "1.0.0", source: "hexium" },
+					{ id: "x-Ts", version: "1.0.0", source: "thunderstore" },
+				],
+			},
+			server,
+			{},
+		);
+		expect(m.mods[0]).toMatchObject({ ns: "LVH-IT", name: "UseEquipmentInWater" });
+		expect(m.mods.find((x) => x.id === "x-Only")?.source).toBe("hexium");
+		expect(m.mods.find((x) => x.id === "x-Ts")).not.toHaveProperty("source");
+		// a pair that does not spell the id is dropped, the entry stays
+		expect(m.mods[1]).toEqual({ id: "Wubarrk-BetterContinents", version: "0.10.6-rc.1", explicit: true, requiredBy: [] });
 	});
 });

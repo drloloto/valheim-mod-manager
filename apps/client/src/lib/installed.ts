@@ -92,17 +92,21 @@ const COMPARE: Record<string, (a: InstalledRow, b: InstalledRow) => number> = {
 	status: (a, b) => STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state),
 };
 
+/** The loader every profile needs: always the first row, whatever the sort. */
+export const LOADER_ID = "denikson-BepInExPack_Valheim";
+const loaderFirst = (a: InstalledRow, b: InstalledRow) => Number(b.id === LOADER_ID) - Number(a.id === LOADER_ID);
+
 /**
- * The same order on every machine: by source (server, own, local, dependencies), then by name. A column
- * sort replaces the first key; ties always fall back to the name.
+ * The same order on every machine: the loader, then by source (server, own, local, dependencies), then
+ * by name. A column sort replaces the source key; the loader stays on top and ties fall back to the name.
  */
 export function sortRows(rows: readonly InstalledRow[], sort: SortState | null): InstalledRow[] {
 	const cmp = sort ? COMPARE[sort.key] : undefined;
 	if (cmp) {
 		const dir = sort!.dir === "asc" ? 1 : -1;
-		return [...rows].sort((a, b) => dir * cmp(a, b) || byName(a, b));
+		return [...rows].sort((a, b) => loaderFirst(a, b) || dir * cmp(a, b) || byName(a, b));
 	}
-	return [...rows].sort((a, b) => COMPARE.source(a, b) || byName(a, b));
+	return [...rows].sort((a, b) => loaderFirst(a, b) || COMPARE.source(a, b) || byName(a, b));
 }
 
 export function countSources(rows: readonly InstalledRow[]): Record<Source, number> {

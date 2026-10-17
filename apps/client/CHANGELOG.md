@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Hexium as a second mod store. The index merges Hexium's package list with Thunderstore's by package id:
+  mods only Hexium has appear in Browse (filter "Store"), the detail panel links to both pages, a release
+  both stores have is downloaded from Thunderstore. Profiles are unchanged; the lock published to a
+  companion names the store per mod, and the companion (and its takeover of hand-installed servers)
+  downloads from Hexium when told to. Settings → "Include Hexium" turns the second store off.
+
+### Fixed
+
+- A mod the server dropped was never uninstalled: the comparison counted it as the player's own extra and
+  reported "in sync". It is now its own kind of difference ("the server removed it, adopting uninstalls
+  it"), for players and admins alike, on both transports.
+- Server mods no longer show "update available" and "Update all" leaves them alone: adoption pins them to
+  the server's version, as the server-managed-mods spec always said.
+- Adopting over a companion address now remembers the adopted state like a sync code does; adopting a sync
+  code whose server has not published a mod list yet is refused instead of emptying the profile.
+- Publishing a profile with a mod whose team name contains a hyphen (`LVH-IT-…`) or a pre-release version
+  failed on the companion ("invalid mod entry"). The lock now carries namespace and name next to the id,
+  and the companion accepts both.
+
+### Changed
+
+- The profile manager is built from the app's own parts (setting rows, section labels, segmented switches,
+  status dots): the cards and the detail tabs now share spacing, type and colors with the Settings page and
+  the toolbar instead of carrying their own.
+- `bun run mock` starts the DEV app together with the browser preview on one dev server; the preview now
+  wears the DEV colors and badge like the DEV app. `bun run mock:web` is the browser preview alone.
+
 ## [0.3.1] - 2026-10-14
 
 ### Added

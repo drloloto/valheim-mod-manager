@@ -25,6 +25,7 @@
 		itemLabel,
 		NUM_KEYS,
 		STATUS_ITEMS,
+		STORE_ITEMS,
 		type DateKey,
 		type ListKey,
 		type NumKey,
@@ -70,7 +71,11 @@
 			{ key: "owners", items: listItems("owners"), limit: 8, searchable: true },
 		];
 		if (showProfiles) out.push({ key: "profiles", items: listItems("profiles", store.otherProfiles), limit: 8 });
-		out.push({ key: "deps", items: listItems("deps", DEPS_ITEMS), limit: 3 }, { key: "flags", items: listItems("flags", FLAG_ITEMS), limit: 3 });
+		out.push(
+			{ key: "deps", items: listItems("deps", DEPS_ITEMS), limit: 3 },
+			{ key: "flags", items: listItems("flags", FLAG_ITEMS), limit: 3 },
+			{ key: "stores", items: listItems("stores", STORE_ITEMS), limit: 2 },
+		);
 		return out;
 	});
 

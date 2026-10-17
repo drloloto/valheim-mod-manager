@@ -6,7 +6,7 @@ import { t } from "#lib/i18n/t.js";
 export type Tri = 1 | -1;
 export type TriMap = Readonly<Record<string, Tri>>;
 
-export const LIST_KEYS = ["status", "cats", "owners", "profiles", "deps", "flags"] as const;
+export const LIST_KEYS = ["status", "cats", "owners", "profiles", "deps", "flags", "stores"] as const;
 export type ListKey = (typeof LIST_KEYS)[number];
 
 export const DATE_KEYS = ["upd", "created"] as const;
@@ -48,14 +48,15 @@ export interface Criteria {
 export const STATUS_ITEMS = ["inProfile", "update", "disabled", "dependency", "none"] as const;
 export const DEPS_ITEMS = ["none", "inProfile", "missing"] as const;
 export const FLAG_ITEMS = ["deprecated", "nsfw", "pinned"] as const;
+export const STORE_ITEMS = ["thunderstore", "hexium"] as const;
 
 export function fieldLabel(key: ListKey | RangeKey): string {
 	return t(`field.${key}`);
 }
 
-/** Fixed list values (status, dependencies, flags) have translations; categories, authors and profiles do not. */
+/** Fixed list values (status, dependencies, flags, stores) have translations; categories, authors and profiles do not. */
 export function itemLabel(key: ListKey, value: string): string {
-	if (key === "status" || key === "deps" || key === "flags") return t(`item.${key}.${value}` as Parameters<typeof t>[0]);
+	if (key === "status" || key === "deps" || key === "flags" || key === "stores") return t(`item.${key}.${value}` as Parameters<typeof t>[0]);
 	return value;
 }
 
@@ -64,7 +65,7 @@ export function defaultCriteria(opts: { showNsfw?: boolean } = {}): Criteria {
 	if (!opts.showNsfw) flags.nsfw = -1;
 	return {
 		query: "",
-		lists: { status: {}, cats: {}, owners: {}, profiles: {}, deps: {}, flags },
+		lists: { status: {}, cats: {}, owners: {}, profiles: {}, deps: {}, flags, stores: {} },
 		catMode: "any",
 		dates: { upd: null, created: null },
 		nums: { dl: null, rating: null, size: null, ndeps: null, ndependants: null },

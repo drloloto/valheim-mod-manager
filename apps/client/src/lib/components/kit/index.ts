@@ -45,6 +45,7 @@ export { Toaster } from "@vmm/ui/components/ui/sonner/index.js";
 export * as Dialog from "@vmm/ui/components/ui/dialog/index.js";
 export * as DropdownMenu from "@vmm/ui/components/ui/dropdown-menu/index.js";
 export * as ContextMenu from "@vmm/ui/components/ui/context-menu/index.js";
+export * as Popover from "@vmm/ui/components/ui/popover/index.js";
 export * as Tooltip from "@vmm/ui/components/ui/tooltip/index.js";
 export * as Resizable from "@vmm/ui/components/ui/resizable/index.js";
 

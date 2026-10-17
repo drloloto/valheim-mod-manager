@@ -9,7 +9,7 @@ const base: ServerCheck = {
 	name: "S",
 	world: "W",
 	inSync: true,
-	diff: { onlyServer: [], onlyLocal: [], changed: [] },
+	diff: { onlyServer: [], onlyLocal: [], dropped: [], changed: [] },
 	serverMods: 1,
 	serverConfigs: 0,
 	hash: "h",
@@ -23,8 +23,18 @@ const base: ServerCheck = {
 const differs: ServerCheck = {
 	...base,
 	inSync: false,
-	diff: { onlyServer: [{ id: "a-A", version: "1", explicit: true, requiredBy: [] }], onlyLocal: [], changed: [] },
+	diff: { onlyServer: [{ id: "a-A", version: "1", explicit: true, requiredBy: [] }], onlyLocal: [], dropped: [], changed: [] },
 	configsChanged: ["x.cfg", "y.cfg"],
+};
+const droppedOne: ServerCheck = {
+	...base,
+	inSync: false,
+	diff: {
+		onlyServer: [],
+		onlyLocal: [{ id: "me-Mine", version: "1", explicit: true, requiredBy: [] }],
+		dropped: [{ id: "a-A", version: "1", explicit: true, requiredBy: [] }],
+		changed: [],
+	},
 };
 const staged: ServerCheck = {
 	...base,
@@ -45,6 +55,11 @@ describe("serverView: one reading for chip, status bar and dialogs", () => {
 
 	it("an admin who differs is sent to publish", () => {
 		expect(serverView(differs, true, t)).toMatchObject({ kind: "differs", action: "publish" });
+	});
+
+	it("a mod the server dropped counts for players and admins; a player's own extra only for admins", () => {
+		expect(serverView(droppedOne, false, t)).toMatchObject({ kind: "differs", text: "chip.differs:chip.mods:1" });
+		expect(serverView(droppedOne, true, t)).toMatchObject({ kind: "differs", text: "chip.differs:chip.mods:2" });
 	});
 
 	it("a waiting release: the admin follows it, the player is only told and still sees a difference first", () => {

@@ -2,7 +2,6 @@
 	import { onMount } from "svelte";
 	import { getCurrentWebview } from "@tauri-apps/api/webview";
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
-	import ChevronDown from "@lucide/svelte/icons/chevron-down";
 	import Columns3 from "@lucide/svelte/icons/columns-3";
 	import FilePlus from "@lucide/svelte/icons/file-plus";
 	import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
@@ -17,6 +16,7 @@
 		InstallState,
 		isHidden,
 		ModAvatar,
+		Popover,
 		resetColumns,
 		Resizable,
 		Segmented,
@@ -56,7 +56,6 @@
 	const missing = $derived(store.readiness.status === "incomplete" ? store.readiness.missing : []);
 	const missingNames = $derived(missing.map((m) => store.byId.get(m.id)?.name ?? m.id).join(", "));
 	const compact = $derived(prefs.value.density === "compact");
-	let healthOpen = $state(true);
 	const nameOf = (id: string) => store.byId.get(id)?.name ?? id;
 	const healthText = (id: string) => (store.healthByMod.get(id) ?? []).map((h) => describeIssue(h, nameOf, store.state.game.lastUpdated)).join("\n");
 	const health = $derived(groupIssues(store.state.health, nameOf));
@@ -169,6 +168,70 @@
 					<Input data-search class="w-[220px] shrink" placeholder={t("installed.search")} bind:value={query} />
 					<Segmented bind:value={show} options={showOptions} />
 					<div class="flex-1"></div>
+					{#if store.state.health.length}
+						<!-- Hints: one explanation per kind, the affected mods as a compact list under it. Behind a button, so a
+						     profile with a few stale mods does not lose table height to them. -->
+						<Popover.Root>
+							<Popover.Trigger>
+								{#snippet child({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="sm"
+										class="text-primary-text gap-1.5 px-2"
+										title={t("health.count", { n: store.state.health.length })}
+									>
+										<TriangleAlert class="size-4" /><span class="text-xs font-semibold">{store.state.health.length}</span>
+									</Button>
+								{/snippet}
+							</Popover.Trigger>
+							<Popover.Content align="end" class="w-[420px] max-w-[calc(100vw-32px)] gap-0 p-0">
+								<p class="text-primary-text flex items-center gap-1.5 border-b px-3 py-2 text-xs font-semibold">
+									<TriangleAlert class="size-3.5" />{t("health.count", { n: store.state.health.length })}
+								</p>
+								<div class="scroll-y grid max-h-[320px] gap-3 px-3 py-2.5 text-xs">
+									{#if health.stale.length}
+										<div class="grid gap-1">
+											<p class="text-foreground-soft">
+												{t("health.staleIntro", { game: gameUpdated ? formatDate(gameUpdated) : "?" })}
+											</p>
+											<ul class="flex flex-wrap gap-1.5">
+												{#each health.stale as s (s.id)}
+													<li class="border-line-subtle bg-raised flex h-6 items-center gap-2 rounded-[4px] border px-2">
+														<span class="text-foreground">{s.name}</span>
+														<span class="text-subtle-foreground font-mono text-[11px]" title={t("health.lastUpdate")}>{formatDate(s.when)}</span>
+													</li>
+												{/each}
+											</ul>
+										</div>
+									{/if}
+									{#if health.deprecated.length}
+										<div class="grid gap-1">
+											<p class="text-foreground-soft">{t("health.deprecatedIntro")}</p>
+											<ul class="flex flex-wrap gap-1.5">
+												{#each health.deprecated as d (d.id)}
+													<li class="border-line-subtle bg-raised text-foreground flex h-6 items-center rounded-[4px] border px-2">{d.name}</li>
+												{/each}
+											</ul>
+										</div>
+									{/if}
+									{#if health.duplicates.length}
+										<div class="grid gap-1">
+											<p class="text-foreground-soft">{t("health.duplicateIntro")}</p>
+											<ul class="grid gap-0.5">
+												{#each health.duplicates as d (d.file)}
+													<li>
+														<span class="text-foreground font-mono text-[11.5px]">{d.file}</span>
+														<span class="text-muted-foreground">← {d.mods.join(", ")}</span>
+													</li>
+												{/each}
+											</ul>
+										</div>
+									{/if}
+								</div>
+							</Popover.Content>
+						</Popover.Root>
+					{/if}
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger>
 							{#snippet child({ props })}
@@ -220,62 +283,6 @@
 					</div>
 				{/if}
 
-				{#if store.state.health.length}
-					<!-- Hints: one explanation per kind, the affected mods as a compact list under it. -->
-					<div class="border-b px-4 py-2">
-						<button
-							type="button"
-							class="text-primary-text hover:text-foreground flex items-center gap-1.5 text-xs"
-							aria-expanded={healthOpen}
-							onclick={() => (healthOpen = !healthOpen)}
-						>
-							<TriangleAlert class="size-3.5" /><span class="font-semibold">{t("health.count", { n: store.state.health.length })}</span>
-							<ChevronDown class="size-3 transition-transform {healthOpen ? '' : '-rotate-90'}" />
-						</button>
-						{#if healthOpen}
-							<div class="scroll-y mt-2 grid max-h-[168px] gap-2.5 pb-1 text-xs">
-								{#if health.stale.length}
-									<div class="grid gap-1">
-										<p class="text-foreground-soft">
-											{t("health.staleIntro", { game: gameUpdated ? formatDate(gameUpdated) : "?" })}
-										</p>
-										<ul class="flex flex-wrap gap-1.5">
-											{#each health.stale as s (s.id)}
-												<li class="border-line-subtle bg-raised flex h-6 items-center gap-2 rounded-[4px] border px-2">
-													<span class="text-foreground">{s.name}</span>
-													<span class="text-subtle-foreground font-mono text-[11px]" title={t("health.lastUpdate")}>{formatDate(s.when)}</span>
-												</li>
-											{/each}
-										</ul>
-									</div>
-								{/if}
-								{#if health.deprecated.length}
-									<div class="grid gap-1">
-										<p class="text-foreground-soft">{t("health.deprecatedIntro")}</p>
-										<ul class="flex flex-wrap gap-1.5">
-											{#each health.deprecated as d (d.id)}
-												<li class="border-line-subtle bg-raised text-foreground flex h-6 items-center rounded-[4px] border px-2">{d.name}</li>
-											{/each}
-										</ul>
-									</div>
-								{/if}
-								{#if health.duplicates.length}
-									<div class="grid gap-1">
-										<p class="text-foreground-soft">{t("health.duplicateIntro")}</p>
-										<ul class="grid gap-0.5">
-											{#each health.duplicates as d (d.file)}
-												<li>
-													<span class="text-foreground font-mono text-[11.5px]">{d.file}</span> <span class="text-muted-foreground">← {d.mods.join(", ")}</span>
-												</li>
-											{/each}
-										</ul>
-									</div>
-								{/if}
-							</div>
-						{/if}
-					</div>
-				{/if}
-
 				<DataTable
 					class="flex-1"
 					{rows}
@@ -310,12 +317,7 @@
 							<div class="flex min-w-0 items-center gap-[11px]">
 								{#if !compact}<ModAvatar name={r.name} icon={p?.icon} />{/if}
 								<div class="flex min-w-0 flex-col gap-0.5">
-									<span class="flex min-w-0 items-center gap-1.5">
-										<span class="text-row truncate font-semibold {r.kind === 'dep' ? 'text-foreground-soft' : ''}">{r.name}</span>
-										{#if store.healthByMod.has(r.id)}
-											<span class="text-primary-text inline-flex shrink-0" title={healthText(r.id)}><TriangleAlert class="size-3.5" /></span>
-										{/if}
-									</span>
+									<span class="text-row truncate font-semibold {r.kind === 'dep' ? 'text-foreground-soft' : ''}">{r.name}</span>
 									{#if !compact}
 										<span class="text-muted-foreground truncate text-xs">{r.mod?.source === "local" ? t("installed.localMod") : (p?.desc ?? "")}</span>
 									{/if}
@@ -324,8 +326,14 @@
 						{:else if key === "author"}
 							<span class="cell-soft block">{r.author}</span>
 						{:else if key === "version"}
+							<!-- The hint triangle sits by the version: stale and deprecated are facts about this version. -->
 							<span class="cell-mono inline-flex items-center gap-1"
-								>{r.version}{#if r.mod?.pinned}<Pin class="text-primary size-3" aria-label={t("installed.pinnedTitle")} />{/if}</span
+								>{r.version}{#if r.mod?.pinned}<Pin
+										class="text-primary size-3"
+										aria-label={t("installed.pinnedTitle")}
+									/>{/if}{#if store.healthByMod.has(r.id)}<span class="text-primary-text inline-flex shrink-0" title={healthText(r.id)}
+										><TriangleAlert class="size-3.5" /></span
+									>{/if}</span
 							>
 						{:else if key === "dl"}
 							<span class="cell-mono" title={p ? formatNumber(p.dl) : undefined}>{p ? formatCompact(p.dl) : "—"}</span>

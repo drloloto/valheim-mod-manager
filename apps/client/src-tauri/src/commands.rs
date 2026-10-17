@@ -50,17 +50,26 @@ impl AppCtx {
     }
 
     async fn ensure_index(&self) -> Result<Arc<Index>> {
-        if let Some(i) = self.index.get() {
-            return Ok(i);
+        if self.index.get().is_none() {
+            let cache = self.paths.index_cache();
+            if let Ok(Some(idx)) = tokio::task::spawn_blocking(move || thunderstore::load_cache(&cache)).await {
+                self.index.set(idx);
+            }
         }
-        let cache = self.paths.index_cache();
-        if let Ok(Some(idx)) = tokio::task::spawn_blocking(move || thunderstore::load_cache(&cache)).await {
-            self.index.set(idx);
+        let hexium = self.settings.read().unwrap().hexium;
+        match self.index.get() {
+            // An index from before the second store: merge Hexium in before answering, so a lock that names a
+            // Hexium mod resolves on the first adoption after the update (the worker does the same in time).
+            Some(i) if hexium && i.lacks_hexium() => {
+                if let Err(e) = thunderstore::refresh(&self.index, &self.client, &self.paths.index_cache(), false, true).await {
+                    eprintln!("Hexium could not be merged into the index: {e}");
+                }
+            }
+            Some(i) => return Ok(i),
+            None => {
+                thunderstore::refresh(&self.index, &self.client, &self.paths.index_cache(), true, hexium).await?;
+            }
         }
-        if let Some(i) = self.index.get() {
-            return Ok(i);
-        }
-        thunderstore::refresh(&self.index, &self.client, &self.paths.index_cache(), true).await?;
         self.index.get().ok_or_else(|| AppError::Network("The mod index is not available.".into()))
     }
 }
@@ -237,9 +246,15 @@ pub async fn index_worker(app: AppHandle) {
         }
     }
     loop {
-        let ttl = ctx.settings.read().unwrap().index_ttl_minutes as i64 * 60_000;
-        if ctx.index.staleness_ms().is_none_or(|age| age > ttl) {
-            match thunderstore::refresh(&ctx.index, &ctx.client, &ctx.paths.index_cache(), false).await {
+        let (ttl, hexium) = {
+            let s = ctx.settings.read().unwrap();
+            (s.index_ttl_minutes as i64 * 60_000, s.hexium)
+        };
+        let stale = ctx.index.staleness_ms().is_none_or(|age| age > ttl);
+        // Hexium on but never fetched (a cache from before the second store): refresh regardless of the age.
+        let missing_store = hexium && ctx.index.get().is_some_and(|i| i.lacks_hexium());
+        if stale || missing_store {
+            match thunderstore::refresh(&ctx.index, &ctx.client, &ctx.paths.index_cache(), false, hexium).await {
                 Ok(true) => emit_index_updated(&app, &ctx),
                 Ok(false) => {}
                 Err(e) => eprintln!("Index refresh failed: {e}"),
@@ -276,7 +291,8 @@ pub async fn get_index(ctx: State<'_, AppCtx>, since: Option<i64>) -> Result<tau
 
 #[tauri::command]
 pub async fn refresh_index(app: AppHandle, ctx: State<'_, AppCtx>) -> Result<Option<i64>> {
-    thunderstore::refresh(&ctx.index, &ctx.client, &ctx.paths.index_cache(), true).await?;
+    let hexium = ctx.settings.read().unwrap().hexium;
+    thunderstore::refresh(&ctx.index, &ctx.client, &ctx.paths.index_cache(), true, hexium).await?;
     emit_index_updated(&app, &ctx);
     Ok(ctx.index.age_ms())
 }
@@ -665,7 +681,7 @@ async fn check_gist(ctx: &AppCtx, profile: &str, link: &ServerLink, m: &gistsync
         Err(e) => return unreachable_check(link, e),
     };
     let manifest = s.manifest.unwrap_or_default();
-    let diff = server::diff(&plan.resolved, &manifest.mods);
+    let diff = server::diff(&p, &plan.resolved, &manifest.mods);
     let changed = configs_changed(ctx, profile, &s.configs);
     // Mods and versions must match. Configs are the server's business: synced mods hand them to the
     // client at join, and a profile created from the server took the rest once (see adopt_server).
@@ -773,7 +789,7 @@ async fn check_link(ctx: &AppCtx, profile: &str) -> Result<ServerCheck> {
     let quick = thunderstore::http_client(Duration::from_secs(2), Duration::from_secs(4))?;
     match server::fetch_manifest(&quick, &link).await {
         Ok(m) => {
-            let diff = server::diff(&plan.resolved, &m.mods);
+            let diff = server::diff(&p, &plan.resolved, &m.mods);
             let status = server::fetch_status(&quick, &link).await.unwrap_or_default();
             Ok(ServerCheck {
                 reachable: true,
@@ -862,10 +878,12 @@ pub async fn adopt_server(
     let (info, mods, configs, adopted) = match gist_of(&ctx, &link)? {
         Some((m, key)) => {
             let s = gistsync::read_server(&m, &key).await?.ok_or_else(|| AppError::Network("The server has not written to the gist yet.".into()))?;
-            let manifest = s.manifest.unwrap_or_default();
+            // No lock yet (a companion before its first release) is not "the server runs nothing": adopting
+            // that would uninstall every server mod.
+            let manifest = s.manifest.ok_or_else(|| AppError::Invalid("The server has not published a mod list yet.".into()))?;
             let adopted = format!("{}:{}", manifest.hash, gistsync::config_hash(&s.configs));
             let configs = if with_configs { s.configs.iter().filter_map(|c| server::decode_config(c).map(|b| (c.path.clone(), b))).collect() } else { vec![] };
-            (s.server, manifest.mods, configs, Some(adopted))
+            (s.server, manifest.mods, configs, adopted)
         }
         None => {
             let m = server::fetch_manifest(&ctx.client, &link).await?;
@@ -875,7 +893,8 @@ pub async fn adopt_server(
             } else {
                 vec![]
             };
-            (m.server, m.mods, configs, None)
+            let adopted = server::adopted_stamp(&m.hash, &m.configs);
+            (m.server, m.mods, configs, adopted)
         }
     };
     let guard = ctx.sync.lock.lock().await;
@@ -896,9 +915,7 @@ pub async fn adopt_server(
         if !info.name.is_empty() {
             s.name = info.name.clone();
         }
-        if adopted.is_some() {
-            s.last_adopted = adopted;
-        }
+        s.last_adopted = Some(adopted);
     }
     profiles::save(&ctx.paths, &p)?;
     let dir = ctx.paths.config_dir(&target);
@@ -928,7 +945,7 @@ pub async fn publish_profile(ctx: State<'_, AppCtx>, profile: String, with_confi
     if !plan.errors.is_empty() {
         return Err(AppError::Invalid(format!("The profile cannot be resolved: {}", plan.errors.join("; "))));
     }
-    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved);
+    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved, &index.by_id);
     let mut configs = vec![];
     if with_configs {
         let dir = ctx.paths.config_dir(&profile);
@@ -957,7 +974,7 @@ pub async fn publish_gist(ctx: State<'_, AppCtx>, profile: String, with_configs:
     if !plan.errors.is_empty() {
         return Err(AppError::Invalid(format!("The profile cannot be resolved: {}", plan.errors.join("; "))));
     }
-    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved);
+    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved, &index.by_id);
     let mut configs = vec![];
     if with_configs {
         let dir = ctx.paths.config_dir(&profile);
@@ -1013,7 +1030,7 @@ pub fn import_foreign_profile(
 #[tauri::command]
 pub async fn export_profile_code(ctx: State<'_, AppCtx>, profile: String) -> Result<ExportResult> {
     let p = profiles::load(&ctx.paths, &profile)?;
-    let (bytes, skipped_local) = share::build_r2z(&p, &ctx.paths.config_dir(&profile))?;
+    let (bytes, skipped_local) = share::build_r2z(&p, &ctx.paths.config_dir(&profile), ctx.index.get().as_deref().map(|i| &i.by_id))?;
     let code = share::upload_code(&ctx.client, bytes).await?;
     Ok(ExportResult { code: Some(code), skipped_local })
 }
@@ -1021,7 +1038,7 @@ pub async fn export_profile_code(ctx: State<'_, AppCtx>, profile: String) -> Res
 #[tauri::command]
 pub fn export_profile_file(ctx: State<'_, AppCtx>, profile: String, path: String) -> Result<ExportResult> {
     let p = profiles::load(&ctx.paths, &profile)?;
-    let (bytes, skipped_local) = share::build_r2z(&p, &ctx.paths.config_dir(&profile))?;
+    let (bytes, skipped_local) = share::build_r2z(&p, &ctx.paths.config_dir(&profile), ctx.index.get().as_deref().map(|i| &i.by_id))?;
     std::fs::write(&path, bytes)?;
     Ok(ExportResult { code: None, skipped_local })
 }

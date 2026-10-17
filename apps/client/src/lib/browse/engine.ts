@@ -22,8 +22,9 @@ export const BIT: Record<ListKey | DateKey | NumKey | "query", number> = {
 	ndeps: 1 << 11,
 	query: 1 << 12,
 	ndependants: 1 << 13,
+	stores: 1 << 14,
 };
-export const ALL = (1 << 14) - 1;
+export const ALL = (1 << 15) - 1;
 
 export { searchKey } from "./query";
 

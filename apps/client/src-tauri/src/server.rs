@@ -1,10 +1,11 @@
 //! Linked server (the companion container): fetch its manifest, compare it with the local plan,
 //! adopt its versions, publish the local plan. The manifest is the lock both sides agree on.
 use crate::error::{AppError, Result};
-use crate::models::{Profile, ProfileMod, Resolved, ServerLink, Source};
+use crate::models::{Pkg, Profile, ProfileMod, Resolved, ServerLink, Source, Store};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 fn yes() -> bool {
     true
@@ -23,6 +24,25 @@ pub struct ManifestMod {
     pub explicit: bool,
     #[serde(default)]
     pub required_by: Vec<String>,
+    /// Namespace and name as the index knows them: `id` alone cannot be split when the team name has a
+    /// hyphen (`LVH-IT-UseEquipmentInWater`). Empty in a diff and in locks from older clients.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub ns: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// The store the companion downloads this release from; locks from older clients mean Thunderstore.
+    #[serde(default)]
+    pub source: Store,
+}
+
+impl ManifestMod {
+    /// (namespace, name): the stored pair, or the id split at its first hyphen.
+    pub fn split(&self) -> Option<(&str, &str)> {
+        if !self.ns.is_empty() && !self.name.is_empty() {
+            return Some((&self.ns, &self.name));
+        }
+        self.id.split_once('-').filter(|(ns, name)| !ns.is_empty() && !name.is_empty())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -64,25 +84,61 @@ pub struct Changed {
 pub struct ServerDiff {
     /// On the server, not resolved locally.
     pub only_server: Vec<ManifestMod>,
-    /// Resolved locally, not on the server.
+    /// Resolved locally, not on the server: the player's own mods (an admin's unpublished work).
     pub only_local: Vec<ManifestMod>,
+    /// The server's mods (`managed`) it no longer lists: adoption uninstalls them.
+    pub dropped: Vec<ManifestMod>,
     pub changed: Vec<Changed>,
 }
 
-/// Local resolved set vs the server manifest; the BepInEx pack is ignored on both sides.
-pub fn diff(local: &BTreeMap<String, Resolved>, manifest: &[ManifestMod]) -> ServerDiff {
+/// Ids the server claims in this profile: every `managed` entry, or, in a profile adopted before `managed`
+/// existed (the link has `last_adopted`, nothing is managed), every Thunderstore entry.
+pub fn servers_ids(profile: &Profile) -> HashSet<String> {
+    let legacy = profile.server.as_ref().is_some_and(|s| s.last_adopted.is_some()) && !profile.mods.iter().any(|m| m.managed);
+    profile.mods.iter().filter(|m| m.managed || (legacy && m.source == Source::Thunderstore)).map(ProfileMod::id).collect()
+}
+
+/// Local resolved set vs the server manifest; the BepInEx pack is ignored on both sides. A local mod the
+/// server does not list is `dropped` when the server put it there (see `servers_ids`), `only_local` when
+/// the player did. A disabled server mod the server dropped is not resolved, so it is read off the profile.
+pub fn diff(profile: &Profile, local: &BTreeMap<String, Resolved>, manifest: &[ManifestMod]) -> ServerDiff {
     let mut d = ServerDiff::default();
+    let servers = servers_ids(profile);
     let server: BTreeMap<&str, &ManifestMod> = manifest.iter().filter(|m| !is_pack(&m.id)).map(|m| (m.id.as_str(), m)).collect();
     for (id, r) in local.iter().filter(|(id, _)| !is_pack(id)) {
         match server.get(id.as_str()) {
-            None => d.only_local.push(ManifestMod {
-                id: id.clone(),
-                version: r.version.clone(),
-                explicit: r.required_by.is_empty(),
-                required_by: r.required_by.clone(),
-            }),
+            None => {
+                let m = ManifestMod {
+                    id: id.clone(),
+                    version: r.version.clone(),
+                    explicit: r.required_by.is_empty(),
+                    required_by: r.required_by.clone(),
+                    ns: String::new(),
+                    name: String::new(),
+                    source: r.store,
+                };
+                if servers.contains(id) {
+                    d.dropped.push(m);
+                } else {
+                    d.only_local.push(m);
+                }
+            }
             Some(m) if m.version != r.version => d.changed.push(Changed { id: id.clone(), local: r.version.clone(), server: m.version.clone() }),
             Some(_) => {}
+        }
+    }
+    for m in profile.mods.iter().filter(|m| !m.enabled && servers.contains(&m.id())) {
+        let id = m.id();
+        if !is_pack(&id) && !server.contains_key(id.as_str()) && !local.contains_key(&id) {
+            d.dropped.push(ManifestMod {
+                id,
+                version: m.version.clone(),
+                explicit: !m.implicit,
+                required_by: vec![],
+                ns: String::new(),
+                name: String::new(),
+                source: Store::Thunderstore,
+            });
         }
     }
     for (id, m) in server {
@@ -93,38 +149,62 @@ pub fn diff(local: &BTreeMap<String, Resolved>, manifest: &[ManifestMod]) -> Ser
     d
 }
 
-/// The lock to publish: every resolved package, `explicit` from the profile. Local mods cannot be
-/// installed on the server and are returned separately.
-pub fn manifest_mods(profile: &Profile, resolved: &BTreeMap<String, Resolved>) -> (Vec<ManifestMod>, Vec<String>) {
+/// The lock to publish: every resolved package, `explicit` from the profile, namespace and name from the
+/// index. Local mods cannot be installed on the server and are returned separately.
+pub fn manifest_mods(profile: &Profile, resolved: &BTreeMap<String, Resolved>, by_id: &HashMap<String, Pkg>) -> (Vec<ManifestMod>, Vec<String>) {
     let explicit: Vec<String> = profile.mods.iter().filter(|m| m.source == Source::Thunderstore && m.enabled && !m.implicit).map(ProfileMod::id).collect();
     let local: Vec<String> = profile.mods.iter().filter(|m| m.source == Source::Local).map(ProfileMod::id).collect();
     let mods = resolved
         .iter()
         .filter(|(id, _)| !local.contains(id))
-        .map(|(id, r)| ManifestMod { id: id.clone(), version: r.version.clone(), explicit: explicit.contains(id), required_by: r.required_by.clone() })
+        .map(|(id, r)| {
+            let (ns, name) = by_id.get(id).map(|p| (p.ns.clone(), p.name.clone())).unwrap_or_default();
+            ManifestMod {
+                id: id.clone(),
+                version: r.version.clone(),
+                explicit: explicit.contains(id),
+                required_by: r.required_by.clone(),
+                ns,
+                name,
+                source: r.store,
+            }
+        })
         .collect();
     (mods, local)
 }
 
+/// `<manifest hash>:<config hash>` of a server state, what `ServerLink::last_adopted` remembers. The config
+/// part hashes the manifest's `configs` map (path → sha256) in path order.
+pub fn adopted_stamp(manifest_hash: &str, configs: &BTreeMap<String, String>) -> String {
+    let mut h = Sha256::new();
+    for (path, hash) in configs {
+        h.update(path.as_bytes());
+        h.update([0]);
+        h.update(hash.as_bytes());
+        h.update([0]);
+    }
+    let digest: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    format!("{manifest_hash}:{digest}")
+}
+
 /// Writes the server's list into the profile: every listed mod becomes a pinned, enabled, `managed`
-/// Thunderstore entry in the server's version (so the resolver cannot drift from the server), replacing
-/// whatever the profile had under that id. What the server lists as a dependency *of something* stays one
-/// here (`implicit`); an entry the server calls a dependency that nothing requires is a pick (older locks
-/// carry such entries). Managed entries the server no longer lists are removed. Everything else, the
-/// player's own mods and local mods, stays untouched, so a player can run client-side extras next to
-/// the server's set.
+/// Thunderstore entry in the server's version (so neither the resolver nor "Update all" can drift from the
+/// server), replacing whatever the profile had under that id. What the server lists as a dependency *of
+/// something* stays one here (`implicit`); an entry the server calls a dependency that nothing requires is
+/// a pick (older locks carry such entries). Managed entries the server no longer lists are removed.
+/// Everything else, the player's own mods and local mods, stays untouched, so a player can run
+/// client-side extras next to the server's set.
 ///
 /// A profile adopted before `managed` existed was the server list in full (the old rewrite); it is read
-/// that way once, so its next adoption behaves exactly as before.
+/// that way once (`servers_ids`), so its next adoption behaves exactly as before.
 pub fn adopt(profile: &mut Profile, manifest: &[ManifestMod]) {
-    let legacy = profile.server.as_ref().is_some_and(|s| s.last_adopted.is_some()) && !profile.mods.iter().any(|m| m.managed);
+    let servers = servers_ids(profile);
     let listed = |m: &ProfileMod| manifest.iter().any(|x| x.id == m.id());
-    let servers = |m: &ProfileMod| m.managed || (legacy && m.source == Source::Thunderstore);
-    let mut mods: Vec<ProfileMod> = profile.mods.iter().filter(|m| m.source == Source::Local || (!listed(m) && !servers(m))).cloned().collect();
+    let mut mods: Vec<ProfileMod> = profile.mods.iter().filter(|m| m.source == Source::Local || (!listed(m) && !servers.contains(&m.id()))).cloned().collect();
     for m in manifest {
-        if let Some((ns, name)) = m.id.split_once('-') {
+        if let Some((ns, name)) = m.split() {
             let implicit = !m.explicit && !m.required_by.is_empty();
-            mods.push(ProfileMod { implicit, managed: true, ..ProfileMod::thunderstore(ns, name, &m.version) });
+            mods.push(ProfileMod { implicit, managed: true, pinned: true, ..ProfileMod::thunderstore(ns, name, &m.version) });
         }
     }
     profile.mods = mods;
@@ -136,10 +216,11 @@ pub fn is_admin(link: &ServerLink) -> bool {
     set(&link.token) || set(&link.gist_token)
 }
 
-/// A player is in sync when every server mod is there in the server's version; mods only they have are
-/// theirs to keep. An admin's profile is the server list, so a mod only they have is unpublished work.
+/// A player is in sync when every server mod is there in the server's version and nothing the server
+/// dropped is still installed; mods only they have are theirs to keep. An admin's profile is the server
+/// list, so a mod only they have is unpublished work.
 pub fn in_sync(d: &ServerDiff, admin: bool) -> bool {
-    d.only_server.is_empty() && d.changed.is_empty() && (!admin || d.only_local.is_empty())
+    d.only_server.is_empty() && d.changed.is_empty() && d.dropped.is_empty() && (!admin || d.only_local.is_empty())
 }
 
 pub fn normalize_url(url: &str) -> Result<String> {
@@ -450,10 +531,18 @@ mod tests {
     use super::*;
 
     fn res(v: &str, by: &[&str]) -> Resolved {
-        Resolved { version: v.into(), required_by: by.iter().map(|s| s.to_string()).collect() }
+        Resolved { version: v.into(), required_by: by.iter().map(|s| s.to_string()).collect(), store: Store::Thunderstore }
     }
     fn mm(id: &str, v: &str) -> ManifestMod {
-        ManifestMod { id: id.into(), version: v.into(), explicit: true, required_by: vec![] }
+        ManifestMod {
+            id: id.into(),
+            version: v.into(),
+            explicit: true,
+            required_by: vec![],
+            ns: String::new(),
+            name: String::new(),
+            source: Store::Thunderstore,
+        }
     }
 
     #[test]
@@ -463,12 +552,57 @@ mod tests {
         local.insert("b-B".to_string(), res("1.0.0", &["a-A"]));
         local.insert("denikson-BepInExPack_Valheim".to_string(), res("5.4.2351", &[]));
         let manifest = vec![mm("a-A", "2.0.0"), mm("c-C", "1.0.0")];
-        let d = diff(&local, &manifest);
+        let p = Profile::default();
+        let d = diff(&p, &local, &manifest);
         assert_eq!(d.changed, vec![Changed { id: "a-A".into(), local: "1.0.0".into(), server: "2.0.0".into() }]);
         assert_eq!(d.only_local.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["b-B"]);
         assert!(!d.only_local[0].explicit);
+        assert!(d.dropped.is_empty());
         assert_eq!(d.only_server, vec![mm("c-C", "1.0.0")]);
-        assert!(in_sync(&diff(&local, &[mm("a-A", "1.0.0"), mm("b-B", "1.0.0")]), true));
+        assert!(in_sync(&diff(&p, &local, &[mm("a-A", "1.0.0"), mm("b-B", "1.0.0")]), true));
+    }
+
+    #[test]
+    fn diff_reports_a_dropped_server_mod_as_out_of_sync_for_players() {
+        // me-Minimap is the player's own, a-A and b-B came from the server; the server dropped b-B.
+        let mut mods = vec![ProfileMod::thunderstore("me", "Minimap", "1.0.0")];
+        mods.push(ProfileMod { managed: true, ..ProfileMod::thunderstore("a", "A", "1.0.0") });
+        mods.push(ProfileMod { managed: true, enabled: false, ..ProfileMod::thunderstore("b", "B", "1.0.0") });
+        mods.push(ProfileMod { managed: true, ..ProfileMod::thunderstore("c", "C", "1.0.0") });
+        let p = Profile { name: "p".into(), mods, server: None };
+        let mut local = BTreeMap::new();
+        local.insert("me-Minimap".to_string(), res("1.0.0", &[]));
+        local.insert("a-A".to_string(), res("1.0.0", &[]));
+        local.insert("c-C".to_string(), res("1.0.0", &[]));
+        let d = diff(&p, &local, &[mm("a-A", "1.0.0")]);
+        assert_eq!(d.only_local.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["me-Minimap"]);
+        // c-C runs and is dropped; b-B is disabled (not resolved), still the server's, still dropped.
+        assert_eq!(d.dropped.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["c-C", "b-B"]);
+        assert!(!in_sync(&d, false));
+        // Listed again and running: in sync (b-B stays disabled, so it is "only on the server", as before).
+        local.insert("b-B".to_string(), res("1.0.0", &[]));
+        assert!(in_sync(&diff(&p, &local, &[mm("a-A", "1.0.0"), mm("b-B", "1.0.0"), mm("c-C", "1.0.0")]), false));
+        // A profile adopted before `managed` existed: every Thunderstore entry is the server's.
+        let legacy = Profile {
+            name: "p".into(),
+            mods: vec![ProfileMod::thunderstore("old", "Gone", "1.0.0")],
+            server: Some(ServerLink { last_adopted: Some("h:c".into()), ..Default::default() }),
+        };
+        let mut local = BTreeMap::new();
+        local.insert("old-Gone".to_string(), res("1.0.0", &[]));
+        assert_eq!(diff(&legacy, &local, &[]).dropped.len(), 1);
+    }
+
+    #[test]
+    fn manifest_mod_splits_hyphenated_teams_only_with_the_stored_pair() {
+        let m = ManifestMod { ns: "LVH-IT".into(), name: "UseEquipmentInWater".into(), ..mm("LVH-IT-UseEquipmentInWater", "0.2.4") };
+        assert_eq!(m.split(), Some(("LVH-IT", "UseEquipmentInWater")));
+        assert_eq!(mm("LVH-IT-UseEquipmentInWater", "0.2.4").split(), Some(("LVH", "IT-UseEquipmentInWater")));
+        assert_eq!(mm("broken", "1.0.0").split(), None);
+        let s = serde_json::to_string(&m).unwrap();
+        assert!(s.contains("\"ns\":\"LVH-IT\"") && !serde_json::to_string(&mm("a-A", "1.0.0")).unwrap().contains("\"ns\""));
+        assert_eq!(adopted_stamp("sha256:x", &BTreeMap::new()).split(':').count(), 3);
+        assert_ne!(adopted_stamp("h", &BTreeMap::from([("a.cfg".to_string(), "1".to_string())])), adopted_stamp("h", &BTreeMap::new()));
     }
 
     #[test]
@@ -489,11 +623,13 @@ mod tests {
         resolved.insert("a-A".to_string(), res("1.0.0", &[]));
         resolved.insert("b-B".to_string(), res("2.0.0", &["a-A"]));
         resolved.insert("local-Mine".to_string(), res("0.1.0", &[]));
-        let (mods, local) = manifest_mods(&p, &resolved);
+        let by_id = HashMap::from([("a-A".to_string(), crate::models::test_pkg("a-A", &[("1.0.0", &[])]))]);
+        let (mods, local) = manifest_mods(&p, &resolved, &by_id);
         assert_eq!(local, vec!["local-Mine"]);
         assert_eq!(mods.len(), 2);
         assert!(mods[0].explicit && !mods[1].explicit);
         assert_eq!(mods[1].required_by, vec!["a-A"]);
+        assert_eq!((mods[0].ns.as_str(), mods[0].name.as_str(), mods[1].ns.as_str()), ("a", "A", ""));
 
         // b-B is a dependency of a-A; c-C is called a dependency but nothing requires it, so it is a pick.
         adopt(
@@ -514,12 +650,14 @@ mod tests {
             ]
         );
         assert!(p.mods.iter().all(|m| m.enabled));
+        // Server mods are pinned: "Update all" never moves them off the server's version.
+        assert!(p.mods.iter().filter(|m| m.managed).all(|m| m.pinned));
         // Publishing the adopted profile again reports the dependency as one, not as a pick of this player.
         let mut resolved = BTreeMap::new();
         resolved.insert("a-A".to_string(), res("1.5.0", &[]));
         resolved.insert("b-B".to_string(), res("2.0.0", &["a-A"]));
         resolved.insert("c-C".to_string(), res("1.0.0", &[]));
-        let (mods, _) = manifest_mods(&p, &resolved);
+        let (mods, _) = manifest_mods(&p, &resolved, &HashMap::new());
         assert_eq!(mods.iter().map(|m| (m.id.as_str(), m.explicit)).collect::<Vec<_>>(), vec![("a-A", true), ("b-B", false), ("c-C", true)]);
     }
 
@@ -556,6 +694,8 @@ mod tests {
         assert!(!in_sync(&extra, true));
         let missing = ServerDiff { only_server: vec![mm("a-A", "1.0.0")], ..Default::default() };
         assert!(!in_sync(&missing, false));
+        let dropped = ServerDiff { dropped: vec![mm("a-A", "1.0.0")], ..Default::default() };
+        assert!(!in_sync(&dropped, false) && !in_sync(&dropped, true));
         assert!(is_admin(&ServerLink { gist_token: Some("g".into()), ..Default::default() }));
         assert!(!is_admin(&ServerLink { token: Some(" ".into()), ..Default::default() }));
     }

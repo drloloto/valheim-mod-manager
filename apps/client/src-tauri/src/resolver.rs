@@ -1,4 +1,4 @@
-use crate::models::{Installed, Pkg, Plan, ProfileMod, Resolved, Source, ToInstall};
+use crate::models::{Installed, Pkg, Plan, ProfileMod, Resolved, Source, Store, ToInstall};
 use crate::util::{cmp_version, parse_full_name};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
@@ -30,11 +30,15 @@ impl Resolver<'_> {
             return None;
         };
         let latest = pkg.versions.first()?;
-        let want = if pkg.versions.iter().any(|v| v.v == version) { version.to_string() } else { latest.v.clone() };
+        let chosen = pkg.versions.iter().find(|v| v.v == version).unwrap_or(latest);
+        let want = chosen.v.clone();
         match self.resolved.get_mut(&id) {
-            Some(cur) => cur.version = want.clone(),
+            Some(cur) => {
+                cur.version = want.clone();
+                cur.store = chosen.src;
+            }
             None => {
-                self.resolved.insert(id.clone(), Resolved { version: want.clone(), required_by: vec![] });
+                self.resolved.insert(id.clone(), Resolved { version: want.clone(), required_by: vec![], store: chosen.src });
             }
         }
         Some(want)
@@ -55,7 +59,7 @@ impl Resolver<'_> {
             }
             return;
         }
-        self.resolved.insert(id.clone(), Resolved { version: latest.v.clone(), required_by: vec![parent.to_string()] });
+        self.resolved.insert(id.clone(), Resolved { version: latest.v.clone(), required_by: vec![parent.to_string()], store: latest.src });
         self.walk(&id, &latest.v);
     }
 
@@ -84,7 +88,7 @@ pub fn plan(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>, installed: &Insta
                 }
             }
             Source::Local => {
-                r.resolved.insert(id.clone(), Resolved { version: m.version.clone(), required_by: vec![] });
+                r.resolved.insert(id.clone(), Resolved { version: m.version.clone(), required_by: vec![], store: Store::default() });
                 walk.push((id, m.deps.clone()));
             }
         }
@@ -97,9 +101,9 @@ pub fn plan(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>, installed: &Insta
         }
     }
     if !mods.is_empty() && !r.resolved.contains_key(BEPINEX_PACK_ID) {
-        match by_id.get(BEPINEX_PACK_ID).and_then(|p| p.versions.first().map(|v| v.v.clone())) {
-            Some(v) => {
-                r.resolved.insert(BEPINEX_PACK_ID.to_string(), Resolved { version: v, required_by: vec![] });
+        match by_id.get(BEPINEX_PACK_ID).and_then(|p| p.versions.first().map(|v| (v.v.clone(), v.src))) {
+            Some((v, store)) => {
+                r.resolved.insert(BEPINEX_PACK_ID.to_string(), Resolved { version: v, required_by: vec![], store });
             }
             None => r.errors.push("BepInExPack_Valheim is not in the mod index.".to_string()),
         }
@@ -116,10 +120,11 @@ pub fn plan(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>, installed: &Insta
     Plan { resolved: r.resolved, to_install, to_remove, errors }
 }
 
-/// Explicit, unpinned Thunderstore mods for which the index knows a newer version.
+/// Explicit, unpinned Thunderstore mods for which the index knows a newer version. A server's mods
+/// (`managed`) run the server's version; the server, not the player, updates them.
 pub fn updates(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>) -> BTreeMap<String, String> {
     mods.iter()
-        .filter(|m| m.source == Source::Thunderstore && !m.pinned && !m.implicit)
+        .filter(|m| m.source == Source::Thunderstore && !m.pinned && !m.implicit && !m.managed)
         .filter_map(|m| {
             let latest = by_id.get(&m.id())?.versions.first()?;
             (cmp_version(&m.version, &latest.v) == Ordering::Less).then(|| (m.id(), latest.v.clone()))
@@ -165,8 +170,10 @@ mod tests {
         let idx = index(vec![test_pkg("a-A", &[("2.0.0", &[]), ("1.0.0", &[])])]);
         let old = m("a-A", "1.0.0");
         assert_eq!(updates(std::slice::from_ref(&old), &idx).get("a-A").map(String::as_str), Some("2.0.0"));
-        let pinned = ProfileMod { pinned: true, ..old };
+        let pinned = ProfileMod { pinned: true, ..old.clone() };
         assert!(updates(&[pinned], &idx).is_empty());
+        let managed = ProfileMod { managed: true, ..old };
+        assert!(updates(&[managed], &idx).is_empty());
     }
 
     #[test]

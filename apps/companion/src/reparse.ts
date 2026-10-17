@@ -12,7 +12,7 @@ import { loadInstalled, type Installed } from "./install";
 import { configHashes, isPack, loadManifest, normalizeManifest, saveManifest, type Manifest, type ManifestMod, type ServerInfo } from "./manifest";
 import { BEPINEX_DIR } from "./paths";
 import { pendingRelease } from "./releases";
-import { lockFrom, resolveCandidate, scanPlugins, thunderstoreApi, type PackageApi, type Resolved } from "./takeover";
+import { lockFrom, resolveCandidate, scanPlugins, storeApi, type PackageApi, type Resolved } from "./takeover";
 
 export type Source = "companion" | "hand" | "image" | "lock-only";
 export type Status = "ok" | "version" | "not-in-lock" | "not-on-disk" | "unresolved";
@@ -55,7 +55,7 @@ const byId = (mods: ManifestMod[]) => new Map(mods.map((m) => [m.id, m]));
 
 export async function reparse(server: ServerInfo, o: ReparseOpts): Promise<Report> {
 	const bepinexDir = o.bepinexDir ?? BEPINEX_DIR;
-	const api = o.api ?? thunderstoreApi;
+	const api = o.api ?? storeApi;
 	const lock = byId(o.lock?.mods ?? []);
 	const scan = await scanPlugins(bepinexDir);
 	const tracked = new Set(Object.values(o.installed).flatMap((e) => e.files));

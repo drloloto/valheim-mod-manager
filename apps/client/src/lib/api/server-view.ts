@@ -46,7 +46,8 @@ export function serverView(check: ServerCheck | null, admin: boolean, t: T): Ser
 	if (!check.reachable) return { kind: "unreachable", tone: "err", pulse: false, text: t("chip.unreachable"), action: "refresh", release: null };
 	const release = pendingRelease(check);
 	// A player's own extra mods are no difference (in_sync in commands.rs agrees); an admin's are unpublished.
-	const mods = check.diff.changed.length + check.diff.onlyServer.length + (admin ? check.diff.onlyLocal.length : 0);
+	// What the server dropped counts for both: it still runs here.
+	const mods = check.diff.changed.length + check.diff.onlyServer.length + check.diff.dropped.length + (admin ? check.diff.onlyLocal.length : 0);
 	// Configs are not part of this: synced mods take them at join, the rest came once with the profile.
 	const differs = (): ServerView => ({
 		kind: "differs",

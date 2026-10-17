@@ -37,6 +37,8 @@ export interface PackageVersion {
 	version: string;
 	createdAt: number;
 	dependencies: string[];
+	/** set when only Hexium answered for the package */
+	source?: "hexium";
 }
 
 export interface PackageApi {
@@ -52,6 +54,8 @@ export interface Resolved {
 	/** latest: the latest release predates the copy; dll: the DLL's own version exists; guess: latest, released after the copy */
 	from: "latest" | "dll" | "guess";
 	dependencies: string[];
+	/** the lock downloads from Hexium when only Hexium has the package */
+	source?: "hexium";
 }
 
 export interface Takeover {
@@ -71,21 +75,33 @@ const toVersion = (body: { version_number?: string; date_created?: string; depen
 	dependencies: Array.isArray(body.dependencies) ? body.dependencies.filter((d): d is string => typeof d === "string") : [],
 });
 
-/** Thunderstore's experimental package API: one request per package, one more per DLL version to check. */
-export const thunderstoreApi: PackageApi = {
-	async latest(ns, name) {
-		const res = await fetch(`https://thunderstore.io/api/experimental/package/${ns}/${name}/`, { headers });
-		if (res.status === 404) return null;
-		if (!res.ok) throw new Error(`thunderstore ${ns}-${name}: HTTP ${res.status}`);
-		const body = (await res.json()) as { latest?: Parameters<typeof toVersion>[0] };
-		return body.latest ? toVersion(body.latest) : null;
-	},
-	async version(ns, name, version) {
-		const res = await fetch(`https://thunderstore.io/api/experimental/package/${ns}/${name}/${version}/`, { headers });
-		if (res.status === 404) return null;
-		if (!res.ok) throw new Error(`thunderstore ${ns}-${name}-${version}: HTTP ${res.status}`);
-		return toVersion((await res.json()) as Parameters<typeof toVersion>[0]);
-	},
+/** The experimental package API (Thunderstore's, which Hexium serves too): one request per package, one more per DLL version to check. */
+const experimentalApi = (base: string, label: string, source?: "hexium"): PackageApi => {
+	const mark = (v: PackageVersion): PackageVersion => (source ? { ...v, source } : v);
+	return {
+		async latest(ns, name) {
+			const res = await fetch(`${base}/package/${ns}/${name}/`, { headers });
+			if (res.status === 404) return null;
+			if (!res.ok) throw new Error(`${label} ${ns}-${name}: HTTP ${res.status}`);
+			const body = (await res.json()) as { latest?: Parameters<typeof toVersion>[0] };
+			return body.latest ? mark(toVersion(body.latest)) : null;
+		},
+		async version(ns, name, version) {
+			const res = await fetch(`${base}/package/${ns}/${name}/${version}/`, { headers });
+			if (res.status === 404) return null;
+			if (!res.ok) throw new Error(`${label} ${ns}-${name}-${version}: HTTP ${res.status}`);
+			return mark(toVersion((await res.json()) as Parameters<typeof toVersion>[0]));
+		},
+	};
+};
+
+export const thunderstoreApi = experimentalApi("https://thunderstore.io/api/experimental", "thunderstore");
+export const hexiumApi = experimentalApi("https://valheim.hexium.gg/api/experimental", "hexium", "hexium");
+
+/** Thunderstore first, Hexium for what Thunderstore does not have (its answers mark the release for the lock). */
+export const storeApi: PackageApi = {
+	latest: async (ns, name) => (await thunderstoreApi.latest(ns, name)) ?? hexiumApi.latest(ns, name),
+	version: async (ns, name, v) => (await thunderstoreApi.version(ns, name, v)) ?? hexiumApi.version(ns, name, v),
 };
 
 /** The x.y.z versions a .NET assembly's VERSIONINFO carries (ProductVersion, FileVersion), without build tags. */
@@ -154,13 +170,14 @@ export async function resolveCandidate(c: Candidate, api: PackageApi): Promise<R
 	const [ns, name] = c.id.split("-", 2);
 	const latest = await api.latest(ns, name);
 	if (!latest) return null;
-	if (latest.createdAt <= c.copiedAt + SLACK_MS) return { id: c.id, version: latest.version, from: "latest", dependencies: latest.dependencies };
+	const src = latest.source ? { source: latest.source } : {};
+	if (latest.createdAt <= c.copiedAt + SLACK_MS) return { id: c.id, version: latest.version, from: "latest", dependencies: latest.dependencies, ...src };
 	for (const v of c.dllVersions) {
-		if (v === latest.version) return { id: c.id, version: v, from: "dll", dependencies: latest.dependencies };
+		if (v === latest.version) return { id: c.id, version: v, from: "dll", dependencies: latest.dependencies, ...src };
 		const hit = await api.version(ns, name, v);
-		if (hit) return { id: c.id, version: v, from: "dll", dependencies: hit.dependencies };
+		if (hit) return { id: c.id, version: v, from: "dll", dependencies: hit.dependencies, ...(hit.source ? { source: hit.source } : {}) };
 	}
-	return { id: c.id, version: latest.version, from: "guess", dependencies: latest.dependencies };
+	return { id: c.id, version: latest.version, from: "guess", dependencies: latest.dependencies, ...src };
 }
 
 const newer = (a: string, b: string) => {
@@ -173,7 +190,7 @@ const newer = (a: string, b: string) => {
 /** The lock entries: every resolved package explicit, its dependencies pinned as Thunderstore lists them. */
 export function lockFrom(resolved: Resolved[]): ManifestMod[] {
 	const mods = new Map<string, ManifestMod>();
-	for (const r of resolved) mods.set(r.id, { id: r.id, version: r.version, explicit: true, requiredBy: [] });
+	for (const r of resolved) mods.set(r.id, { id: r.id, version: r.version, explicit: true, requiredBy: [], ...(r.source ? { source: r.source } : {}) });
 	for (const r of resolved) {
 		for (const dep of r.dependencies) {
 			const m = DEP.exec(dep);
@@ -191,7 +208,7 @@ export function lockFrom(resolved: Resolved[]): ManifestMod[] {
 }
 
 export async function takeover(server: ServerInfo, opts: { bepinexDir?: string; api?: PackageApi; configs?: Record<string, string> } = {}): Promise<Takeover> {
-	const api = opts.api ?? thunderstoreApi;
+	const api = opts.api ?? storeApi;
 	const scan = await scanPlugins(opts.bepinexDir);
 	const resolved: Resolved[] = [];
 	const unresolved: string[] = [];

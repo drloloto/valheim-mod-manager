@@ -1,5 +1,9 @@
 // Data shapes of the Rust commands (src-tauri/src/commands.rs).
 
+/** A package store the index is built from; the index merges both by package id. */
+export type Store = "thunderstore" | "hexium";
+export const STORES: readonly Store[] = ["thunderstore", "hexium"];
+
 export interface SlimPkg {
 	id: string; // "Namespace-Name"
 	ns: string;
@@ -23,6 +27,8 @@ export interface SlimPkg {
 	deps: string[];
 	/** How many packages depend on this one (latest versions) */
 	ndependants: number;
+	/** Which stores list the package */
+	stores: Store[];
 }
 
 export interface IndexPayload {
@@ -35,6 +41,8 @@ export interface Version {
 	deps: string[];
 	size: number;
 	date: number;
+	/** The store this release is downloaded from */
+	src: Store;
 }
 
 /** Text tabs of the detail panel; readme and changelog are per version, the wiki per package. */
@@ -59,8 +67,12 @@ export interface Pkg {
 	dep: boolean;
 	nsfw: boolean;
 	pinned: boolean;
+	/** The Thunderstore page; empty when only Hexium has the package */
 	url: string;
 	web: string;
+	/** The Hexium page; empty when Hexium does not have the package */
+	hx_url?: string;
+	stores: Store[];
 	versions: Version[];
 }
 
@@ -127,11 +139,16 @@ export interface ManifestMod {
 	version: string;
 	explicit: boolean;
 	requiredBy: string[];
+	/** The store the companion downloads from; missing means Thunderstore */
+	source?: Store;
 }
 
 export interface ServerDiff {
 	onlyServer: ManifestMod[];
+	/** the player's own mods (an admin's unpublished work) */
 	onlyLocal: ManifestMod[];
+	/** the server's mods it no longer lists: adoption uninstalls them, a publish would put them back */
+	dropped: ManifestMod[];
 	changed: { id: string; local: string; server: string }[];
 }
 
@@ -296,6 +313,8 @@ export interface Settings {
 	showNsfw: boolean;
 	/** Thunderstore team service-account token for publishing modpacks (local only). */
 	thunderstoreToken: string | null;
+	/** Merge Hexium's package list into the index. */
+	hexium: boolean;
 }
 
 export interface PublishCategory {

@@ -114,8 +114,8 @@ mod tests {
         let idx: HashMap<String, Pkg> = [lib].into_iter().map(|p| (p.id.clone(), p)).collect();
         let mods = vec![ProfileMod::thunderstore("a", "A", "1.0.0")];
         let mut resolved = BTreeMap::new();
-        resolved.insert("a-A".to_string(), Resolved { version: "1.0.0".into(), required_by: vec![] });
-        resolved.insert("lib-Lib".to_string(), Resolved { version: "1.0.0".into(), required_by: vec!["a-A".into()] });
+        resolved.insert("a-A".to_string(), Resolved { version: "1.0.0".into(), required_by: vec![], store: Default::default() });
+        resolved.insert("lib-Lib".to_string(), Resolved { version: "1.0.0".into(), required_by: vec!["a-A".into()], store: Default::default() });
         let ids = ids_to_check(&mods, Some(&resolved));
         assert_eq!(ids, vec!["a-A", "lib-Lib"]);
         let issues = check(&ids, &Installed::new(), Some(&idx), Some(3_000));

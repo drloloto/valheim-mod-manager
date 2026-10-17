@@ -10,6 +10,7 @@
 	import Maximize2 from "@lucide/svelte/icons/maximize-2";
 	import { describeIssue } from "#lib/health.js";
 	import { t } from "#lib/i18n/index.svelte.js";
+	import { cn } from "@vmm/ui/utils.js";
 	import ModDocs from "./ModDocs.svelte";
 
 	let { id }: { id: string | null } = $props();
@@ -106,11 +107,13 @@
 					<TriangleAlert class="mt-0.5 size-3.5 shrink-0" />{describeIssue(h, (x) => store.byId.get(x)?.name ?? x, store.state.game.lastUpdated)}
 				</p>
 			{/each}
-			<div class="grid grid-cols-1 gap-2 @sm:grid-cols-[minmax(0,1fr)_auto]">
+			<!-- one store link, or two when both stores list the package -->
+			<div class={cn("grid grid-cols-1 gap-2", pkg.url && pkg.hx_url ? "@sm:grid-cols-[minmax(0,1fr)_auto_auto]" : "@sm:grid-cols-[minmax(0,1fr)_auto]")}>
 				<Button class="min-w-0" variant={mod && status !== "update" ? "outline" : "default"} onclick={primary}>
 					{status === "update" ? t("detail.updateTo", { v: update ?? "" }) : mod ? t("detail.remove") : t("detail.add")}
 				</Button>
-				<Button variant="outline" onclick={() => store.openExternal(pkg!.url)}>{t("detail.thunderstore")}</Button>
+				{#if pkg.url}<Button variant="outline" onclick={() => store.openExternal(pkg!.url)}>{t("detail.thunderstore")}</Button>{/if}
+				{#if pkg.hx_url}<Button variant="outline" onclick={() => store.openExternal(pkg!.hx_url!)}>{t("detail.hexium")}</Button>{/if}
 			</div>
 		</div>
 

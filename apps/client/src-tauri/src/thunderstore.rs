@@ -1,26 +1,67 @@
 //! Thunderstore index: fetched once, compacted, kept in RAM (O(1) lookups) and on
 //! disk. The frontend receives a pre-rendered slim JSON.
 use crate::error::{AppError, Result};
-use crate::models::{Pkg, Version};
+use crate::models::{Pkg, Store, Version};
 use crate::resolver::canonical_id;
-use crate::util::{now_ms, parse_full_name, write_atomic};
+use crate::util::{cmp_version, now_ms, parse_full_name, write_atomic};
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
-/// The old full index. Marked deprecated in Thunderstore's Swagger since release 0.182.0; kept as the
-/// fallback while it still answers.
-pub const API_URL: &str = "https://thunderstore.io/c/valheim/api/v1/package/";
-/// The successor: a 302 to a gzip blob listing gzip JSON chunks on the CDN, same package shape as v1.
-pub const LISTING_INDEX_URL: &str = "https://thunderstore.io/c/valheim/api/v1/package-listing-index/";
 const RETRY_BACKOFF: Duration = Duration::from_secs(5 * 60);
 const CHUNK_PARALLEL: usize = 4;
 
+impl Store {
+    fn host(self) -> &'static str {
+        match self {
+            Store::Thunderstore => "https://thunderstore.io/c/valheim",
+            Store::Hexium => "https://valheim.hexium.gg",
+        }
+    }
+
+    /// The old full index. Marked deprecated in Thunderstore's Swagger since release 0.182.0; kept as the
+    /// fallback while it still answers. Hexium serves the same shape.
+    pub fn v1_url(self) -> String {
+        format!("{}/api/v1/package/", self.host())
+    }
+
+    /// The successor: a 302 to a gzip blob listing gzip JSON chunks on the CDN, same package shape as v1.
+    /// Hexium answers the index directly (no redirect), so its change detector is the chunk list itself.
+    pub fn listing_index_url(self) -> String {
+        format!("{}/api/v1/package-listing-index/", self.host())
+    }
+}
+
 pub fn download_url(ns: &str, name: &str, version: &str) -> String {
     format!("https://thunderstore.io/package/download/{ns}/{name}/{version}/")
+}
+
+/// The URL a release is downloaded from: as the store listed it (Hexium), else derived from the id
+/// (Thunderstore). An unknown version falls back to Thunderstore's pattern, as before.
+pub fn download_url_of(pkg: &Pkg, version: &str) -> String {
+    match pkg.versions.iter().find(|v| v.v == version) {
+        Some(v) if !v.dl.is_empty() => v.dl.clone(),
+        _ => download_url(&pkg.ns, &pkg.name, version),
+    }
+}
+
+/// Hexium names the audience categories differently; the browse filters and the server dialog know
+/// Thunderstore's names, so Hexium's are mapped onto them.
+pub fn normalize_category(store: Store, cat: &str) -> Vec<String> {
+    let names: &[&str] = match (store, cat) {
+        (Store::Thunderstore, c) => &[c],
+        (Store::Hexium, "Client-only") => &["Client-side"],
+        (Store::Hexium, "Server-only") => &["Server-side"],
+        (Store::Hexium, "Client & Server" | "Client (& Server)") => &["Client-side", "Server-side"],
+        (Store::Hexium, "Modpack") => &["Modpacks"],
+        (Store::Hexium, "Npc") => &["NPCs"],
+        (Store::Hexium, c) => &[c],
+    };
+    names.iter().map(|s| s.to_string()).collect()
 }
 
 const EXPERIMENTAL_API: &str = "https://thunderstore.io/api/experimental";
@@ -150,18 +191,39 @@ struct RawVersion {
     date_created: Option<String>,
     #[serde(default)]
     website_url: Option<String>,
+    #[serde(default)]
+    download_url: Option<String>,
 }
 
 fn parse_date(s: &Option<String>) -> i64 {
     s.as_deref().and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok()).map(|d| d.timestamp_millis()).unwrap_or(0)
 }
 
+#[cfg(test)]
 pub fn parse_raw(bytes: &[u8]) -> Result<Vec<Pkg>> {
+    parse_raw_from(bytes, Store::Thunderstore)
+}
+
+/// A store's v1 package list (or one listing chunk) as packages of that store.
+pub fn parse_raw_from(bytes: &[u8], store: Store) -> Result<Vec<Pkg>> {
     let raw: Vec<RawPkg> = serde_json::from_slice(bytes)?;
     Ok(raw
         .into_iter()
         .map(|p| {
             let latest = p.versions.first();
+            let mut cats: Vec<String> = vec![];
+            for c in &p.categories {
+                for n in normalize_category(store, c) {
+                    if !cats.contains(&n) {
+                        cats.push(n);
+                    }
+                }
+            }
+            let page = p.package_url.unwrap_or_default();
+            let (url, hx_url) = match store {
+                Store::Thunderstore => (page, String::new()),
+                Store::Hexium => (String::new(), page),
+            };
             Pkg {
                 id: format!("{}-{}", p.owner, p.name),
                 desc: latest.and_then(|v| v.description.clone()).unwrap_or_default(),
@@ -170,22 +232,96 @@ pub fn parse_raw(bytes: &[u8]) -> Result<Vec<Pkg>> {
                 dl: p.versions.iter().map(|v| v.downloads).sum(),
                 upd: parse_date(&p.date_updated),
                 created: parse_date(&p.date_created),
-                cats: p.categories,
+                cats,
                 rating: p.rating_score,
                 dep: p.is_deprecated,
                 nsfw: p.has_nsfw_content,
                 pinned: p.is_pinned,
-                url: p.package_url.unwrap_or_default(),
+                url,
+                hx_url,
+                stores: vec![store],
                 versions: p
                     .versions
                     .iter()
-                    .map(|v| Version { v: v.version_number.clone(), deps: v.dependencies.clone(), size: v.file_size, date: parse_date(&v.date_created) })
+                    .map(|v| Version {
+                        v: v.version_number.clone(),
+                        deps: v.dependencies.clone(),
+                        size: v.file_size,
+                        date: parse_date(&v.date_created),
+                        src: store,
+                        dl: if store == Store::Hexium { v.download_url.clone().unwrap_or_default() } else { String::new() },
+                    })
                     .collect(),
                 ns: p.owner,
                 name: p.name,
             }
         })
         .collect())
+}
+
+/// The package lists per store, as fetched; the index is built from their merge.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Parts {
+    pub thunderstore: Vec<Pkg>,
+    pub hexium: Vec<Pkg>,
+}
+
+impl Parts {
+    pub fn thunderstore(pkgs: Vec<Pkg>) -> Self {
+        Parts { thunderstore: pkgs, hexium: vec![] }
+    }
+}
+
+/// One package per id. A package both stores list keeps Thunderstore's listing and gains the versions only
+/// Hexium has (newest first again), Hexium's page and categories; counts take the larger value, and the
+/// description follows the newer release. A release on both stores is downloaded from Thunderstore.
+pub fn merge(parts: &Parts) -> Vec<Pkg> {
+    let mut out: Vec<Pkg> = parts.thunderstore.clone();
+    let mut at: HashMap<String, usize> = out.iter().enumerate().map(|(i, p)| (p.id.clone(), i)).collect();
+    for h in &parts.hexium {
+        let Some(&i) = at.get(&h.id) else {
+            at.insert(h.id.clone(), out.len());
+            out.push(h.clone());
+            continue;
+        };
+        let p = &mut out[i];
+        if !p.stores.contains(&Store::Hexium) {
+            p.stores.push(Store::Hexium);
+        }
+        p.hx_url = h.hx_url.clone();
+        for c in &h.cats {
+            if !p.cats.contains(c) {
+                p.cats.push(c.clone());
+            }
+        }
+        p.dl = p.dl.max(h.dl);
+        p.rating = p.rating.max(h.rating);
+        p.upd = p.upd.max(h.upd);
+        if p.created == 0 || (h.created > 0 && h.created < p.created) {
+            p.created = h.created;
+        }
+        p.nsfw |= h.nsfw;
+        let newer = h.versions.first().zip(p.versions.first()).is_some_and(|(hv, pv)| cmp_version(&hv.v, &pv.v) == Ordering::Greater);
+        let mut added = false;
+        for v in &h.versions {
+            if !p.versions.iter().any(|x| x.v == v.v) {
+                p.versions.push(v.clone());
+                added = true;
+            }
+        }
+        if added {
+            p.versions.sort_by(|a, b| cmp_version(&b.v, &a.v));
+        }
+        if newer {
+            p.desc = h.desc.clone();
+            p.icon = h.icon.clone();
+            if p.web.is_empty() {
+                p.web = h.web.clone();
+            }
+        }
+    }
+    out
 }
 
 #[derive(Serialize)]
@@ -211,6 +347,8 @@ struct SlimPkg<'a> {
     deps: Vec<String>,
     /// How many packages list this one as a dependency (latest versions only).
     ndependants: usize,
+    /// Which stores list the package.
+    stores: &'a [Store],
 }
 
 fn dep_ids(deps: &[String]) -> Vec<String> {
@@ -233,15 +371,34 @@ struct SlimPayload<'a> {
     packages: Vec<SlimPkg<'a>>,
 }
 
+/// Where each part of the index came from: the listing-index blob URL per store (None for v1 or old
+/// caches), the change detector of the next refresh.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct IndexSource {
+    pub thunderstore: Option<String>,
+    pub hexium: Option<String>,
+}
+
 pub struct Index {
     pub fetched_at: i64,
-    /// Listing-index blob URL this index was built from (None for v1 or old caches).
-    pub source: Option<String>,
+    pub source: IndexSource,
+    /// The lists per store, kept so a refresh that finds one store unchanged reuses its list.
+    pub parts: Parts,
     pub by_id: HashMap<String, Pkg>,
     pub slim_json: Vec<u8>,
 }
 
-pub fn build(fetched_at: i64, pkgs: Vec<Pkg>) -> Index {
+impl Index {
+    /// True while Hexium's list was never merged in: a cache from before the second store, or a Hexium fetch
+    /// that never succeeded. With Hexium on, such an index is refreshed regardless of its age.
+    pub fn lacks_hexium(&self) -> bool {
+        self.parts.hexium.is_empty() && self.source.hexium.is_none()
+    }
+}
+
+pub fn build(fetched_at: i64, parts: Parts) -> Index {
+    let pkgs = merge(&parts);
     let mut dependants: HashMap<&str, usize> = HashMap::new();
     let dep_lists: Vec<Vec<String>> = pkgs.iter().map(|p| p.versions.first().map(|v| dep_ids(&v.deps)).unwrap_or_default()).collect();
     for ids in &dep_lists {
@@ -276,21 +433,36 @@ pub fn build(fetched_at: i64, pkgs: Vec<Pkg>) -> Index {
                     nver: p.versions.len(),
                     deps: deps.clone(),
                     ndependants: dependants.get(p.id.as_str()).copied().unwrap_or(0),
+                    stores: &p.stores,
                 }
             })
             .collect(),
     };
     let slim_json = serde_json::to_vec(&slim).expect("slim index is serializable");
     let by_id = pkgs.into_iter().map(|p| (p.id.clone(), p)).collect();
-    Index { fetched_at, source: None, by_id, slim_json }
+    Index { fetched_at, source: IndexSource::default(), parts, by_id, slim_json }
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CacheRef<'a> {
     fetched_at: i64,
-    source: &'a Option<String>,
-    pkgs: &'a [Pkg],
+    source: &'a IndexSource,
+    parts: &'a Parts,
+}
+
+/// Caches from before Hexium hold one list (`pkgs`) and one blob URL as a string.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum CacheSource {
+    Old(Option<String>),
+    New(IndexSource),
+}
+
+impl Default for CacheSource {
+    fn default() -> Self {
+        CacheSource::Old(None)
+    }
 }
 
 #[derive(Deserialize)]
@@ -298,20 +470,27 @@ struct CacheRef<'a> {
 struct CacheOwned {
     fetched_at: i64,
     #[serde(default)]
-    source: Option<String>,
+    source: CacheSource,
+    #[serde(default)]
+    parts: Parts,
+    #[serde(default)]
     pkgs: Vec<Pkg>,
 }
 
 pub fn load_cache(path: &Path) -> Option<Index> {
     let bytes = std::fs::read(path).ok()?;
     let c: CacheOwned = serde_json::from_slice(&bytes).ok()?;
-    let mut idx = build(c.fetched_at, c.pkgs);
-    idx.source = c.source;
+    let (source, parts) = match c.source {
+        CacheSource::New(s) => (s, c.parts),
+        CacheSource::Old(url) => (IndexSource { thunderstore: url, hexium: None }, if c.pkgs.is_empty() { c.parts } else { Parts::thunderstore(c.pkgs) }),
+    };
+    let mut idx = build(c.fetched_at, parts);
+    idx.source = source;
     Some(idx)
 }
 
-pub fn save_cache(path: &Path, fetched_at: i64, source: &Option<String>, pkgs: &[Pkg]) -> Result<()> {
-    write_atomic(path, &serde_json::to_vec(&CacheRef { fetched_at, source, pkgs })?)
+pub fn save_cache(path: &Path, fetched_at: i64, source: &IndexSource, parts: &Parts) -> Result<()> {
+    write_atomic(path, &serde_json::to_vec(&CacheRef { fetched_at, source, parts })?)
 }
 
 /// The app's HTTP client. The timeouts keep a stalled connection from blocking the
@@ -338,19 +517,19 @@ pub enum FetchOutcome {
 }
 
 /// Listing index first, v1 as the fallback (logged, so a broken successor does not go unnoticed).
-pub async fn fetch(client: &reqwest::Client, known_source: Option<&str>) -> Result<FetchOutcome> {
-    match fetch_listing_index(client, known_source).await {
+pub async fn fetch(client: &reqwest::Client, store: Store, known_source: Option<&str>) -> Result<FetchOutcome> {
+    match fetch_listing_index(client, store, known_source).await {
         Ok(outcome) => Ok(outcome),
         Err(e) => {
-            eprintln!("package-listing-index failed ({e}); falling back to {API_URL}");
-            Ok(FetchOutcome::Changed(Fetched { pkgs: fetch_v1(client).await?, source: None }))
+            eprintln!("{store:?} package-listing-index failed ({e}); falling back to {}", store.v1_url());
+            Ok(FetchOutcome::Changed(Fetched { pkgs: fetch_v1(client, store).await?, source: None }))
         }
     }
 }
 
-async fn fetch_v1(client: &reqwest::Client) -> Result<Vec<Pkg>> {
-    let bytes = get_bytes_retry(client, API_URL).await?;
-    tokio::task::spawn_blocking(move || parse_raw(&bytes)).await.map_err(|e| AppError::Invalid(e.to_string()))?
+async fn fetch_v1(client: &reqwest::Client, store: Store) -> Result<Vec<Pkg>> {
+    let bytes = get_bytes_retry(client, &store.v1_url()).await?;
+    tokio::task::spawn_blocking(move || parse_raw_from(&bytes, store)).await.map_err(|e| AppError::Invalid(e.to_string()))?
 }
 
 /// Thunderstore's CDN has documented outages; one retry after a short pause covers the usual blip.
@@ -383,7 +562,7 @@ pub fn maybe_gunzip(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-async fn fetch_listing_index(client: &reqwest::Client, known_source: Option<&str>) -> Result<FetchOutcome> {
+async fn fetch_listing_index(client: &reqwest::Client, store: Store, known_source: Option<&str>) -> Result<FetchOutcome> {
     // Resolve the redirect by hand: the target URL is the change detector.
     let probe = reqwest::Client::builder()
         .user_agent(concat!("valheim-modmanager/", env!("CARGO_PKG_VERSION")))
@@ -391,7 +570,7 @@ async fn fetch_listing_index(client: &reqwest::Client, known_source: Option<&str
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(60))
         .build()?;
-    let res = probe.get(LISTING_INDEX_URL).send().await?;
+    let res = probe.get(store.listing_index_url()).send().await?;
     let (blob_url, index_bytes) = if res.status().is_redirection() {
         let loc = res
             .headers()
@@ -418,7 +597,7 @@ async fn fetch_listing_index(client: &reqwest::Client, known_source: Option<&str
         let client = client.clone();
         async move {
             let bytes = get_bytes_retry(&client, &u).await?;
-            tokio::task::spawn_blocking(move || parse_raw(&maybe_gunzip(&bytes)?)).await.map_err(|e| AppError::Invalid(e.to_string()))?
+            tokio::task::spawn_blocking(move || parse_raw_from(&maybe_gunzip(&bytes)?, store)).await.map_err(|e| AppError::Invalid(e.to_string()))?
         }
     }))
     .buffered(CHUNK_PARALLEL)
@@ -477,9 +656,11 @@ impl IndexStore {
     }
 }
 
-/// Re-fetches the index. Without `force`, a failure pauses retries for 5 minutes
-/// as long as an (old) index is still available.
-pub async fn refresh(store: &IndexStore, client: &reqwest::Client, cache: &Path, force: bool) -> Result<bool> {
+/// Re-fetches the index: Thunderstore, and Hexium when `hexium` is on. Without `force`, a failure pauses
+/// retries for 5 minutes as long as an (old) index is still available. Thunderstore failing is the error
+/// it always was; Hexium failing keeps its last list (or goes without it), logged, so the second store
+/// never costs the first.
+pub async fn refresh(store: &IndexStore, client: &reqwest::Client, cache: &Path, force: bool, hexium: bool) -> Result<bool> {
     let _guard = store.refresh_lock.lock().await;
     if !force && store.get().is_some() {
         if let Some(t) = *store.last_failure.lock().unwrap() {
@@ -488,34 +669,59 @@ pub async fn refresh(store: &IndexStore, client: &reqwest::Client, cache: &Path,
             }
         }
     }
-    let known = store.get().and_then(|i| i.source.clone());
-    match fetch(client, if force { None } else { known.as_deref() }).await {
-        Ok(FetchOutcome::Unchanged) => {
-            *store.last_check.lock().unwrap() = Some(Instant::now());
-            *store.last_failure.lock().unwrap() = None;
-            Ok(false)
+    let old = store.get();
+    let known = if force { IndexSource::default() } else { old.as_ref().map(|i| i.source.clone()).unwrap_or_default() };
+    let (ts, hx) = futures::join!(fetch(client, Store::Thunderstore, known.thunderstore.as_deref()), async {
+        if hexium {
+            Some(fetch(client, Store::Hexium, known.hexium.as_deref()).await)
+        } else {
+            None
         }
-        Ok(FetchOutcome::Changed(Fetched { pkgs, source })) => {
-            let at = now_ms();
-            let cache = cache.to_path_buf();
-            let idx = tokio::task::spawn_blocking(move || {
-                let _ = save_cache(&cache, at, &source, &pkgs);
-                let mut idx = build(at, pkgs);
-                idx.source = source;
-                idx
-            })
-            .await
-            .map_err(|e| AppError::Invalid(e.to_string()))?;
-            store.set(idx);
-            *store.last_check.lock().unwrap() = Some(Instant::now());
-            *store.last_failure.lock().unwrap() = None;
-            Ok(true)
-        }
+    });
+    let ts = match ts {
+        Ok(o) => o,
         Err(e) => {
             *store.last_failure.lock().unwrap() = Some(Instant::now());
-            Err(e)
+            return Err(e);
         }
+    };
+    let old_parts = old.as_ref().map(|i| &i.parts);
+    let old_hexium = || old_parts.map(|p| p.hexium.clone()).unwrap_or_default();
+    let had_hexium = old_parts.is_some_and(|p| !p.hexium.is_empty());
+    let (ts_pkgs, ts_source, ts_changed) = match ts {
+        FetchOutcome::Changed(f) => (f.pkgs, f.source, true),
+        FetchOutcome::Unchanged => (old_parts.map(|p| p.thunderstore.clone()).unwrap_or_default(), known.thunderstore.clone(), false),
+    };
+    let (hx_pkgs, hx_source, hx_changed) = match hx {
+        Some(Ok(FetchOutcome::Changed(f))) => (f.pkgs, f.source, true),
+        Some(Ok(FetchOutcome::Unchanged)) => (old_hexium(), known.hexium.clone(), false),
+        Some(Err(e)) => {
+            eprintln!("Hexium index failed ({e}); keeping the last list");
+            (old_hexium(), old.as_ref().and_then(|i| i.source.hexium.clone()), false)
+        }
+        None => (vec![], None, had_hexium),
+    };
+    if !ts_changed && !hx_changed {
+        *store.last_check.lock().unwrap() = Some(Instant::now());
+        *store.last_failure.lock().unwrap() = None;
+        return Ok(false);
     }
+    let at = now_ms();
+    let cache = cache.to_path_buf();
+    let idx = tokio::task::spawn_blocking(move || {
+        let parts = Parts { thunderstore: ts_pkgs, hexium: hx_pkgs };
+        let source = IndexSource { thunderstore: ts_source, hexium: hx_source };
+        let _ = save_cache(&cache, at, &source, &parts);
+        let mut idx = build(at, parts);
+        idx.source = source;
+        idx
+    })
+    .await
+    .map_err(|e| AppError::Invalid(e.to_string()))?;
+    store.set(idx);
+    *store.last_check.lock().unwrap() = Some(Instant::now());
+    *store.last_failure.lock().unwrap() = None;
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -529,7 +735,7 @@ mod tests {
             crate::models::test_pkg("b-One", &[("1.0.0", &["a-Lib-1.0.0"])]),
             crate::models::test_pkg("c-Two", &[("2.0.0", &["a-Lib-0.9.0", "b-One-1.0.0"]), ("1.0.0", &["a-Lib-0.9.0"])]),
         ];
-        let idx = build(1, pkgs);
+        let idx = build(1, Parts::thunderstore(pkgs));
         let slim: serde_json::Value = serde_json::from_slice(&idx.slim_json).unwrap();
         let by: std::collections::HashMap<&str, u64> =
             slim["packages"].as_array().unwrap().iter().map(|p| (p["id"].as_str().unwrap(), p["ndependants"].as_u64().unwrap())).collect();
@@ -556,12 +762,56 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let path = d.path().join("index.json");
         let pkgs = parse_raw(RAW.as_bytes()).unwrap();
-        save_cache(&path, 5, &Some("https://cdn/blob".into()), &pkgs).unwrap();
+        let source = IndexSource { thunderstore: Some("https://cdn/blob".into()), hexium: None };
+        save_cache(&path, 5, &source, &Parts::thunderstore(pkgs)).unwrap();
         let idx = load_cache(&path).unwrap();
-        assert_eq!((idx.fetched_at, idx.source.as_deref()), (5, Some("https://cdn/blob")));
-        // Old caches without a source still load.
+        assert_eq!((idx.fetched_at, idx.source), (5, source));
+        // Caches from before Hexium: one list and one blob URL as a string, or no source at all.
+        std::fs::write(&path, br#"{"fetchedAt":1,"source":"https://cdn/old","pkgs":[]}"#).unwrap();
+        assert_eq!(load_cache(&path).unwrap().source.thunderstore.as_deref(), Some("https://cdn/old"));
+        assert!(load_cache(&path).unwrap().lacks_hexium(), "a cache from before Hexium still has it to fetch");
+        assert!(!build(1, Parts { thunderstore: vec![], hexium: parse_raw(RAW.as_bytes()).unwrap() }).lacks_hexium());
         std::fs::write(&path, br#"{"fetchedAt":1,"pkgs":[]}"#).unwrap();
-        assert_eq!(load_cache(&path).unwrap().source, None);
+        assert_eq!(load_cache(&path).unwrap().source, IndexSource::default());
+    }
+
+    const HX: &str = r#"[{
+        "owner": "denikson", "name": "BepInExPack_Valheim", "package_url": "https://valheim.hexium.gg/mods/denikson/BepInExPack_Valheim",
+        "categories": ["Client & Server", "Modpack"], "rating_score": 1,
+        "versions": [
+            {"version_number": "5.4.2400", "download_url": "https://cdn.hexium.gg/upload/1/5.4.2400.zip", "dependencies": [], "description": "newer on Hexium"},
+            {"version_number": "5.4.2351", "download_url": "https://cdn.hexium.gg/upload/1/5.4.2351.zip", "dependencies": []}
+        ]
+    }, {
+        "owner": "x", "name": "Only", "package_url": "https://valheim.hexium.gg/mods/x/Only", "categories": ["Server-only"],
+        "versions": [{"version_number": "1.0.0", "download_url": "https://cdn.hexium.gg/upload/2/1.0.0.zip", "dependencies": []}]
+    }]"#;
+
+    #[test]
+    fn hexium_listing_is_normalised_and_merged_by_id() {
+        let hx = parse_raw_from(HX.as_bytes(), Store::Hexium).unwrap();
+        assert_eq!(hx[0].cats, vec!["Client-side", "Server-side", "Modpacks"]);
+        assert_eq!((hx[0].url.as_str(), hx[0].hx_url.as_str()), ("", "https://valheim.hexium.gg/mods/denikson/BepInExPack_Valheim"));
+        assert_eq!((hx[0].versions[0].src, hx[0].versions[0].dl.as_str()), (Store::Hexium, "https://cdn.hexium.gg/upload/1/5.4.2400.zip"));
+        let ts = parse_raw(RAW.as_bytes()).unwrap();
+        let merged = merge(&Parts { thunderstore: ts.clone(), hexium: hx });
+        let pack = merged.iter().find(|p| p.id == "denikson-BepInExPack_Valheim").unwrap();
+        assert_eq!(pack.stores, vec![Store::Thunderstore, Store::Hexium]);
+        assert_eq!(pack.url, "https://thunderstore.io/p");
+        assert_eq!(pack.versions.len(), ts[0].versions.len() + 1, "the release both stores have is kept once");
+        assert_eq!((pack.versions[0].v.as_str(), pack.versions[0].src), ("5.4.2400", Store::Hexium));
+        assert_eq!(pack.versions.iter().find(|v| v.v == "5.4.2351").unwrap().src, Store::Thunderstore);
+        assert_eq!(pack.desc, "newer on Hexium");
+        assert_eq!(download_url_of(pack, "5.4.2400"), "https://cdn.hexium.gg/upload/1/5.4.2400.zip");
+        assert_eq!(download_url_of(pack, "5.4.2351"), "https://thunderstore.io/package/download/denikson/BepInExPack_Valheim/5.4.2351/");
+        let only = merged.iter().find(|p| p.id == "x-Only").unwrap();
+        assert_eq!((only.stores.clone(), only.cats.clone()), (vec![Store::Hexium], vec!["Server-side".to_string()]));
+        let idx = build(1, Parts { thunderstore: ts, hexium: parse_raw_from(HX.as_bytes(), Store::Hexium).unwrap() });
+        let slim: serde_json::Value = serde_json::from_slice(&idx.slim_json).unwrap();
+        let by: HashMap<&str, &serde_json::Value> = slim["packages"].as_array().unwrap().iter().map(|p| (p["id"].as_str().unwrap(), &p["stores"])).collect();
+        assert_eq!(by["x-Only"], &serde_json::json!(["hexium"]));
+        assert_eq!(by["denikson-BepInExPack_Valheim"], &serde_json::json!(["thunderstore", "hexium"]));
+        assert_eq!(normalize_category(Store::Thunderstore, "Client-only"), vec!["Client-only"], "Thunderstore's names pass through");
     }
 
     /// Network: `cargo test listing_index -- --ignored`. Downloads the real Valheim index both ways.
@@ -569,14 +819,39 @@ mod tests {
     #[ignore]
     async fn listing_index_matches_v1_in_size_and_detects_unchanged() {
         let client = http_client(Duration::from_secs(15), Duration::from_secs(60)).unwrap();
-        let FetchOutcome::Changed(first) = fetch_listing_index(&client, None).await.unwrap() else { panic!("expected a download") };
+        let FetchOutcome::Changed(first) = fetch_listing_index(&client, Store::Thunderstore, None).await.unwrap() else { panic!("expected a download") };
         assert!(first.pkgs.len() > 10_000, "got {} packages", first.pkgs.len());
         assert!(first.source.as_deref().is_some_and(|s| s.contains("blob")));
-        assert!(matches!(fetch_listing_index(&client, first.source.as_deref()).await.unwrap(), FetchOutcome::Unchanged));
-        let v1 = fetch_v1(&client).await.unwrap();
+        assert!(matches!(fetch_listing_index(&client, Store::Thunderstore, first.source.as_deref()).await.unwrap(), FetchOutcome::Unchanged));
+        let FetchOutcome::Changed(hx) = fetch_listing_index(&client, Store::Hexium, None).await.unwrap() else { panic!("expected a download") };
+        assert!(hx.pkgs.len() > 1_000 && hx.pkgs.iter().all(|p| p.stores == [Store::Hexium]), "got {} Hexium packages", hx.pkgs.len());
+        let v1 = fetch_v1(&client, Store::Thunderstore).await.unwrap();
         let diff = (v1.len() as i64 - first.pkgs.len() as i64).abs();
         assert!(diff < 50, "v1 {} vs listing {}", v1.len(), first.pkgs.len());
         assert!(first.pkgs.iter().any(|p| p.id == "ValheimModding-Jotunn"));
+    }
+
+    /// Network: `cargo test hexium_refresh -- --ignored --nocapture`. A real refresh into a temp cache with
+    /// Hexium on, then off: the merged index gains Hexium-only packages and loses them again; the cache follows.
+    #[tokio::test]
+    #[ignore]
+    async fn hexium_refresh_on_and_off_against_the_live_stores() {
+        let client = http_client(Duration::from_secs(15), Duration::from_secs(60)).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let cache = dir.path().join("index.json");
+        let store = IndexStore::new();
+        assert!(refresh(&store, &client, &cache, true, true).await.unwrap());
+        let on = store.get().unwrap();
+        let hx_only = on.by_id.values().filter(|p| p.stores == [Store::Hexium]).count();
+        let both = on.by_id.values().filter(|p| p.stores.len() == 2).count();
+        eprintln!("hexium on: {} packages, {hx_only} Hexium-only, {both} in both stores", on.by_id.len());
+        assert!(hx_only > 0 && both > 1_000, "merge produced {hx_only} Hexium-only and {both} shared packages");
+        assert_eq!(load_cache(&cache).unwrap().parts.hexium.len(), on.parts.hexium.len());
+        assert!(refresh(&store, &client, &cache, true, false).await.unwrap(), "turning Hexium off must rebuild the index");
+        let off = store.get().unwrap();
+        assert!(off.by_id.values().all(|p| p.stores == [Store::Thunderstore]), "Hexium entries survived the switch-off");
+        assert!(off.by_id.len() < on.by_id.len());
+        assert!(load_cache(&cache).unwrap().parts.hexium.is_empty());
     }
 
     #[test]
@@ -623,7 +898,7 @@ mod tests {
     #[test]
     fn builds_slim_payload_and_roundtrips_cache() {
         let pkgs = parse_raw(RAW.as_bytes()).unwrap();
-        let idx = build(1000, pkgs.clone());
+        let idx = build(1000, Parts::thunderstore(pkgs.clone()));
         let slim: serde_json::Value = serde_json::from_slice(&idx.slim_json).unwrap();
         assert_eq!(slim["fetchedAt"], 1000);
         assert_eq!(slim["packages"][0]["ver"], "5.4.2351");
@@ -637,7 +912,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = dir.path().join("cache").join("index.json");
         assert!(load_cache(&cache).is_none());
-        save_cache(&cache, 1000, &None, &pkgs).unwrap();
+        save_cache(&cache, 1000, &IndexSource::default(), &Parts::thunderstore(pkgs.clone())).unwrap();
         let loaded = load_cache(&cache).unwrap();
         assert_eq!(loaded.fetched_at, 1000);
         assert_eq!(loaded.by_id["denikson-BepInExPack_Valheim"], pkgs[0]);
@@ -661,7 +936,7 @@ mod tests {
     fn store_reports_age() {
         let s = IndexStore::new();
         assert!(s.get().is_none() && s.age_ms().is_none());
-        s.set(build(crate::util::now_ms() - 5_000, vec![]));
+        s.set(build(crate::util::now_ms() - 5_000, Parts::default()));
         assert!(s.age_ms().unwrap() >= 5_000);
     }
 }

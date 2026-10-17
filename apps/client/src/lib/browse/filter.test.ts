@@ -25,6 +25,7 @@ export const pkg = (o: Partial<SlimPkg>): SlimPkg => ({
 	nver: 1,
 	size: 0,
 	deps: [],
+	stores: ["thunderstore"],
 	...o,
 });
 /** Everything allowed, including deprecated and NSFW. */
@@ -83,6 +84,10 @@ describe("matchesCriteria", () => {
 		expect(depsState(pkg({}), facts)).toBe("none");
 		expect(matchesCriteria(pkg({ deps: ["Z-Lib"] }), withList(open(), "deps", { missing: -1 }), facts, NOW)).toBe(false);
 		expect(listValues("flags", pkg({ dep: true, pinned: true }), none)).toEqual(["deprecated", "pinned"]);
+		// the store facet: a package on both stores matches either, a Hexium-only one only Hexium
+		expect(matchesCriteria(pkg({ stores: ["thunderstore", "hexium"] }), withList(open(), "stores", { hexium: 1 }), none, NOW)).toBe(true);
+		expect(matchesCriteria(pkg({ stores: ["hexium"] }), withList(open(), "stores", { thunderstore: 1 }), none, NOW)).toBe(false);
+		expect(matchesCriteria(pkg({}), withList(open(), "stores", { hexium: -1 }), none, NOW)).toBe(true);
 	});
 	it("filters date and number ranges, skipping the requested one", () => {
 		const c = withNum(withDate(open(), "upd", { op: "within", n: 30, unit: "day", from: null, to: null }), "dl", { op: "gte", from: 100, to: null });

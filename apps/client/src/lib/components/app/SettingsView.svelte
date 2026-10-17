@@ -181,6 +181,12 @@
 							<span class="text-muted-foreground min-w-0 text-xs">{t("settings.nsfwHint")}</span>
 						</div>
 					</SettingRow>
+					<SettingRow label={t("settings.hexium")} align="center">
+						<div class="flex items-center gap-2.5">
+							<Switch bind:checked={form.hexium} aria-label={t("settings.hexium")} />
+							<span class="text-muted-foreground min-w-0 text-xs">{t("settings.hexiumHint")}</span>
+						</div>
+					</SettingRow>
 				</section>
 
 				<section id="settings-appearance">

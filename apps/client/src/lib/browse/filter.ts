@@ -48,6 +48,8 @@ export function listValues(key: ListKey, p: SlimPkg, f: ProfileFacts): readonly 
 			return [depsState(p, f)];
 		case "flags":
 			return flagsOf(p);
+		case "stores":
+			return p.stores;
 	}
 }
 

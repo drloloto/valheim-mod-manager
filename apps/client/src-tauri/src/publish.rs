@@ -319,8 +319,8 @@ mod tests {
     #[test]
     fn zip_holds_manifest_readme_icon_and_configs() {
         let mut resolved = BTreeMap::new();
-        resolved.insert("a-Lib".to_string(), Resolved { version: "1.2.3".into(), required_by: vec![] });
-        resolved.insert("denikson-BepInExPack_Valheim".to_string(), Resolved { version: "5.4.2351".into(), required_by: vec![] });
+        resolved.insert("a-Lib".to_string(), Resolved { version: "1.2.3".into(), required_by: vec![], store: Default::default() });
+        resolved.insert("denikson-BepInExPack_Valheim".to_string(), Resolved { version: "5.4.2351".into(), required_by: vec![], store: Default::default() });
         let plan = Plan { resolved, to_install: vec![], to_remove: vec![], errors: vec![] };
         let deps = dependency_strings(&plan);
         assert_eq!(deps, vec!["a-Lib-1.2.3", "denikson-BepInExPack_Valheim-5.4.2351"]);

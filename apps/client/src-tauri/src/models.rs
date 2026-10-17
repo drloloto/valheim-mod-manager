@@ -1,12 +1,29 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+/// A package store the index is built from. Hexium speaks Thunderstore's API on its own hosts; the index
+/// merges both by package id (`owner-name`), so a profile and a manifest name mods the same way whichever
+/// store has them.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Store {
+    #[default]
+    Thunderstore,
+    Hexium,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Version {
     pub v: String,
     pub deps: Vec<String>,
     pub size: u64,
     pub date: i64,
+    /// The store this release is downloaded from (a release on both stores is taken from Thunderstore).
+    #[serde(default)]
+    pub src: Store,
+    /// The download URL as the store listed it; empty for Thunderstore, whose URL follows from the id.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub dl: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -24,8 +41,15 @@ pub struct Pkg {
     pub dep: bool,
     pub nsfw: bool,
     pub pinned: bool,
+    /// The Thunderstore page; empty when only Hexium has the package.
     pub url: String,
     pub web: String,
+    /// The Hexium page; empty when Hexium does not have the package.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub hx_url: String,
+    /// Which stores list the package.
+    #[serde(default)]
+    pub stores: Vec<Store>,
     /// newest first
     pub versions: Vec<Version>,
 }
@@ -132,6 +156,9 @@ pub type Installed = BTreeMap<String, InstalledEntry>;
 pub struct Resolved {
     pub version: String,
     pub required_by: Vec<String>,
+    /// Where this version is downloaded from (the index's `Version::src`).
+    #[serde(default)]
+    pub store: Store,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -170,7 +197,19 @@ pub fn test_pkg(id: &str, versions: &[(&str, &[&str])]) -> Pkg {
         pinned: false,
         url: String::new(),
         web: String::new(),
-        versions: versions.iter().map(|(v, deps)| Version { v: v.to_string(), deps: deps.iter().map(|d| d.to_string()).collect(), size: 0, date: 0 }).collect(),
+        hx_url: String::new(),
+        stores: vec![Store::Thunderstore],
+        versions: versions
+            .iter()
+            .map(|(v, deps)| Version {
+                v: v.to_string(),
+                deps: deps.iter().map(|d| d.to_string()).collect(),
+                size: 0,
+                date: 0,
+                src: Store::Thunderstore,
+                dl: String::new(),
+            })
+            .collect(),
     }
 }
 
