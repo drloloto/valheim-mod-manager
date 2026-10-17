@@ -5,7 +5,7 @@
 ## How it was verified
 
 - [ ] `vp run ci` (format, lint, type checks, svelte-check, tests, builds, the Rust core)
-- [ ] Tried in the app (`pnpm -C apps/client tauri dev`) or in the browser preview (`VITE_MOCK_TAURI=1 pnpm -C apps/client dev`)
+- [ ] Tried in the app (`bun run --cwd apps/client tauri dev`) or in the browser preview (`bun run mock`)
 - [ ] Tested with the real game, if the change touches sync, install or launch
 
 ## Notes for the reviewer

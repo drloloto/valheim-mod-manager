@@ -9,13 +9,15 @@ A Windows desktop mod manager for Valheim: Tauri 2 (Rust core) + SvelteKit 3 SPA
 Tailwind 4, shadcn-svelte). It talks to the Thunderstore API, installs BepInEx mods into per-profile folders
 and launches the game through Steam. Architecture: [docs/architecture.md](../../docs/architecture.md).
 
-## Commands (from `apps/client`, or with `pnpm -C apps/client` from the root)
+## Commands (from `apps/client`, or with `bun run --cwd apps/client` from the root)
 
 ```bash
-pnpm tauri dev                    # real app, shares the installed app's data dir
-pnpm dev:app                      # DEV app: own identifier and data dir (…valheim-mod-manager.dev), DEV badge, cyan accent
-pnpm build:dev-app                # the same as a standalone debug exe (src-tauri/target/debug)
-VITE_MOCK_TAURI=1 pnpm dev        # browser preview with mock backend at http://localhost:1420
+bun run tauri dev                 # real app, shares the installed app's data dir
+bun run dev:app                   # DEV app: own identifier and data dir (…valheim-mod-manager.dev), DEV badge, cyan accent
+bun run build:dev-app             # the same as a standalone debug exe (src-tauri/target/debug)
+VITE_MOCK_TAURI=1 bun run dev:app # DEV app plus the browser preview with the mock backend at http://localhost:1420 (root: bun run mock,
+                                  # which first copies the installed app's profiles into the DEV data dir: dev/seed-dev-data.ps1)
+VITE_MOCK_TAURI=1 bun run dev     # the browser preview alone (root: bun run mock:web)
 vp run build | test | check:svelte | rust   # the package's cached tasks; `vp run ci` at the root runs them all
 ```
 
@@ -32,8 +34,10 @@ vp run build | test | check:svelte | rust   # the package's cached tasks; `vp ru
 - UI building blocks: `src/lib/components/kit/` (the client's own, exported through `kit/index.ts`, which also
   re-exports the shared ones) over `@vmm/ui` in `packages/ui`: tokens (`theme.css`), the vega style, the
   desktop overrides (`style-desktop.css`), the shadcn primitives in `components/ui` (generated, do not edit by
-  hand; regenerate in `packages/ui` with `pnpm dlx shadcn-svelte@latest add <name>`) and the small shared kit
-  parts both apps use.
+  hand; regenerate in `packages/ui` with `bunx shadcn-svelte add <name> --overwrite --no-deps-install`; its
+  `components.json` maps the `#lib` alias through `packages/ui/tsconfig.json`. The CLI rewrites
+  dependency versions in `packages/ui/package.json`: put the `catalog:` references back) and the small shared
+  kit parts both apps use.
 - The design reference is `docs/design/2026-10-02-mod-manager-designs.html` (variant 1a "Werkbank", filter
   system from 2a).
 - Translations: `src/lib/i18n/en.ts` (reference) and `de.ts`. Use `t("key", { vars })` from
@@ -59,9 +63,13 @@ vp run build | test | check:svelte | rust   # the package's cached tasks; `vp ru
 
 ## Verifying UI work without the Tauri window
 
-Start the mock preview, then `node dev/screenshot.mjs 1100 680 /installed out.png` (from Git Bash with
-`MSYS_NO_PATHCONV=1`, or the route `/` turns into a Windows path) drives headless Edge over
-the Chrome DevTools Protocol, runs `dev/layout-audit.js` (overflow, stray scrollbars, overlapping text) and
-saves a screenshot; `PRESET` and `ACTION` (see the file header) set the locale or click a row first. Check
-every changed page at 1100 × 680 in German before claiming a UI change done. The mock lives in
-`dev/mock-tauri.js`; extend it when a new command is needed.
+Start the mock preview (`bun run mock` at the root, or `bun run mock:web` without the DEV app), then `bun run mock:audit` screenshots every page at
+1100 × 680 in German into `dev/out/` and runs `dev/layout-audit.js` (overflow, stray scrollbars, overlapping
+text) on each. `bun run mock:shot 1100 680 /installed out.png` does one page; `LOCALE`, `ACTION`, `PRESET` and
+`PORT` (see the header of `dev/screenshot.mjs`) set the language, click a row first or use another port. Both
+drive headless Edge over the Chrome DevTools Protocol without dependencies; from Git Bash set
+`MSYS_NO_PATHCONV=1`, or the route `/installed` turns into a Windows path. Check every changed page at
+1100 × 680 in German before claiming a UI change done. The mock lives in `dev/mock-tauri.js` and reports a dev build
+(cyan accent, DEV badge) like the DEV app; extend it when a
+new command is needed. In Claude Code, `/ux-review` (`.claude/skills/ux-review`) writes a heuristic UX review
+from those screenshots.

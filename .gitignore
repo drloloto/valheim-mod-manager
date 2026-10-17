@@ -28,10 +28,9 @@ pnpm-debug.log*
 *.sln
 *.sw?
 
-# Lockfiles of other package managers (pnpm is the workspace's package manager)
+# Lockfiles of other package managers (Bun is the workspace's package manager)
 package-lock.json
-bun.lock
-bun.lockb
+pnpm-lock.yaml
 yarn.lock
 
 # The docker test stack: secrets and runtime state stay local
@@ -40,15 +39,21 @@ test/config/
 test/data/
 test/backups/
 
-# Local experiments and design-sync scratch
+# Local experiments
 /spike/
-/.ds-sync/
-/ds-bundle/
-/.design-sync/.cache/
+
+# Per-user Claude Code settings
+.claude/settings.local.json
 test/valheim.env
 test/frpc.toml
 test/e2e/out/
+# snapshots of a real server (test/seed.ps1) and the config/ a seed replaced
+test/snapshots/
+test/config.prev/
+apps/client/dev/out/
 
 # Vite+: generated hook shims (vp config) and Vitest's cache
 .vite-hooks/_/
 .vitest/
+
+competitor

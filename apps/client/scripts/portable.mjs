@@ -1,6 +1,6 @@
 // Assembles the portable zip from a finished release build: the executable, the `portable` marker file
 // and a short README go into dist/valheim-mod-manager-<version>-portable-win64(.zip).
-// Used by `pnpm run tauri:build:portable` and by the release workflow.
+// Used by `bun run tauri:build:portable` and by the release workflow.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -11,7 +11,7 @@ const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).ver
 const exe = join(root, "src-tauri", "target", "release", "valheim-mod-manager.exe");
 
 if (!existsSync(exe)) {
-	console.error(`No release build at ${exe}. Run \`pnpm run tauri:build:portable\` (or \`tauri build\`) first.`);
+	console.error(`No release build at ${exe}. Run \`bun run tauri:build:portable\` (or \`tauri build\`) first.`);
 	process.exit(1);
 }
 

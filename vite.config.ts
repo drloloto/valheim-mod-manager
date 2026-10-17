@@ -19,11 +19,13 @@ const IGNORED = [
 	"packages/ui/src/components/ui/**",
 	"packages/ui/src/style-vega.css",
 	"docs/design/**",
-	"pnpm-lock.yaml",
+	"bun.lock",
 	// the docker test stack's runtime state (game data, configs, backups) and local design-sync scratch
 	"test/data/**",
 	"test/config/**",
 	"test/backups/**",
+	"test/snapshots/**",
+	"test/config.prev/**",
 	"test/e2e/out/**",
 	"spike/**",
 	"ds-bundle/**",
@@ -63,11 +65,21 @@ export default defineConfig({
 					"@vmm/client#test",
 					"@vmm/client#build",
 					"@vmm/client#rust",
+					"@vmm/ui#check:svelte",
 					"@vmm/companion#test",
 					"@vmm/companion-ui#check:svelte",
 					"@vmm/companion-ui#build",
 				],
 			},
+			// The docker test stack and the DEV app: nothing here is cacheable. test:migration seeds the stack with a
+			// snapshot of a real server (test/snapshots), starts the companion built from apps/companion on it and
+			// checks that it serves that state unchanged (test/verify-migration.ps1). SNAPSHOT=<tar.gz> picks one.
+			"stack:up": { command: "pwsh test/up.ps1 -SetupSync", cache: false },
+			"stack:seed": { command: "pwsh test/seed.ps1", cache: false },
+			"stack:verify": { command: "pwsh test/verify-migration.ps1", cache: false },
+			"test:migration": { command: ["pwsh test/seed.ps1", "pwsh test/up.ps1 -SetupSync", "pwsh test/verify-migration.ps1"], cache: false },
+			// the player path end to end (companion page, then the DEV app), on the stack as it runs
+			e2e: { command: "pwsh test/e2e.ps1 -NoBuild", cache: false },
 		},
 	},
 });

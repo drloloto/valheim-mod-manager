@@ -1,7 +1,7 @@
 version: 2
 updates:
-  # The pnpm workspace: one lockfile and one catalog at the root for every package.
-  - package-ecosystem: npm
+  # The Bun workspace: one lockfile (bun.lock) and one catalog (package.json) at the root for every package.
+  - package-ecosystem: bun
     directory: /
     schedule:
       interval: weekly

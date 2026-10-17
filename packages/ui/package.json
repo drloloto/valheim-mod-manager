@@ -28,7 +28,12 @@
 		"tailwind-variants": "catalog:"
 	},
 	"devDependencies": {
+		"@internationalized/date": "catalog:",
+		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"svelte": "catalog:",
-		"@sveltejs/vite-plugin-svelte": "catalog:"
+		"svelte-check": "catalog:",
+		"tailwindcss": "catalog:",
+		"typescript": "catalog:",
+		"vite-plus": "catalog:"
 	}
 }

@@ -5,12 +5,18 @@ to get a change merged. If you use AI tools, read the last section; they are wel
 
 ## Setup
 
-1. Install Node.js 22.18+ (or 24), pnpm (`corepack enable`), Rust stable (rustup), Bun (for the companion's
-   tests) and the Tauri prerequisites for Windows (MSVC Build Tools, WebView2). Linux and macOS can run the
+1. Install Node.js 22.18+ (or 24), Bun 1.4+ (the package manager; it also runs the companion), Rust stable
+   (rustup) and the Tauri prerequisites for Windows (MSVC Build Tools, WebView2). Linux and macOS can run the
    frontend and the tests, but the app targets Windows + Steam.
-2. `pnpm install` at the repository root (the workspace; it also installs the git hooks)
-3. `pnpm -C apps/client tauri dev` for the real app, or `VITE_MOCK_TAURI=1 pnpm -C apps/client dev` for a
-   browser preview with sample data (no Rust toolchain needed).
+2. `bun install` at the repository root (the workspace; it also installs the git hooks)
+3. `bun run mock` for the DEV app plus a browser preview with sample data at `http://localhost:1420`, or
+   `bun run mock:web` for the browser preview alone (no Rust toolchain needed).
+
+**Editor.** VS Code with the Svelte extension (`.vscode/extensions.json`); `.vscode/settings.json` points it at
+the workspace's TypeScript (6.x, the one svelte-check and `vp check` use) and turns on the Svelte TS plugin,
+which is what lets a `.ts` file import `.svelte` components (`kit/index.ts` re-exports `@vmm/ui` ones). Every
+package has a `tsconfig.json`; a file outside one is checked with TypeScript's defaults and shows errors the
+gate never sees. When the editor shows errors `vp run ci` does not, reload the window first.
 
 ## Repository map
 
@@ -26,7 +32,8 @@ apps/client/                  the Mod Manager (Tauri 2 + SvelteKit)
   dev/                        browser mock of the Tauri backend, DEV app scripts
 apps/companion/               the server companion (Bun + Hono) and its landing page (ui/)
 apps/invite/                  the static invite page
-packages/ui/                  @vmm/ui: tokens, styles, shadcn primitives (generated), shared kit components
+packages/ui/                  @vmm/ui: tokens, styles, shadcn primitives (generated), shared kit components;
+                              its own tsconfig (the #lib alias, strict) and a svelte-check task in the gate
 test/                         the docker test stack and the end-to-end player path
 docs/                         architecture, AI workflow, design reference, specs and plans
 ```
@@ -39,12 +46,12 @@ Every pull request has to pass what CI runs:
 vp run ci            # format, lint, type checks, svelte-check, tests, builds, the Rust core (Vite+, cached)
 ```
 
-From a shell without the global Vite+ CLI, use `pnpm exec vp run ci`. `vp check --fix` and `cargo fmt` fix
+From a shell without the global Vite+ CLI, use `bunx vp run ci`. `vp check --fix` and `cargo fmt` fix
 formatting; the pre-commit hook runs `vp check --fix` on staged files.
 
-To build an installer locally use `pnpm -C apps/client tauri:build:local`; `tauri:build:portable` skips the
+To build an installer locally use `bun run --cwd apps/client tauri:build:local`; `tauri:build:portable` skips the
 installers and produces the portable zip in `apps/client/dist/` (executable, `portable` marker, README). Plain
-`pnpm -C apps/client tauri build` also signs the updater artifacts and fails without the private key
+`bun run --cwd apps/client tauri build` also signs the updater artifacts and fails without the private key
 (`TAURI_SIGNING_PRIVATE_KEY` with the key content); only maintainers need that.
 
 ## Conventions
@@ -78,7 +85,7 @@ reviewed and published by hand. Versions live in `apps/client/package.json`, `ap
 `apps/client/src-tauri/tauri.conf.json` and must match (the workflow refuses otherwise).
 
 The workflow needs two repository secrets: `TAURI_SIGNING_PRIVATE_KEY` (the updater private key, generated
-with `pnpm -C apps/client tauri signer generate`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The matching public key is in
+with `bun run --cwd apps/client tauri signer generate`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The matching public key is in
 `apps/client/src-tauri/tauri.conf.json`. Losing the private key means existing installations can no longer verify
 updates, so keep it backed up.
 

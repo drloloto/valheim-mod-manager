@@ -20,16 +20,22 @@ The direction and the open phases: [docs/specs/2026-10-15-monorepo-viteplus-comp
 
 ## Commands
 
-The toolchain is Vite+ (`vp`) on a pnpm workspace. `vp` comes with the workspace (`vite-plus` dev dependency);
-from a shell without the global CLI, prefix it with `pnpm exec`.
+The toolchain is Vite+ (`vp`) on a Bun workspace. `vp` comes with the workspace (`vite-plus` dev dependency);
+from a shell without the global CLI, run it as `bunx vp`.
 
 ```bash
-pnpm install                      # the workspace; also installs the git hooks (vp config)
+bun install                       # the workspace; also installs the git hooks (vp config)
 vp run ci                         # THE gate: format, lint, type checks, svelte-check, tests, builds, Rust core (cached)
 vp check --fix                    # format and lint fixes (the pre-commit hook runs this on staged files)
 vp run --filter @vmm/client test  # one task of one package (also: build, check:svelte, rust)
-pnpm -C apps/client dev           # the client in the browser (VITE_MOCK_TAURI=1 for the mock backend)
-pnpm -C apps/client dev:app       # the DEV app (own data dir and scheme, see apps/client/AGENTS.md)
+bun run mock                      # DEV app (tauri dev, own data dir, cyan) + the browser preview with the mock backend on http://localhost:1420
+bun run mock:web                  # the browser preview alone (no Rust toolchain needed)
+bun run mock:audit                # every page at 1100 × 680 in German: screenshots + layout audit (apps/client/dev/out)
+bun run mock:shot 1100 680 /installed out.png   # one page (LOCALE, ACTION, PORT: see apps/client/dev/screenshot.mjs)
+bun run --cwd apps/client dev:app # the DEV app alone, without the mock in the browser (see apps/client/AGENTS.md)
+bun run mock:seed                 # copy the installed app's profiles into the DEV app's data dir afresh (mock does it once)
+vp run test:migration             # seed the test stack with a server snapshot, start the companion on it, verify (see below)
+vp run stack:up | stack:verify | e2e   # the pieces: start the companion, verify, the player path end to end
 ```
 
 Run `vp run ci` before declaring any task done; an unchanged package replays from the cache, so it is cheap.
@@ -39,7 +45,7 @@ Release builds run it with `--no-cache`.
 
 1. English everywhere: identifiers, comments, commit messages, docs, UI keys. German only in the client's
    `de.ts` (and the companion UI's catalog).
-2. One version per shared dependency: add it to the `catalog:` in `pnpm-workspace.yaml`, reference it as
+2. One version per shared dependency: add it to `workspaces.catalog` in the root `package.json`, reference it as
    `"catalog:"`. Workspace packages are referenced as `"workspace:*"`. New dependencies only when nothing in the
    workspace does the job.
 3. Formatting, lint and type-check settings live only in the root `vite.config.ts`; package configs hold their
@@ -63,7 +69,17 @@ Release builds run it with `--no-cache`.
 - `pwsh test/up.ps1 [-SetupSync] [-Reset] [-NoBuild]` builds the companion image from `apps/companion` (with
   the repository root as build context) and starts it. It is the only way to start the stack.
 - `pwsh test/e2e.ps1 [-Build]` runs the player's path end to end: landing page in headless Edge → the
-  button's link → the DEV app links and adopts. Run it before claiming the hand-off works.
-- The production game server (10.10.10.123) is never modified from here, not even read. The companion in
-  `test/` is the only server anything may be pushed to. `%APPDATA%\io.github.drloloto.valheim-mod-manager`
-  is the owner's real data; test scenarios never write there.
+  button's link → the DEV app links and adopts. Run it before claiming the hand-off works. After `bun run mock`
+  (`tauri dev`) the debug exe expects the dev server on port 1420, so run `e2e.ps1 -Build` to get a standalone one back.
+- `vp run test:migration` (= `test/seed.ps1`, `test/up.ps1 -SetupSync`, `test/verify-migration.ps1`) is the
+  migration test: the stack is seeded with a snapshot of a real server (`test/snapshots/*.tar.gz`, local and
+  git-ignored: a compose folder without the game binaries, the compose `.env` and the companion's secrets),
+  the companion built from `apps/companion` starts on that state, and the verify script checks that it serves
+  the lock, installed.json, the on-disk comparison (reparse) and the profile zip unchanged. The test stack's
+  own `sync.json`, `sync-state.json` and `companion-token` survive a seed; the previous `test/config` is kept
+  as `test/config.prev`. `SNAPSHOT=<tar.gz>` picks a snapshot; the default is the newest.
+- The production game server (10.10.10.123) is never modified from here, and never read unless the owner
+  says so for that one occasion (a snapshot is streamed read-only over SSH, no file is created there). The
+  companion in `test/` is the only server anything may be pushed to. `%APPDATA%\io.github.drloloto.valheim-mod-manager`
+  is the owner's real data; test scenarios never write there (`dev/seed-dev-data.ps1` only copies from it and
+  strips the server links of the copies).
