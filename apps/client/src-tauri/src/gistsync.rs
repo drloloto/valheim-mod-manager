@@ -201,6 +201,8 @@ pub struct GistManifest {
     pub generated_at: i64,
     #[serde(default)]
     pub mods: Vec<ManifestMod>,
+    #[serde(default)]
+    pub release: Option<crate::server::ReleaseRef>,
 }
 
 /// `server.json` as the companion writes it.
@@ -240,6 +242,9 @@ pub struct ReleaseFile {
     pub created_at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// What the admin calls the release: the profile's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub mods: Vec<ManifestMod>,
     #[serde(default)]
     pub configs: Vec<PublishConfig>,
@@ -528,6 +533,7 @@ mod tests {
                 v: 1,
                 id: new_release_id(),
                 created_at: now_ms(),
+                name: None,
                 mods: vec![],
                 apply: Apply { when: "idle".into(), at: None },
                 ..Default::default()
@@ -583,6 +589,7 @@ mod tests {
             v: 1,
             id: new_release_id(),
             created_at: now_ms(),
+            name: None,
             message: Some("client spike: no-op, stage only".into()),
             mods: before.manifest.map(|m| m.mods).unwrap_or_default(),
             configs: vec![],

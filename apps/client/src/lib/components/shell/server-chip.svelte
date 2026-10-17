@@ -3,7 +3,7 @@
 	import Server from "@lucide/svelte/icons/server";
 	import KeyRound from "@lucide/svelte/icons/key-round";
 	import Eye from "@lucide/svelte/icons/eye";
-	import { serverView, type ServerTone } from "#lib/api/server-view.js";
+	import { releaseLabel, serverView, type ServerTone } from "#lib/api/server-view.js";
 	import { store } from "#lib/api/store.svelte.js";
 	import { t } from "#lib/i18n/index.svelte.js";
 	import { cn } from "@vmm/ui/utils.js";
@@ -23,6 +23,7 @@
 		const lines = [link?.gist ? t("chip.viaGist") : t("chip.viaHttp", { url: link?.url ?? "" }), admin ? t("chip.adminHint") : t("chip.readOnlyHint")];
 		if (check?.error) lines.push(check.error);
 		if (check?.reachable) {
+			lines.push(`${t("server.currentTitle")}: ${releaseLabel(check.current, t)}`);
 			const nameOf = (id: string) => store.byId.get(id)?.name ?? id;
 			for (const c of check.diff.changed) lines.push(t("server.changed", { id: nameOf(c.id), local: c.local, server: c.server }));
 			for (const m of check.diff.onlyServer) lines.push(t("server.onlyServer", { id: nameOf(m.id), version: m.version }));

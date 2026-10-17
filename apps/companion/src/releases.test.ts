@@ -19,6 +19,7 @@ describe("release summary", () => {
 	it("counts the plan and keeps problems and schedule", () => {
 		const r: Release = {
 			id: "r1",
+			name: "Hardcore",
 			createdAt: 1,
 			updatedAt: 2,
 			manifest: { schema: 1, generatedAt: 1, server: { name: "s", world: "w", gameVersion: null, bepinex: null }, mods: [], configs: {}, hash: "" },
@@ -40,6 +41,7 @@ describe("release summary", () => {
 		};
 		expect(summary(r)).toEqual({
 			id: "r1",
+			name: "Hardcore",
 			createdAt: 1,
 			updatedAt: 2,
 			modsFrom: "client",

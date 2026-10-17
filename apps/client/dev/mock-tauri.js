@@ -297,6 +297,7 @@
 			features: { publish: true, modManager: true },
 			release: null,
 			online: 2,
+			current: { id: "rmv4k1x9c", name: "Hardcore", appliedAt: NOW - 3 * 3600000, source: "client" },
 			configsChanged: state.server?.gist ? ["EpicLoot.cfg", "Jotunn.cfg"] : [],
 			gistRelease: state.server?.gist
 				? {

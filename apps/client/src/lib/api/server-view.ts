@@ -1,5 +1,6 @@
 import type { t as translate } from "#lib/i18n/index.svelte.js";
-import type { ServerCheck } from "./types";
+import type { ReleaseRef, ServerCheck } from "./types";
+import { relativeTime } from "#lib/format.js";
 
 // One reading of the linked server for everything that shows it: the toolbar chip, the status bar and
 // the dialogs they open. The state names are the vocabulary; en.ts/de.ts hold the words.
@@ -69,4 +70,11 @@ export function serverView(check: ServerCheck | null, admin: boolean, t: T): Ser
 	if (!check.inSync) return differs();
 	if (release) return pending();
 	return { kind: "inSync", tone: "ok", pulse: false, text: t("chip.inSync"), action: admin ? "publish" : "refresh", release };
+}
+
+/** One line for what the server runs: the release's name (or what its transport implies), its id, when it was applied. */
+export function releaseLabel(current: ReleaseRef | null | undefined, t: T, now = Date.now()): string {
+	if (!current) return t("server.currentNone");
+	const name = current.name ?? t(current.source === "web" ? "server.releaseWeb" : "server.releaseUnnamed");
+	return t("server.currentLine", { name, id: current.id, when: relativeTime(current.appliedAt, now) });
 }

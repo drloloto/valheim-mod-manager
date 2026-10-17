@@ -34,6 +34,8 @@ export interface ReleaseFile {
 	id: string;
 	createdAt: number;
 	message?: string;
+	/** what the admin calls the release: the profile's name */
+	name?: string;
 	mods: unknown;
 	configs?: ConfigFile[];
 	/** default: "none" (stage only; the admin applies from the companion UI) */
@@ -60,7 +62,7 @@ export interface ServerFile {
 	v: 1;
 	updatedAt: number;
 	server: { name: string; world: string };
-	manifest: Pick<Manifest, "hash" | "generatedAt" | "mods"> | null;
+	manifest: Pick<Manifest, "hash" | "generatedAt" | "mods" | "release"> | null;
 	configs: ConfigFile[];
 	configsSkipped: string[];
 	release: ReleaseStatus | null;
@@ -171,7 +173,9 @@ export async function syncOnce(d: SyncDeps): Promise<{ handled: string | null; w
 	const body: Omit<ServerFile, "updatedAt"> = {
 		v: 1,
 		server: snap.server,
-		manifest: snap.manifest ? { hash: snap.manifest.hash, generatedAt: snap.manifest.generatedAt, mods: snap.manifest.mods } : null,
+		manifest: snap.manifest
+			? { hash: snap.manifest.hash, generatedAt: snap.manifest.generatedAt, mods: snap.manifest.mods, release: snap.manifest.release }
+			: null,
 		configs: snap.configs,
 		configsSkipped: snap.configsSkipped,
 		release: state.release,
@@ -179,7 +183,9 @@ export async function syncOnce(d: SyncDeps): Promise<{ handled: string | null; w
 	// What the server runs, without the timestamp the manifest gets on every regeneration: a server that stands
 	// still writes nothing. That matters because gist writes are limited to 100 per hour per user, and the
 	// admin's publishes come out of the same bucket.
-	const hash = sha(JSON.stringify({ ...body, manifest: body.manifest && { hash: body.manifest.hash, mods: body.manifest.mods } }));
+	const hash = sha(
+		JSON.stringify({ ...body, manifest: body.manifest && { hash: body.manifest.hash, mods: body.manifest.mods, release: body.manifest.release } }),
+	);
 	let wrote = false;
 	if (hash !== state.lastServerHash) {
 		if (d.canWrite) {
@@ -196,7 +202,7 @@ async function handleRelease(d: SyncDeps, rel: ReleaseFile, now: () => number): 
 	const status: ReleaseStatus = { id: rel.id, companionId: null, state: "staged", handledAt: now(), problems: [], error: null, schedule: null, plan: null };
 	d.log(`release ${rel.id} received${rel.message ? `: ${rel.message}` : ""}`);
 	try {
-		const r = await d.stage({ mods: rel.mods, configs: rel.configs });
+		const r = await d.stage({ mods: rel.mods, configs: rel.configs, name: rel.name });
 		status.companionId = r.id;
 		status.problems = r.problems;
 		status.plan = { install: r.plan.install.length, remove: r.plan.remove.length, configs: r.plan.configsChanged.length + r.plan.configsNew.length };

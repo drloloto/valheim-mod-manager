@@ -14,6 +14,10 @@ All notable changes to this project are documented here. The format follows
   companion names the store per mod, and the companion (and its takeover of hand-installed servers)
   downloads from Hexium when told to. Settings → "Include Hexium" turns the second store off.
 
+- The release the server runs is visible: its name (the profile that was published), its id and when it was
+  applied, in the server chip's tooltip, the server dialog and the profile manager's Server & Sync tab. The
+  companion records it in the lock when a release is applied; older locks show "no release recorded yet".
+
 ### Fixed
 
 - A mod the server dropped was never uninstalled: the comparison counted it as the player's own extra and

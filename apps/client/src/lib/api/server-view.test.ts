@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { serverView } from "./server-view";
+import { releaseLabel, serverView } from "./server-view";
 import type { ServerCheck } from "./types";
 
 const t = (key: string, p?: Record<string, string | number>) => (p ? `${key}:${Object.values(p).join(",")}` : key);
@@ -19,6 +19,7 @@ const base: ServerCheck = {
 	online: null,
 	configsChanged: [],
 	gistRelease: null,
+	current: null,
 };
 const differs: ServerCheck = {
 	...base,
@@ -88,5 +89,13 @@ describe("serverView: one reading for chip, status bar and dialogs", () => {
 	it("in sync: nothing to do, an admin may still open publish", () => {
 		expect(serverView(base, false, t)).toMatchObject({ kind: "inSync", tone: "ok", action: "refresh" });
 		expect(serverView(base, true, t)).toMatchObject({ kind: "inSync", action: "publish" });
+	});
+});
+
+describe("releaseLabel", () => {
+	it("names the release or says none is recorded", () => {
+		expect(releaseLabel(null, t)).toBe("server.currentNone");
+		expect(releaseLabel({ id: "r1", name: "Hardcore", appliedAt: 1000, source: "client" }, t, 1000 + 3_600_000)).toMatch(/^server.currentLine:Hardcore,r1,/);
+		expect(releaseLabel({ id: "r2", name: null, appliedAt: 0, source: "web" }, t, 60_000)).toMatch(/^server.currentLine:server.releaseWeb,r2,/);
 	});
 });

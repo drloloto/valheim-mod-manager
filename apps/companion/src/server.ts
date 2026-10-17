@@ -133,7 +133,7 @@ api.get("/status", async (c) => {
 		sync: sync.summary(),
 		server: { name: info.name, world: detailed ? info.world : "" },
 		container,
-		manifest: m ? { hash: m.hash, generatedAt: m.generatedAt, mods: m.mods.length } : null,
+		manifest: m ? { hash: m.hash, generatedAt: m.generatedAt, mods: m.mods.length, release: m.release ?? null } : null,
 		world: world ? { name: world.name, size: world.size, lastSave: world.lastSave } : null,
 		release: pending ? summary(pending) : null,
 		/** players online from the log; null when logs are off or docker is unreachable */

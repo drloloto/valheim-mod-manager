@@ -31,6 +31,23 @@ export interface ServerInfo {
 	bepinex: string | null;
 }
 
+/** The release whose apply produced the lock: its id, the name the admin gave it (the profile), when, and the transport. */
+export interface ReleaseRef {
+	id: string;
+	name: string | null;
+	appliedAt: number;
+	source: "client" | "web" | "gist" | null;
+}
+
+/** A stored reference, or nothing when the lock predates release tracking or came from a takeover. */
+export function cleanRelease(raw: unknown): ReleaseRef | undefined {
+	if (!raw || typeof raw !== "object") return undefined;
+	const r = raw as Record<string, unknown>;
+	if (typeof r.id !== "string" || !r.id || typeof r.appliedAt !== "number") return undefined;
+	const source = r.source === "client" || r.source === "web" || r.source === "gist" ? r.source : null;
+	return { id: r.id, name: typeof r.name === "string" && r.name ? r.name : null, appliedAt: r.appliedAt, source };
+}
+
 export interface Manifest {
 	schema: 1;
 	generatedAt: number;
@@ -39,6 +56,8 @@ export interface Manifest {
 	/** config file path → sha256 */
 	configs: Record<string, string>;
 	hash: string;
+	/** set by applyRelease; missing on older locks and takeovers */
+	release?: ReleaseRef;
 }
 
 export interface ModDiff {
@@ -129,7 +148,9 @@ export function normalizeManifest(body: unknown, server: ServerInfo, configs: Re
 export async function loadManifest(): Promise<Manifest | null> {
 	try {
 		const raw = JSON.parse(await readFile(MANIFEST_FILE, "utf-8"));
-		return normalizeManifest(raw, raw.server, raw.configs ?? {});
+		const m = normalizeManifest(raw, raw.server, raw.configs ?? {});
+		const release = cleanRelease(raw.release);
+		return release ? { ...m, release } : m;
 	} catch {
 		return null;
 	}

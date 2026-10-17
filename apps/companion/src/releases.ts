@@ -53,6 +53,8 @@ export interface Release {
 	id: string;
 	createdAt: number;
 	updatedAt: number;
+	/** what the admin calls it: the profile that was published; null for web edits and older files */
+	name?: string | null;
 	manifest: Manifest;
 	/** who provided the lock; null = the mods are the server's current ones (config-only working state) */
 	modsFrom: Source | null;
@@ -69,6 +71,7 @@ export interface Release {
 
 export interface ReleaseSummary {
 	id: string;
+	name: string | null;
 	createdAt: number;
 	updatedAt: number;
 	modsFrom: Source | null;
@@ -90,6 +93,7 @@ export const isEmptyPlan = (p: ReleasePlan) => !p.install.length && !p.remove.le
 
 export const summary = (r: Release): ReleaseSummary => ({
 	id: r.id,
+	name: r.name ?? null,
 	createdAt: r.createdAt,
 	updatedAt: r.updatedAt ?? r.createdAt,
 	modsFrom: r.modsFrom ?? null,
@@ -217,6 +221,8 @@ export async function refreshPlan(r: Release): Promise<Release> {
 
 export interface StageBody {
 	mods?: unknown;
+	/** what the admin calls the release: the profile's name */
+	name?: unknown;
 	configs?: { path: string; contentBase64: string }[];
 }
 
@@ -231,6 +237,7 @@ export async function stageRelease(body: StageBody, info: ServerInfo, log: (l: s
 	r.manifest = manifest;
 	r.modsFrom = source;
 	r.modsAt = Date.now();
+	r.name = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 80) : null;
 	r.schedule = null;
 	r.lastError = null;
 	for (const f of Array.isArray(body.configs) ? body.configs : []) {
@@ -433,6 +440,7 @@ export async function applyRelease(id: string, log: (l: string) => void = () => 
 				m.hash = hashMods(m.mods);
 				m.generatedAt = Date.now();
 				m.configs = await configHashes();
+				m.release = { id: r.id, name: r.name ?? null, appliedAt: Date.now(), source: r.modsFrom ?? null };
 				await saveManifest(m);
 				await discardRelease(r.id);
 				return { result, configsWritten };

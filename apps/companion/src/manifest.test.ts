@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { diffMods, hashMods, normalizeManifest, sameMods, type ManifestMod } from "./manifest";
+import { cleanRelease, diffMods, hashMods, normalizeManifest, sameMods, type ManifestMod } from "./manifest";
 
 const mod = (id: string, version: string, explicit = true): ManifestMod => ({
 	id,
@@ -75,5 +75,18 @@ describe("normalizeManifest", () => {
 		expect(m.mods.find((x) => x.id === "x-Ts")).not.toHaveProperty("source");
 		// a pair that does not spell the id is dropped, the entry stays
 		expect(m.mods[1]).toEqual({ id: "Wubarrk-BetterContinents", version: "0.10.6-rc.1", explicit: true, requiredBy: [] });
+	});
+});
+
+describe("cleanRelease", () => {
+	it("keeps a well-formed reference and drops the rest", () => {
+		expect(cleanRelease({ id: "r1", name: "Hardcore", appliedAt: 5, source: "client" })).toEqual({
+			id: "r1",
+			name: "Hardcore",
+			appliedAt: 5,
+			source: "client",
+		});
+		expect(cleanRelease({ id: "r2", appliedAt: 6, source: "ftp" })).toEqual({ id: "r2", name: null, appliedAt: 6, source: null });
+		expect(cleanRelease({ name: "x" })).toBeUndefined();
 	});
 });

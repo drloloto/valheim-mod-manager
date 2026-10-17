@@ -621,6 +621,8 @@ pub struct ServerCheck {
     configs_changed: Vec<String>,
     /// Gist links: what became of the last published release.
     gist_release: Option<gistsync::ReleaseStatus>,
+    /// The release the server's lock came from, when the companion recorded one.
+    current: Option<server::ReleaseRef>,
 }
 
 fn unreachable_check(link: &ServerLink, e: AppError) -> ServerCheck {
@@ -640,6 +642,7 @@ fn unreachable_check(link: &ServerLink, e: AppError) -> ServerCheck {
         online: None,
         configs_changed: vec![],
         gist_release: None,
+        current: None,
     }
 }
 
@@ -702,6 +705,7 @@ async fn check_gist(ctx: &AppCtx, profile: &str, link: &ServerLink, m: &gistsync
         online: None,
         configs_changed: changed,
         gist_release: s.release,
+        current: manifest.release,
     }
 }
 
@@ -807,6 +811,7 @@ async fn check_link(ctx: &AppCtx, profile: &str) -> Result<ServerCheck> {
                 online: status.online,
                 configs_changed: vec![],
                 gist_release: None,
+                current: m.release,
             })
         }
         Err(e) => Ok(unreachable_check(&link, e)),
@@ -954,7 +959,7 @@ pub async fn publish_profile(ctx: State<'_, AppCtx>, profile: String, with_confi
         }
     }
     let slow = thunderstore::http_client(Duration::from_secs(10), Duration::from_secs(600))?;
-    let mut r = server::stage(&slow, &link, &server::StageBody { mods, configs }).await?;
+    let mut r = server::stage(&slow, &link, &server::StageBody { mods, configs, name: profile.clone() }).await?;
     r.skipped_local = skipped_local;
     Ok(r)
 }
@@ -987,6 +992,7 @@ pub async fn publish_gist(ctx: State<'_, AppCtx>, profile: String, with_configs:
         id: gistsync::new_release_id(),
         created_at: crate::util::now_ms(),
         message: Some(format!("Valheim Mod Manager: profile {profile}")),
+        name: Some(profile.clone()),
         mods,
         configs,
         apply: gistsync::Apply { when, at },

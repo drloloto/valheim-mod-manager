@@ -152,6 +152,14 @@ export interface ServerDiff {
 	changed: { id: string; local: string; server: string }[];
 }
 
+/** The release the server's lock came from: id, the name the admin gave it (the profile), when, transport. */
+export interface ReleaseRef {
+	id: string;
+	name: string | null;
+	appliedAt: number;
+	source: "client" | "web" | "gist" | null;
+}
+
 export interface ServerCheck {
 	reachable: boolean;
 	error?: string;
@@ -173,6 +181,8 @@ export interface ServerCheck {
 	configsChanged: string[];
 	/** Gist links: status of the last published release. */
 	gistRelease: GistRelease | null;
+	/** What the server runs; null until a companion with release tracking applied a release. */
+	current: ReleaseRef | null;
 }
 
 /** What a pasted address resolved to (autoconfig). */

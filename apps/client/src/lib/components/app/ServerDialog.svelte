@@ -2,6 +2,7 @@
 	import { Button, Checkbox, Dialog, Input, Label, Select } from "#lib/components/kit/index.js";
 	import { store } from "#lib/api/store.svelte.js";
 	import type { ApplyWhen, ServerDiscovery } from "#lib/api/types.js";
+	import { releaseLabel } from "#lib/api/server-view.js";
 	import { formatDateTime } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
 
@@ -77,6 +78,13 @@
 	}
 </script>
 
+{#snippet currentRelease()}
+	<!-- What the server runs right now, on every view that talks about its state. -->
+	{#if check?.reachable}
+		<p class="text-muted-foreground text-xs"><span class="text-foreground-soft">{t("server.currentTitle")}:</span> {releaseLabel(check.current, t)}</p>
+	{/if}
+{/snippet}
+
 <Dialog.Root {open} onOpenChange={(v) => !v && close()}>
 	<Dialog.Content class="sm:max-w-md">
 		{#if mode === "link"}
@@ -106,6 +114,7 @@
 				<Dialog.Title>{t("server.publishTitle", { name: serverName })}</Dialog.Title>
 				<Dialog.Description>{store.server?.gist ? t("server.gistDesc") : pending ? t("server.stagedDesc") : t("server.publishDesc")}</Dialog.Description>
 			</Dialog.Header>
+			{@render currentRelease()}
 			{#if store.server?.gist}
 				<!-- Gist transport: publish and schedule in one step; the companion answers through server.json. -->
 				<div class="grid gap-3 text-sm">
@@ -269,6 +278,7 @@
 				<Dialog.Title>{t("server.inSyncTitle", { name: serverName })}</Dialog.Title>
 				<Dialog.Description>{t("server.identical")}</Dialog.Description>
 			</Dialog.Header>
+			{@render currentRelease()}
 			<Dialog.Footer>
 				<Button onclick={close}>{t("common.done")}</Button>
 			</Dialog.Footer>
@@ -278,6 +288,7 @@
 				<Dialog.Title>{t("server.diffTitle", { name: serverName })}</Dialog.Title>
 				<Dialog.Description>{t("server.diffDesc")}</Dialog.Description>
 			</Dialog.Header>
+			{@render currentRelease()}
 			<ul class="text-foreground-soft grid gap-1 text-xs">
 				{#each check.diff.changed as c (c.id)}<li>{t("server.changed", { id: nameOf(c.id), local: c.local, server: c.server })}</li>{/each}
 				{#each check.diff.onlyServer as m (m.id)}

@@ -54,6 +54,20 @@ pub struct ServerInfo {
     pub world: String,
 }
 
+/// The release whose apply produced the server's lock: its id, the name the admin gave it (the profile),
+/// when, and the transport. Missing on locks from before release tracking or from a takeover.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseRef {
+    pub id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub applied_at: i64,
+    #[serde(default)]
+    pub source: Option<String>,
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {
@@ -69,6 +83,8 @@ pub struct Manifest {
     /// Companion switches relevant to the client (e.g. `publish: false`).
     #[serde(default)]
     pub features: BTreeMap<String, bool>,
+    #[serde(default)]
+    pub release: Option<ReleaseRef>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -271,6 +287,8 @@ pub struct PublishConfig {
 pub struct StageBody {
     pub mods: Vec<ManifestMod>,
     pub configs: Vec<PublishConfig>,
+    /// What the admin calls the release: the profile's name.
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -726,8 +744,21 @@ mod tests {
         assert_eq!(m.server.name, "S");
         assert_eq!(m.mods[0].required_by, vec!["b-B"]);
         assert!(!m.mods[0].explicit);
-        let body = StageBody { mods: vec![mm("a-A", "1.0.0")], configs: vec![encode_config("sub\\x.cfg", b"k=v")] };
+        let body = StageBody { mods: vec![mm("a-A", "1.0.0")], configs: vec![encode_config("sub\\x.cfg", b"k=v")], name: "P".into() };
         let s = serde_json::to_string(&body).unwrap();
         assert!(s.contains("\"requiredBy\":[]") && s.contains("\"path\":\"sub/x.cfg\"") && s.contains("\"contentBase64\":\"az12\""));
+    }
+}
+
+#[cfg(test)]
+mod release_ref_tests {
+    use super::*;
+
+    #[test]
+    fn manifest_carries_the_applied_release() {
+        let m: Manifest = serde_json::from_str(r#"{"mods":[],"release":{"id":"r1","name":"Hardcore","appliedAt":5,"source":"client"}}"#).unwrap();
+        assert_eq!(m.release, Some(ReleaseRef { id: "r1".into(), name: Some("Hardcore".into()), applied_at: 5, source: Some("client".into()) }));
+        let old: Manifest = serde_json::from_str(r#"{"mods":[]}"#).unwrap();
+        assert!(old.release.is_none());
     }
 }

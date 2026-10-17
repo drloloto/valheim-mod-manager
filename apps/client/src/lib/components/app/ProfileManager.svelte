@@ -11,7 +11,7 @@
 	import Server from "@lucide/svelte/icons/server";
 	import { Button, ConfirmDialog, Dialog, DropdownMenu, Input, Kbd, SectionLabel, Segmented, SettingRow, Stat, StatusItem } from "#lib/components/kit/index.js";
 	import { store } from "#lib/api/store.svelte.js";
-	import { serverView, type ServerTone } from "#lib/api/server-view.js";
+	import { releaseLabel, serverView, type ServerTone } from "#lib/api/server-view.js";
 	import { initials } from "#lib/format.js";
 	import { t } from "#lib/i18n/index.svelte.js";
 	import ImportProfileDialog from "./ImportProfileDialog.svelte";
@@ -350,6 +350,13 @@
 								{/if}
 							</div>
 						</SettingRow>
+						{#if store.server}
+							<SettingRow label={t("pm.currentRelease")} hint={t("pm.currentReleaseHint")} align="center">
+								<span class="text-foreground-soft text-xs"
+									>{store.serverStatus?.reachable ? releaseLabel(store.serverStatus.current, t) : t("chip.unreachable")}</span
+								>
+							</SettingRow>
+						{/if}
 						{#if role === "admin"}
 							<SectionLabel class="border-b pt-6 pb-2.5">
 								{t("pm.adminAccess")}
