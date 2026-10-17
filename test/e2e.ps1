@@ -51,9 +51,11 @@ node (Join-Path $test "e2e\app.mjs") (Join-Path $Out "app-0-fresh.png") | Select
 
 Write-Host "== 4. the button's link through the OS"
 Start-Process $page.href
-Start-Sleep 15
-$text = (node (Join-Path $test "e2e\app.mjs") (Join-Path $Out "app-1-linked.png")) -join "`n"
+# Adoption downloads the lock's mods and, after an app update, merges Hexium into the index first: poll instead of a fixed wait.
 $dev = Join-Path $env:APPDATA "io.github.drloloto.valheim-mod-manager.dev"
+foreach ($i in 1..24) { if ((Get-ChildItem (Join-Path $dev "profiles") -Directory -ErrorAction SilentlyContinue | Where-Object { Test-Path (Join-Path $_.FullName "profile.json") }).Count -ge 1) { break }; Start-Sleep 5 }
+Start-Sleep 10
+$text = (node (Join-Path $test "e2e\app.mjs") (Join-Path $Out "app-1-linked.png")) -join "`n"
 $profiles = Get-ChildItem (Join-Path $dev "profiles") -Directory -ErrorAction SilentlyContinue
 Check ($profiles.Count -eq 1) "exactly one profile was created ($($profiles.Name -join ', '))"
 if ($profiles.Count -ge 1) {

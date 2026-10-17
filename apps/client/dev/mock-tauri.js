@@ -1,6 +1,9 @@
-// Browser preview without Tauri: replaces window.__TAURI_INTERNALS__ with a mock serving sample data.
+// Browser preview without Tauri: installs a window.__TAURI_INTERNALS__ that serves sample data.
 // Active in the dev server only when VITE_MOCK_TAURI=1 is set (see vite.config.ts). Not part of the build.
+// `bun run mock` runs that dev server under `tauri dev`: the DEV app window carries the real internals, so the
+// mock steps aside there and only the browser at http://localhost:1420 gets the sample data.
 (() => {
+	if (window.__TAURI_INTERNALS__) return;
 	const AUTHORS = [
 		"Azumatt",
 		"Therzie",
@@ -125,8 +128,10 @@
 			created,
 		});
 	}
-	const slim = pkgs.map((p) => ({
+	const slim = pkgs.map((p, i) => ({
 		...p,
+		// most packages are Thunderstore's; every 13th is on both stores, every 97th only on Hexium
+		stores: i > 1 && i % 97 === 5 ? ["hexium"] : i % 13 === 0 ? ["thunderstore", "hexium"] : ["thunderstore"],
 		icon: "",
 		ver: `${1 + Math.floor(rnd() * 3)}.${Math.floor(rnd() * 10)}.${Math.floor(rnd() * 20)}`,
 		dep: rnd() < 0.06,
@@ -172,9 +177,18 @@
 			{ kind: "stale", ids: [inProfile[2]], detail: String(NOW - 200 * DAY) },
 			{ kind: "deprecated", ids: [inProfile[3]], detail: "" },
 		],
-		app: { version: "0.3.0", portable: false, dev: false, dataDir: "C:\\Users\\you\\AppData\\Roaming\\io.github.drloloto.valheim-mod-manager" },
+		// the preview is a dev environment like the DEV app: cyan accent and DEV badge, never mistaken for the installed app
+		app: { version: "0.3.0", portable: false, dev: true, dataDir: "C:\\Users\\you\\AppData\\Roaming\\io.github.drloloto.valheim-mod-manager.dev" },
 	};
-	const settings = { valheimDir: null, steamExe: null, downloadConcurrency: 4, indexTtlMinutes: 30, showNsfw: false, thunderstoreToken: "tss_mock" };
+	const settings = {
+		valheimDir: null,
+		steamExe: null,
+		downloadConcurrency: 4,
+		indexTtlMinutes: 30,
+		showNsfw: false,
+		thunderstoreToken: "tss_mock",
+		hexium: true,
+	};
 
 	const mockRelease = (schedule) => ({ id: "r1", createdAt: NOW - 60000, install: 1, remove: 1, configs: 1, problems: [], schedule, lastError: null });
 	const handlers = {
@@ -186,11 +200,12 @@
 			if (!p) throw { message: `Package not found: ${id}`, kind: "notFound" };
 			return {
 				...p,
-				url: `https://thunderstore.io/c/valheim/p/${p.ns}/${p.name}/`,
+				url: p.stores.includes("thunderstore") ? `https://thunderstore.io/c/valheim/p/${p.ns}/${p.name}/` : "",
+				hx_url: p.stores.includes("hexium") ? `https://valheim.hexium.gg/mods/${p.ns}/${p.name}` : "",
 				web: "",
 				versions: [
-					{ v: p.ver, deps: p.deps.map((d) => `${d}-1.0.0`), size: p.size, date: p.upd },
-					{ v: "0.9.0", deps: [], size: p.size - 100, date: p.created },
+					{ v: p.ver, deps: p.deps.map((d) => `${d}-1.0.0`), size: p.size, date: p.upd, src: p.stores[0] },
+					{ v: "0.9.0", deps: [], size: p.size - 100, date: p.created, src: p.stores[0] },
 				],
 			};
 		},
@@ -298,6 +313,8 @@
 			diff: {
 				onlyServer: [{ id: slim[50].id, version: slim[50].ver, explicit: true, requiredBy: [] }],
 				onlyLocal: [],
+				// a server mod (managed, see the profile above) the server no longer lists
+				dropped: [{ id: inProfile[1], version: byId.get(inProfile[1]).ver, explicit: true, requiredBy: [] }],
 				changed: [{ id: inProfile[0], local: byId.get(inProfile[0]).ver, server: "9.9.9" }],
 			},
 		}),

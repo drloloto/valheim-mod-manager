@@ -1,22 +1,29 @@
 // Screenshot + layout audit of the mock preview in headless Edge over CDP. No dependencies.
 //
-//   VITE_MOCK_TAURI=1 pnpm dev                          # in another terminal
-//   node dev/screenshot.mjs 1100 680 /installed out.png  # viewport, route, output
+//   bun run mock                                     # at the root, in another terminal (mock:web: browser only)
+//   bun run mock:shot 1100 680 /installed out.png    # viewport, route, output (default: dev/out/<route>.png)
+//   bun run mock:audit                               # every page, German, 1100 × 680 (dev/audit-pages.mjs)
+//
+// From Git Bash set MSYS_NO_PATHCONV=1, or the route "/installed" turns into a Windows path.
 //
 // Environment:
-//   PRESET  JS evaluated on the loaded page before a second navigation, e.g. a locale:
+//   LOCALE  "de" or "en": the UI language (stored like the app's language setting)
+//   PRESET  JS evaluated on the loaded page before a second navigation (replaces LOCALE), e.g.:
 //           PRESET='localStorage.setItem("werkbank.locale", JSON.stringify("de"))'
 //   ACTION  JS evaluated on the ready page before the audit, e.g. select the first row:
 //           ACTION='document.querySelector("[role=grid] [role=row]").click()'
 //   AUDIT   "0" skips dev/layout-audit.js (prints overflow, stray scrollbars and overlapping text)
+//   PORT    the preview's port (default 1420)
 //   EDGE    path to msedge.exe (default: the x86 program files install)
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const [w, h, route = "/", out = "screenshot.png"] = process.argv.slice(2);
+const here = dirname(fileURLToPath(import.meta.url));
+const [w, h, route = "/", outArg] = process.argv.slice(2);
+const out = outArg ?? join(here, "out", `${route === "/" ? "index" : route.slice(1).replace(/\//g, "-")}.png`);
 const width = Number(w) || 1100;
 const height = Number(h) || 680;
 const port = 9333 + Math.floor(Math.random() * 500);
@@ -66,7 +73,7 @@ const evaluate = async (expression) => (await send("Runtime.evaluate", { express
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
-const url = `http://localhost:1420${route}`;
+const url = `http://localhost:${process.env.PORT || 1420}${route}`;
 async function waitReady() {
 	for (let i = 0; i < 60; i++) {
 		await sleep(500);
@@ -82,8 +89,10 @@ async function waitReady() {
 const nav = await send("Page.navigate", { url });
 if (nav.error) console.log("navigate failed:", nav.error.message);
 let ready = await waitReady();
-if (process.env.PRESET) {
-	await evaluate(process.env.PRESET);
+const preset =
+	process.env.PRESET ?? (process.env.LOCALE ? `localStorage.setItem("werkbank.locale", JSON.stringify(${JSON.stringify(process.env.LOCALE)}))` : null);
+if (preset) {
+	await evaluate(preset);
 	await send("Page.navigate", { url });
 	ready = await waitReady();
 }
@@ -93,10 +102,11 @@ if (process.env.ACTION) {
 	await sleep(1500);
 }
 if (process.env.AUDIT !== "0") {
-	const audit = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "layout-audit.js"), "utf8");
+	const audit = readFileSync(join(here, "layout-audit.js"), "utf8");
 	console.log(await evaluate(audit));
 }
 const shot = await send("Page.captureScreenshot", { format: "png" });
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, Buffer.from(shot.result.data, "base64"));
 if (!ready) console.log("NOT READY (main stayed empty)");
 if (logs.length) console.log(logs.slice(0, 10).join("\n"));
