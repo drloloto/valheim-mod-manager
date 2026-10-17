@@ -20,3 +20,8 @@ Claude-specific additions:
 - The PostToolUse hook in `.claude/settings.json` runs `vp check --fix` on every edited source file; do not
   run formatting by hand.
 - Commit messages end with a `Co-Authored-By` line for the model that wrote the change.
+- Token discipline (measured 2026-10-17: a 62-minute session peaked at 365k context, mostly self-inflicted):
+  read files with `offset`/`limit` or grep, never whole files; create new files with Write, not heredocs;
+  take mock screenshots with `AUDIT=0` unless the layout audit itself is the question, and filter audit
+  output to the element under test (a dialog over a page reports every overlap with the background);
+  print `git status` once; `/compact` after every commit and before a new feature.
