@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Checkbox, Dialog, Input, Label, Select } from "#lib/components/kit/index.js";
+	import { Button, Checkbox, Dialog, Input, Label, Segmented, Select } from "#lib/components/kit/index.js";
 	import { store } from "#lib/api/store.svelte.js";
 	import type { ApplyWhen, ServerDiscovery } from "#lib/api/types.js";
 	import { releaseLabel } from "#lib/api/server-view.js";
@@ -16,6 +16,10 @@
 	let atValue = $state("");
 	let adoptConfigs = $state(true);
 	let discovery = $state.raw<ServerDiscovery | null>(null);
+	/** "Add server…": a new profile, or an existing one reviewed in the assistant. */
+	let addTarget = $state<"new" | "existing">("new");
+	let addProfileEdit = $state<string | null>(null);
+	const addProfile = $derived(addProfileEdit ?? store.state.active ?? store.state.profiles[0] ?? "");
 	/** Gist links: when the server applies the published release. */
 	let gistWhen = $state<ApplyWhen>("idle");
 	const WHEN: ApplyWhen[] = ["now", "idle", "at", "none"];
@@ -350,25 +354,57 @@
 					</p>
 					{#if discovery.features.modManager === false}<p class="text-destructive-text text-xs">{t("server.noModManager")}</p>{/if}
 				{/if}
-				<div class="grid gap-1">
-					<label class="flex items-center gap-2 text-sm">
-						<Checkbox bind:checked={installAll} />
-						{t("import.installAll")}
-					</label>
-					<p class="text-muted-foreground pl-6 text-xs">{t("import.installAllHint")}</p>
-					<label class="flex items-center gap-2 text-sm">
-						<Checkbox bind:checked={adoptConfigs} />
-						{t("server.adoptConfigs")}
-					</label>
-					<p class="text-muted-foreground pl-6 text-xs">{t("server.adoptConfigsHint")}</p>
+				<!-- Where the server's mods go: a fresh profile right away, or an existing one through the assistant. -->
+				<div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
+					<Label>{t("server.addTarget")}</Label>
+					<Segmented
+						bind:value={() => addTarget, (v) => (addTarget = v as "new" | "existing")}
+						options={[
+							{ value: "new", label: t("server.addTargetNew") },
+							{ value: "existing", label: t("server.addTargetExisting") },
+						]}
+						columns={2}
+					/>
+					{#if addTarget === "existing"}
+						<span></span>
+						<Select.Root type="single" value={addProfile} onValueChange={(v) => (addProfileEdit = v)}>
+							<Select.Trigger class="w-full">{addProfile || "—"}</Select.Trigger>
+							<Select.Content>
+								{#each store.state.profiles as p (p)}<Select.Item value={p} label={p} />{/each}
+							</Select.Content>
+						</Select.Root>
+					{/if}
 				</div>
+				{#if addTarget === "existing"}
+					<p class="text-muted-foreground text-xs">{t("server.addTargetHint")}</p>
+				{:else}
+					<div class="grid gap-1">
+						<label class="flex items-center gap-2 text-sm">
+							<Checkbox bind:checked={installAll} />
+							{t("import.installAll")}
+						</label>
+						<p class="text-muted-foreground pl-6 text-xs">{t("import.installAllHint")}</p>
+						<label class="flex items-center gap-2 text-sm">
+							<Checkbox bind:checked={adoptConfigs} />
+							{t("server.adoptConfigs")}
+						</label>
+						<p class="text-muted-foreground pl-6 text-xs">{t("server.adoptConfigsHint")}</p>
+					</div>
+				{/if}
 			</div>
 			<Dialog.Footer>
 				<Button variant="outline" onclick={close}>{t("common.cancel")}</Button>
-				<Button
-					disabled={busy || !discovery || discovery.features.modManager === false}
-					onclick={() => run(() => store.addServer(discovery!, installAll, adoptConfigs))}>{t("server.createProfile")}</Button
-				>
+				{#if addTarget === "existing"}
+					<Button
+						disabled={busy || !discovery || !addProfile || discovery.features.modManager === false}
+						onclick={() => run(() => store.linkExisting(discovery!, addProfile))}>{t("server.linkExisting")}</Button
+					>
+				{:else}
+					<Button
+						disabled={busy || !discovery || discovery.features.modManager === false}
+						onclick={() => run(() => store.addServer(discovery!, installAll, adoptConfigs))}>{t("server.createProfile")}</Button
+					>
+				{/if}
 			</Dialog.Footer>
 		{/if}
 	</Dialog.Content>

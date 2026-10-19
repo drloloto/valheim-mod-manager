@@ -587,7 +587,7 @@ mod tests {
         mods.push(ProfileMod { managed: true, ..ProfileMod::thunderstore("a", "A", "1.0.0") });
         mods.push(ProfileMod { managed: true, enabled: false, ..ProfileMod::thunderstore("b", "B", "1.0.0") });
         mods.push(ProfileMod { managed: true, ..ProfileMod::thunderstore("c", "C", "1.0.0") });
-        let p = Profile { name: "p".into(), mods, server: None };
+        let p = Profile { name: "p".into(), mods, server: None, override_locks: false };
         let mut local = BTreeMap::new();
         local.insert("me-Minimap".to_string(), res("1.0.0", &[]));
         local.insert("a-A".to_string(), res("1.0.0", &[]));
@@ -605,6 +605,7 @@ mod tests {
             name: "p".into(),
             mods: vec![ProfileMod::thunderstore("old", "Gone", "1.0.0")],
             server: Some(ServerLink { last_adopted: Some("h:c".into()), ..Default::default() }),
+            override_locks: false,
         };
         let mut local = BTreeMap::new();
         local.insert("old-Gone".to_string(), res("1.0.0", &[]));
@@ -625,7 +626,7 @@ mod tests {
 
     #[test]
     fn manifest_mods_and_adopt_round_trip() {
-        let mut p = Profile { name: "p".into(), mods: vec![ProfileMod::thunderstore("a", "A", "1.0.0")], server: None };
+        let mut p = Profile { name: "p".into(), mods: vec![ProfileMod::thunderstore("a", "A", "1.0.0")], server: None, override_locks: false };
         p.mods.push(ProfileMod {
             namespace: "local".into(),
             name: "Mine".into(),
@@ -685,7 +686,7 @@ mod tests {
         let own = |id: &str, v: &str| (id.to_string(), v.to_string(), false);
         let srv = |id: &str, v: &str| (id.to_string(), v.to_string(), true);
         let mods = vec![ProfileMod::thunderstore("me", "Minimap", "1.0.0"), ProfileMod::thunderstore("a", "A", "1.0.0")];
-        let mut p = Profile { name: "p".into(), mods, server: None };
+        let mut p = Profile { name: "p".into(), mods, server: None, override_locks: false };
         // first adoption: a-A takes the server's version, the player's Minimap stays
         adopt(&mut p, &[mm("a-A", "1.5.0"), mm("b-B", "2.0.0")]);
         assert_eq!(ids(&p), vec![own("me-Minimap", "1.0.0"), srv("a-A", "1.5.0"), srv("b-B", "2.0.0")]);
@@ -700,7 +701,7 @@ mod tests {
     fn adopt_reads_a_profile_adopted_before_managed_existed_as_the_server_list() {
         let link = ServerLink { last_adopted: Some("h:c".into()), ..Default::default() };
         let mods = vec![ProfileMod::thunderstore("a", "A", "1.0.0"), ProfileMod::thunderstore("old", "Gone", "1.0.0")];
-        let mut p = Profile { name: "p".into(), mods, server: Some(link) };
+        let mut p = Profile { name: "p".into(), mods, server: Some(link), override_locks: false };
         adopt(&mut p, &[mm("a-A", "1.0.0")]);
         assert_eq!(p.mods.iter().map(|m| (m.id(), m.managed)).collect::<Vec<_>>(), vec![("a-A".to_string(), true)]);
     }

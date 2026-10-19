@@ -9,7 +9,20 @@
 	import Cloud from "@lucide/svelte/icons/cloud";
 	import Plus from "@lucide/svelte/icons/plus";
 	import Server from "@lucide/svelte/icons/server";
-	import { Button, ConfirmDialog, Dialog, DropdownMenu, Input, Kbd, SectionLabel, Segmented, SettingRow, Stat, StatusItem } from "#lib/components/kit/index.js";
+	import {
+		Button,
+		ConfirmDialog,
+		Dialog,
+		DropdownMenu,
+		Input,
+		Kbd,
+		SectionLabel,
+		Segmented,
+		SettingRow,
+		Stat,
+		StatusItem,
+		Switch,
+	} from "#lib/components/kit/index.js";
 	import { store } from "#lib/api/store.svelte.js";
 	import { releaseLabel, serverView, type ServerTone } from "#lib/api/server-view.js";
 	import { initials } from "#lib/format.js";
@@ -28,6 +41,7 @@
 	let newOpen = $state(false);
 	let cloneOpen = $state(false);
 	let deleteOpen = $state(false);
+	let restoreOpen = $state(false);
 	let importOpen = $state(false);
 	let importMode = $state<"code" | "file">("code");
 	let migrateOpen = $state(false);
@@ -140,6 +154,15 @@
 	function startImport(mode: "code" | "file") {
 		importMode = mode;
 		importOpen = true;
+	}
+
+	const overrideOn = $derived(sel !== null && store.state.overrides.includes(sel));
+
+	/** The assistant with this profile as the source (copy) or its server as the source (compare). */
+	function openTransfer(kind: "server" | "profile") {
+		if (!sel) return;
+		store.openTransfer(kind, sel, kind === "server" ? sel : null);
+		setOpen(false);
 	}
 
 	/** Where the profiles live on disk, for the footer (the data dir of this install). */
@@ -307,8 +330,27 @@
 						<div class="flex flex-wrap gap-2">
 							<Button size="sm" variant="outline" disabled={busy} onclick={() => run(() => store.repairProfile(current.name))}>{t("profile.repair")}</Button>
 							<Button size="sm" variant="outline" onclick={() => (cloneOpen = true)}>{t("profile.clone")}</Button>
+							<Button size="sm" variant="outline" onclick={() => openTransfer("profile")}>{t("pm.copyMods")}</Button>
+							{#if current.server}
+								<Button size="sm" variant="outline" onclick={() => openTransfer("server")}>{t("pm.compareServer")}</Button>
+							{/if}
+							<Button size="sm" variant="outline" onclick={() => (restoreOpen = true)}>{t("pm.restore")}</Button>
 						</div>
 					</SettingRow>
+					{#if current.server || current.fromServer}
+						<!-- The lock on the server's mods, and the one switch that lifts it. -->
+						<SettingRow label={t("pm.override")} hint={t("pm.overrideHint")} align="center">
+							<div class="flex flex-col gap-2">
+								<Switch
+									checked={overrideOn}
+									disabled={busy}
+									onCheckedChange={(v) => run(() => store.setOverride(current.name, v))}
+									aria-label={t("pm.override")}
+								/>
+								{#if overrideOn}<p class="text-destructive-text max-w-[520px] text-xs">{t("pm.overrideWarn")}</p>{/if}
+							</div>
+						</SettingRow>
+					{/if}
 					<SettingRow label={t("pm.delete")} hint={t("profile.deleteDesc")} align="center">
 						<Button size="sm" variant="destructive" onclick={() => (deleteOpen = true)}>{t("profile.delete")}</Button>
 					</SettingRow>
@@ -465,6 +507,15 @@
 />
 <ImportProfileDialog bind:open={importOpen} bind:mode={importMode} />
 <MigrateDialog bind:open={migrateOpen} />
+<ConfirmDialog
+	bind:open={restoreOpen}
+	title={t("pm.restoreTitle", { name: sel ?? "" })}
+	description={t("pm.restoreDesc")}
+	confirmLabel={t("pm.restore")}
+	onconfirm={async () => {
+		if (sel) await store.restoreSnapshot(sel);
+	}}
+/>
 <ConfirmDialog
 	bind:open={deleteOpen}
 	title={t("profile.deleteTitle", { name: sel ?? "" })}

@@ -179,7 +179,7 @@ pub fn apply_import(paths: &Paths, requested_name: &str, c: R2zContents, with_co
     if enable_all {
         list.iter_mut().for_each(|m| m.enabled = true);
     }
-    profiles::save(paths, &Profile { name: name.clone(), mods: list, server: None })?;
+    profiles::save(paths, &Profile { name: name.clone(), mods: list, server: None, override_locks: false })?;
     let mut configs = 0;
     if with_configs {
         let dir = paths.config_dir(&name);
@@ -253,7 +253,7 @@ mod tests {
     fn r2x_roundtrip_skips_local_mods() {
         let mut off = ProfileMod::thunderstore("a", "B-C", "1.2.3");
         off.enabled = false;
-        let p = Profile { name: "X".into(), mods: vec![off.clone(), local()], server: None };
+        let p = Profile { name: "X".into(), mods: vec![off.clone(), local()], server: None, override_locks: false };
         let (yaml, skipped) = to_r2x(&p, None).unwrap();
         assert_eq!(skipped, vec!["local-Mine"]);
         assert!(!yaml.contains("source"), "Thunderstore releases carry no source line");
@@ -275,7 +275,7 @@ mod tests {
         std::fs::write(d.path().join("a.cfg"), "k = v").unwrap();
         std::fs::write(d.path().join("sub/b.json"), "{}").unwrap();
         std::fs::write(d.path().join("skip.dll"), "x").unwrap();
-        let p = Profile { name: "X".into(), mods: vec![ProfileMod::thunderstore("a", "B", "1.0.0")], server: None };
+        let p = Profile { name: "X".into(), mods: vec![ProfileMod::thunderstore("a", "B", "1.0.0")], server: None, override_locks: false };
         let (bytes, _) = build_r2z(&p, d.path(), None).unwrap();
         let c = read_r2z(&bytes).unwrap();
         assert_eq!(c.profile_name, "X");

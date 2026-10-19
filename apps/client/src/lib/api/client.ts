@@ -26,6 +26,9 @@ import type {
 	PublishResult,
 	ServerLink,
 	Settings,
+	TransferChoice,
+	TransferKind,
+	TransferPlan,
 } from "./types";
 
 export class ApiError extends Error {
@@ -89,6 +92,19 @@ export const api = {
 	discoverServer: (url: string) => call<ServerDiscovery>("discover_server", { url }),
 	adoptServer: (profile: string, withConfigs: boolean, intoNew: string | null, install = true) =>
 		call<AppState>("adopt_server", { profile, withConfigs, intoNew, install }),
+	/** The assistant's review: `target = null` plans for a new profile. */
+	transferPlan: (kind: TransferKind, source: string, target: string | null) => call<TransferPlan>("transfer_plan", { kind, source, target }),
+	transferRun: (
+		kind: TransferKind,
+		source: string,
+		target: string | null,
+		newName: string | null,
+		choices: TransferChoice[],
+		withConfigs: boolean,
+		install: boolean,
+	) => call<AppState>("transfer_run", { kind, source, target, newName, choices, withConfigs, install }),
+	setProfileOverride: (profile: string, on: boolean) => call<AppState>("set_profile_override", { profile, on }),
+	restoreSnapshot: (profile: string) => call<AppState>("restore_snapshot", { profile }),
 	publishProfile: (profile: string, withConfigs: boolean) => call<StageResponse>("publish_profile", { profile, withConfigs }),
 	applyRelease: (profile: string, id: string, when: ApplyWhen, at: number | null) => call<ApplyResponse>("apply_release", { profile, id, when, at }),
 	inviteLink: (profile: string) => call<string>("invite_link", { profile }),

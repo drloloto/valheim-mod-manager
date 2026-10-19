@@ -40,7 +40,7 @@ pub fn create(paths: &Paths, name: &str) -> Result<String> {
         return Err(AppError::Invalid(format!("Profile \"{name}\" already exists.")));
     }
     std::fs::create_dir_all(paths.profile_dir(&name))?;
-    save(paths, &Profile { name: name.clone(), mods: vec![], server: None })?;
+    save(paths, &Profile { name: name.clone(), ..Default::default() })?;
     Ok(name)
 }
 

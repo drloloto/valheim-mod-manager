@@ -6,6 +6,7 @@
 	import FilePlus from "@lucide/svelte/icons/file-plus";
 	import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 	import Pin from "@lucide/svelte/icons/pin";
+	import Lock from "@lucide/svelte/icons/lock";
 	import {
 		Button,
 		ContextMenu,
@@ -97,6 +98,9 @@
 	});
 
 	const selectedMods = $derived([...selection.ids].filter((id) => store.modsMap.has(id)));
+	/** The selection without the server's locked mods: what the bar's actions apply to. */
+	const selectedFree = $derived(selectedMods.filter((id) => !store.isLocked(id)));
+	const lockedTitle = $derived(`${t("installed.locked")} · ${t("installed.lockedHint")}`);
 	const focus = $derived(selection.focus && store.byId.has(selection.focus) ? selection.focus : null);
 
 	const columns: Column[] = $derived([
@@ -304,10 +308,11 @@
 							{#if r.mod}
 								{@const m = r.mod}
 								<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-								<span onclick={stop}
+								<span onclick={stop} title={store.isLocked(r.id) ? lockedTitle : undefined}
 									><Switch
 										size="sm"
 										checked={m.enabled}
+										disabled={store.isLocked(r.id)}
 										onCheckedChange={(v) => store.setEnabled(r.id, v)}
 										aria-label={t("installed.enableAria", { name: m.name })}
 									/></span
@@ -319,7 +324,9 @@
 								<div class="flex min-w-0 flex-col gap-0.5">
 									<span class="text-row truncate font-semibold {r.kind === 'dep' ? 'text-foreground-soft' : ''}">{r.name}</span>
 									{#if !compact}
-										<span class="text-muted-foreground truncate text-xs">{r.mod?.source === "local" ? t("installed.localMod") : (p?.desc ?? "")}</span>
+										<span class="text-muted-foreground truncate text-xs"
+											>{r.mod?.source === "local" && !p?.desc ? t("installed.localMod") : (p?.desc ?? "")}</span
+										>
 									{/if}
 								</div>
 							</div>
@@ -328,7 +335,7 @@
 						{:else if key === "version"}
 							<!-- The hint triangle sits by the version: stale and deprecated are facts about this version. -->
 							<span class="cell-mono inline-flex items-center gap-1"
-								>{r.version}{#if r.mod?.pinned}<Pin
+								>{r.version}{#if store.isLocked(r.id)}<Lock class="text-muted-foreground size-3" aria-label={lockedTitle} />{:else if r.mod?.pinned}<Pin
 										class="text-primary size-3"
 										aria-label={t("installed.pinnedTitle")}
 									/>{/if}{#if store.healthByMod.has(r.id)}<span class="text-primary-text inline-flex shrink-0" title={healthText(r.id)}
@@ -357,8 +364,15 @@
 						{/if}
 					{/snippet}
 					{#snippet menu(ids)}
-						{@const mods = ids.filter((id) => store.modsMap.has(id))}
+						{@const all = ids.filter((id) => store.modsMap.has(id))}
+						{@const mods = all.filter((id) => !store.isLocked(id))}
 						<ContextMenu.Label>{ids.length > 1 ? t("installed.entriesSelected", { n: ids.length }) : nameOf(ids[0])}</ContextMenu.Label>
+						{#if all.length && !mods.length}
+							<!-- Only server-managed mods selected: the menu says why its actions are off. -->
+							<ContextMenu.Label class="text-muted-foreground flex items-center gap-1.5 font-normal"
+								><Lock class="size-3" />{t("installed.locked")} · {t("installed.lockedHint")}</ContextMenu.Label
+							>
+						{/if}
 						<ContextMenu.Item disabled={!mods.length} onSelect={() => store.setEnabledMany(mods, true)}>{t("common.enable")}</ContextMenu.Item>
 						<ContextMenu.Item disabled={!mods.length} onSelect={() => store.setEnabledMany(mods, false)}>{t("common.disable")}</ContextMenu.Item>
 						<ContextMenu.Item disabled={!mods.some((id) => id in store.state.updates)} onSelect={() => store.requestUpdate(mods)}
@@ -368,7 +382,7 @@
 							>{store.modsMap.get(mods[0])?.pinned ? t("installed.unpin") : t("installed.pin")}</ContextMenu.Item
 						>
 						<ContextMenu.Separator />
-						<ContextMenu.Item disabled={ids.length > 1 || !store.byId.has(ids[0])} onSelect={() => thunderstore(ids[0])}
+						<ContextMenu.Item disabled={ids.length > 1 || !store.indexById.has(ids[0])} onSelect={() => thunderstore(ids[0])}
 							>{t("browse.openThunderstore")}<ContextMenu.Shortcut>↗</ContextMenu.Shortcut></ContextMenu.Item
 						>
 						<ContextMenu.Separator />
@@ -383,13 +397,21 @@
 					{/snippet}
 				</DataTable>
 
-				<SelectionBar count={selectedMods.length} onclear={() => (selection = { ...selection, ids: new Set(), anchor: null })} hint={t("installed.hint")}>
-					<Button size="sm" variant="ghost" onclick={() => store.setEnabledMany(selectedMods, true)}>{t("common.enable")}</Button>
-					<Button size="sm" variant="ghost" onclick={() => store.setEnabledMany(selectedMods, false)}>{t("common.disable")}</Button>
-					<Button size="sm" variant="ghost" disabled={!selectedMods.some((id) => id in store.state.updates)} onclick={() => store.requestUpdate(selectedMods)}
+				<SelectionBar
+					count={selectedMods.length}
+					onclear={() => (selection = { ...selection, ids: new Set(), anchor: null })}
+					hint={selectedFree.length < selectedMods.length ? `${t("installed.locked")}: ${selectedMods.length - selectedFree.length}` : t("installed.hint")}
+				>
+					<Button size="sm" variant="ghost" disabled={!selectedFree.length} onclick={() => store.setEnabledMany(selectedFree, true)}
+						>{t("common.enable")}</Button
+					>
+					<Button size="sm" variant="ghost" disabled={!selectedFree.length} onclick={() => store.setEnabledMany(selectedFree, false)}
+						>{t("common.disable")}</Button
+					>
+					<Button size="sm" variant="ghost" disabled={!selectedFree.some((id) => id in store.state.updates)} onclick={() => store.requestUpdate(selectedFree)}
 						>{t("common.update")}</Button
 					>
-					<Button size="sm" variant="destructive" onclick={() => store.removeMods(selectedMods)}>{t("common.remove")}</Button>
+					<Button size="sm" variant="destructive" disabled={!selectedFree.length} onclick={() => store.removeMods(selectedFree)}>{t("common.remove")}</Button>
 				</SelectionBar>
 
 				{#if dragging}

@@ -10,6 +10,7 @@
 	import StatusBar from "#lib/components/shell/status-bar.svelte";
 	import UpdateDialog from "#lib/components/app/UpdateDialog.svelte";
 	import ExternalLinkDialog from "#lib/components/app/ExternalLinkDialog.svelte";
+	import TransferDialog from "#lib/components/app/TransferDialog.svelte";
 	import { store } from "#lib/api/store.svelte.js";
 	import { installDesktopGuards } from "#lib/desktop/guards.js";
 	import { bindShortcuts } from "#lib/desktop/shortcuts.js";
@@ -78,4 +79,5 @@
 
 <UpdateDialog />
 <ExternalLinkDialog />
+<TransferDialog />
 <Toaster theme="dark" position="bottom-right" offset={{ bottom: 40, right: 16 }} />

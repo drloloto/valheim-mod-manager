@@ -18,6 +18,7 @@ use crate::settings::{self, Settings};
 use crate::share::{self, ImportSummary};
 use crate::sync::{self, SyncHandle, SyncJob, SyncStatus};
 use crate::thunderstore::{self, Index, IndexStore};
+use crate::transfer;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -123,6 +124,10 @@ pub struct AppState {
     /// Entries adopted from the server as its dependencies (`ProfileMod::implicit`): pinned in the plan,
     /// listed as dependencies in the UI even when nothing local requires them.
     implicit_mods: Vec<String>,
+    /// The active profile's local (imported) mods as packages: icon, description, website from the zip.
+    local_mods: Vec<Pkg>,
+    /// Profiles whose Override is on (the server's mods are editable there).
+    overrides: Vec<String>,
     health: Vec<HealthIssue>,
     app: AppInfo,
 }
@@ -154,10 +159,13 @@ fn build_state(ctx: &AppCtx) -> Result<AppState> {
     let health_ids = health::ids_to_check(&mods, plan.as_ref().map(|p| &p.resolved));
     let health = health::check(&health_ids, &installed, ctx.index.get().as_deref().map(|i| &i.by_id), manifest.as_ref().map(|m| m.0));
     let names = profiles::list(&ctx.paths);
-    let profile_mods = names
-        .iter()
-        .filter_map(|n| profiles::load(&ctx.paths, n).ok().map(|p| (n.clone(), p.mods.iter().filter(|m| !m.implicit).map(ProfileMod::id).collect())))
-        .collect();
+    let loaded: Vec<(String, Profile)> = names.iter().filter_map(|n| profiles::load(&ctx.paths, n).ok().map(|p| (n.clone(), p))).collect();
+    let profile_mods = loaded.iter().map(|(n, p)| (n.clone(), p.mods.iter().filter(|m| !m.implicit).map(ProfileMod::id).collect())).collect();
+    let overrides = loaded.iter().filter(|(_, p)| p.override_locks).map(|(n, _)| n.clone()).collect();
+    let local_mods = match &active {
+        Some(n) => mods.iter().filter(|m| m.source == Source::Local).filter_map(|m| localmod::pkg(&ctx.paths, n, &m.id())).collect(),
+        None => vec![],
+    };
     // Implicit entries pin a server's dependencies for the plan above; the UI sees them as dependencies.
     let implicit_mods = mods.iter().filter(|m| m.implicit).map(ProfileMod::id).collect();
     mods.retain(|m| !m.implicit);
@@ -174,6 +182,8 @@ fn build_state(ctx: &AppCtx) -> Result<AppState> {
         game: GameStatus { valheim_dir: game.valheim_dir, found, last_updated: manifest.as_ref().map(|m| m.0), build_id: manifest.map(|m| m.1) },
         profile_mods,
         implicit_mods,
+        local_mods,
+        overrides,
         health,
         app: AppInfo { version: env!("CARGO_PKG_VERSION"), portable: ctx.portable, dev: ctx.dev, data_dir: ctx.paths.root.to_string_lossy().to_string() },
     })
@@ -299,8 +309,25 @@ pub async fn refresh_index(app: AppHandle, ctx: State<'_, AppCtx>) -> Result<Opt
 
 #[tauri::command]
 pub async fn get_package(ctx: State<'_, AppCtx>, id: String) -> Result<Pkg> {
+    if let Some(p) = local_pkg(&ctx, &id) {
+        return Ok(p);
+    }
     let idx = ctx.ensure_index().await?;
     idx.by_id.get(&id).cloned().ok_or_else(|| AppError::NotFound(format!("Package {id} not found.")))
+}
+
+/// A `local-*` id as a package: the active profile's copy first, then any profile that has one.
+fn local_pkg(ctx: &AppCtx, id: &str) -> Option<Pkg> {
+    if !id.starts_with("local-") {
+        return None;
+    }
+    let active = profiles::active(&ctx.paths);
+    active.iter().cloned().chain(profiles::list(&ctx.paths)).find_map(|n| localmod::pkg(&ctx.paths, &n, id))
+}
+
+fn local_profile_of(ctx: &AppCtx, id: &str) -> Option<String> {
+    let active = profiles::active(&ctx.paths);
+    active.iter().cloned().chain(profiles::list(&ctx.paths)).find(|n| ctx.paths.local_dir(n).join(id).is_dir())
 }
 
 /// Readme or changelog markdown of one version; cached on disk forever (a version never changes).
@@ -308,6 +335,10 @@ pub async fn get_package(ctx: State<'_, AppCtx>, id: String) -> Result<Pkg> {
 pub async fn get_package_doc(ctx: State<'_, AppCtx>, id: String, version: String, kind: thunderstore::DocKind) -> Result<String> {
     if version.is_empty() || !version.chars().all(|c| c.is_ascii_alphanumeric() || c == '.') {
         return Err(AppError::Invalid(format!("Invalid version \"{version}\".")));
+    }
+    if id.starts_with("local-") {
+        let profile = local_profile_of(&ctx, &id).ok_or_else(|| AppError::NotFound(format!("Package {id} not found.")))?;
+        return localmod::doc(&ctx.paths, &profile, &id, kind);
     }
     // Authors can edit readme and changelog on Thunderstore after the upload, so a cached copy is
     // trusted for a week, not forever.
@@ -456,6 +487,8 @@ pub async fn clone_profile(ctx: State<'_, AppCtx>, from: String, to: String) -> 
 #[tauri::command]
 pub fn set_mods(app: AppHandle, ctx: State<'_, AppCtx>, profile: String, mods: Vec<ProfileMod>) -> Result<AppState> {
     let mut p = profiles::load(&ctx.paths, &profile)?;
+    // While Override is off, the server's entries are read-only here, whatever the UI sent.
+    transfer::check_locks(&p, &mods)?;
     // The UI edits the list but never the server's claim on an entry: `managed` survives any round trip.
     let managed: HashSet<String> = p.mods.iter().filter(|m| m.managed).map(ProfileMod::id).collect();
     let mut mods = mods;
@@ -483,6 +516,9 @@ pub async fn set_mod_enabled(ctx: State<'_, AppCtx>, profile: String, id: String
     let guard = ctx.sync.lock.lock().await;
     let mut p = profiles::load(&ctx.paths, &profile)?;
     let m = p.mods.iter_mut().find(|m| m.id() == id).ok_or_else(|| AppError::NotFound(format!("{id} is not in the profile.")))?;
+    if m.managed && m.enabled != enabled && !p.override_locks {
+        return Err(AppError::Invalid(format!("Managed by the server, switch on Override in the profile settings to change it: {}", m.name)));
+    }
     m.enabled = enabled;
     profiles::save(&ctx.paths, &p)?;
     if let Some(entry) = profiles::load_installed(&ctx.paths, &profile).get(&id) {
@@ -865,6 +901,219 @@ pub async fn discover_server(ctx: State<'_, AppCtx>, url: String) -> Result<serv
     server::discover(&quick, &url).await
 }
 
+/// What one read of the server yields for an adoption: its info, the lock's mods, the config files (when
+/// asked for) and the stamp `ServerLink::last_adopted` remembers.
+struct ServerState {
+    info: server::ServerInfo,
+    mods: Vec<server::ManifestMod>,
+    configs: Vec<(String, Vec<u8>)>,
+    adopted: String,
+}
+
+async fn fetch_server_state(ctx: &AppCtx, link: &ServerLink, with_configs: bool) -> Result<ServerState> {
+    match gist_of(ctx, link)? {
+        Some((m, key)) => {
+            let s = gistsync::read_server(&m, &key).await?.ok_or_else(|| AppError::Network("The server has not written to the gist yet.".into()))?;
+            // No lock yet (a companion before its first release) is not "the server runs nothing": adopting
+            // that would uninstall every server mod.
+            let manifest = s.manifest.ok_or_else(|| AppError::Invalid("The server has not published a mod list yet.".into()))?;
+            let adopted = format!("{}:{}", manifest.hash, gistsync::config_hash(&s.configs));
+            let configs = if with_configs { s.configs.iter().filter_map(|c| server::decode_config(c).map(|b| (c.path.clone(), b))).collect() } else { vec![] };
+            Ok(ServerState { info: s.server, mods: manifest.mods, configs, adopted })
+        }
+        None => {
+            let m = server::fetch_manifest(&ctx.client, link).await?;
+            let configs = if with_configs {
+                let bytes = server::fetch_bytes(&ctx.client, &format!("{}/api/profile.r2z", server::normalize_url(&link.url)?)).await?;
+                share::read_r2z(&bytes)?.configs
+            } else {
+                vec![]
+            };
+            let adopted = server::adopted_stamp(&m.hash, &m.configs);
+            Ok(ServerState { info: m.server, mods: m.mods, configs, adopted })
+        }
+    }
+}
+
+fn write_configs(ctx: &AppCtx, profile: &str, configs: Vec<(String, Vec<u8>)>) -> Result<()> {
+    let dir = ctx.paths.config_dir(profile);
+    for (rel, bytes) in configs {
+        let Ok(dest) = crate::util::safe_join(&dir, &rel) else { continue };
+        std::fs::create_dir_all(dest.parent().unwrap())?;
+        std::fs::write(dest, bytes)?;
+    }
+    Ok(())
+}
+
+/// Thunderstore's side categories of a package, for the assistant's hints.
+fn side_of(index: Option<&Index>, id: &str) -> Option<transfer::Side> {
+    let cats = &index?.by_id.get(id)?.cats;
+    let (server, client) = (cats.iter().any(|c| c == "Server-side"), cats.iter().any(|c| c == "Client-side"));
+    match (server, client) {
+        (true, false) => Some(transfer::Side::Server),
+        (false, true) => Some(transfer::Side::Client),
+        _ => None,
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferPlan {
+    /// The server's name, or the source profile.
+    source_name: String,
+    /// False for a new target.
+    target_exists: bool,
+    items: Vec<transfer::Item>,
+}
+
+/// The source as the planner needs it: the server's lock (with its info) or the other profile's list.
+async fn transfer_source(
+    ctx: &AppCtx,
+    kind: transfer::Kind,
+    source: &str,
+    with_configs: bool,
+) -> Result<(String, Vec<transfer::SourceMod>, Vec<server::ManifestMod>, Option<ServerState>)> {
+    match kind {
+        transfer::Kind::Server => {
+            let link = link_of(ctx, source)?;
+            let s = fetch_server_state(ctx, &link, with_configs).await?;
+            let mods = s.mods.iter().filter_map(transfer::SourceMod::from_manifest).collect();
+            let name = if s.info.name.is_empty() { link.name.clone() } else { s.info.name.clone() };
+            let manifest = s.mods.clone();
+            Ok((name, mods, manifest, Some(s)))
+        }
+        transfer::Kind::Profile => {
+            let p = profiles::load(&ctx.paths, source)?;
+            Ok((p.name.clone(), p.mods.iter().filter(|m| !m.implicit).map(transfer::SourceMod::from_profile).collect(), vec![], None))
+        }
+    }
+}
+
+/// The assistant's review step: every mod of source and target in its case. `target = None` plans for a
+/// new, empty profile (server kind: a clean server profile; profile kind: an empty copy).
+#[tauri::command]
+pub async fn transfer_plan(ctx: State<'_, AppCtx>, kind: transfer::Kind, source: String, target: Option<String>) -> Result<TransferPlan> {
+    let index = ctx.ensure_index().await.ok();
+    let (source_name, mods, _, _) = transfer_source(&ctx, kind, &source, false).await?;
+    let target_profile = match &target {
+        Some(n) => profiles::load(&ctx.paths, n)?,
+        None => Profile::default(),
+    };
+    let items = transfer::plan(kind, &target_profile, &mods, &|id| side_of(index.as_deref(), id));
+    Ok(TransferPlan { source_name, target_exists: target.is_some(), items })
+}
+
+/// The assistant's last step. An existing target is snapshotted first; a new one is created (server
+/// kind: carrying the source's link). The target becomes the active profile; `install` starts the sync.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn transfer_run(
+    app: AppHandle,
+    ctx: State<'_, AppCtx>,
+    kind: transfer::Kind,
+    source: String,
+    target: Option<String>,
+    new_name: Option<String>,
+    choices: Vec<transfer::Choice>,
+    with_configs: bool,
+    install: bool,
+) -> Result<AppState> {
+    let index = ctx.ensure_index().await.ok();
+    let (source_name, mods, manifest, server_state) = transfer_source(&ctx, kind, &source, with_configs).await?;
+    let guard = ctx.sync.lock.lock().await;
+    let name = match target {
+        Some(n) => {
+            profiles::snapshot(&ctx.paths, &n, "transfer")?;
+            n
+        }
+        None => {
+            let base = new_name.filter(|n| !n.trim().is_empty()).unwrap_or_else(|| source_name.clone());
+            let name = profiles::create(&ctx.paths, &profiles::unique_name(&ctx.paths, &base))?;
+            if kind == transfer::Kind::Server {
+                let mut p = profiles::load(&ctx.paths, &name)?;
+                p.server = Some(ServerLink { last_adopted: None, ..link_of(&ctx, &source)? });
+                profiles::save(&ctx.paths, &p)?;
+            }
+            name
+        }
+    };
+    let mut p = profiles::load(&ctx.paths, &name)?;
+    let items = transfer::plan(kind, &p, &mods, &|id| side_of(index.as_deref(), id));
+    let copy_local = transfer::apply(kind, &mut p, &items, &choices, &manifest, &mods);
+    if let Some(s) = server_state {
+        if let Some(l) = p.server.as_mut() {
+            if !s.info.name.is_empty() {
+                l.name = s.info.name.clone();
+            }
+            l.last_adopted = Some(s.adopted.clone());
+        }
+        profiles::save(&ctx.paths, &p)?;
+        write_configs(&ctx, &name, s.configs)?;
+    } else {
+        profiles::save(&ctx.paths, &p)?;
+        for id in copy_local {
+            let (from, to) = (ctx.paths.local_dir(&source).join(&id), ctx.paths.local_dir(&name).join(&id));
+            if from.is_dir() {
+                if to.exists() {
+                    std::fs::remove_dir_all(&to)?;
+                }
+                profiles::copy_dir(&from, &to)?;
+            }
+        }
+    }
+    prune_local_copies(&ctx.paths, &name, &p.mods);
+    profiles::set_active(&ctx.paths, &name)?;
+    drop(guard);
+    if install {
+        request_sync(&app, &name, false);
+    }
+    build_state(&ctx)
+}
+
+/// "Override": the server's mods become editable in this profile (the player takes the risk).
+#[tauri::command]
+pub fn set_profile_override(ctx: State<'_, AppCtx>, profile: String, on: bool) -> Result<AppState> {
+    let mut p = profiles::load(&ctx.paths, &profile)?;
+    p.override_locks = on;
+    profiles::save(&ctx.paths, &p)?;
+    build_state(&ctx)
+}
+
+/// Puts the newest snapshot of the profile back (mod list, installed.json, config folder) and repairs the
+/// installation. The state being replaced is snapshotted first, so a restore can itself be undone.
+#[tauri::command]
+pub async fn restore_snapshot(app: AppHandle, ctx: State<'_, AppCtx>, profile: String) -> Result<AppState> {
+    let root = ctx.paths.profile_dir(&profile).join(profiles::SNAPSHOT_DIR);
+    let mut all: Vec<PathBuf> =
+        std::fs::read_dir(&root).map(|rd| rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).collect()).unwrap_or_default();
+    all.sort();
+    let Some(snap) = all.pop() else {
+        return Err(AppError::NotFound("This profile has no backup yet.".into()));
+    };
+    let guard = ctx.sync.lock.lock().await;
+    profiles::snapshot(&ctx.paths, &profile, "before-restore")?;
+    for file in ["profile.json", "installed.json"] {
+        let src = snap.join(file);
+        if src.is_file() {
+            std::fs::copy(&src, ctx.paths.profile_dir(&profile).join(file))?;
+        }
+    }
+    let cfg = ctx.paths.config_dir(&profile);
+    if snap.join("config").is_dir() {
+        if cfg.is_dir() {
+            std::fs::remove_dir_all(&cfg)?;
+        }
+        profiles::copy_dir(&snap.join("config"), &cfg)?;
+    }
+    // The snapshot keeps the name it was taken under; the folder decides.
+    let mut p = profiles::load(&ctx.paths, &profile)?;
+    p.name = profile.clone();
+    profiles::save(&ctx.paths, &p)?;
+    drop(guard);
+    request_sync(&app, &profile, true);
+    build_state(&ctx)
+}
+
 /// Rewrites the profile (or a fresh clone named `into_new`) to the server manifest, every entry explicit and
 /// pinned, optionally with the server's config files, then syncs. The clone becomes the active profile.
 /// `install = Some(false)` rewrites the profile and links it but starts no download yet ("Add server…"
@@ -879,29 +1128,7 @@ pub async fn adopt_server(
     install: Option<bool>,
 ) -> Result<AppState> {
     let link = link_of(&ctx, &profile)?;
-    // (server info, mods, config files, what to remember as adopted)
-    let (info, mods, configs, adopted) = match gist_of(&ctx, &link)? {
-        Some((m, key)) => {
-            let s = gistsync::read_server(&m, &key).await?.ok_or_else(|| AppError::Network("The server has not written to the gist yet.".into()))?;
-            // No lock yet (a companion before its first release) is not "the server runs nothing": adopting
-            // that would uninstall every server mod.
-            let manifest = s.manifest.ok_or_else(|| AppError::Invalid("The server has not published a mod list yet.".into()))?;
-            let adopted = format!("{}:{}", manifest.hash, gistsync::config_hash(&s.configs));
-            let configs = if with_configs { s.configs.iter().filter_map(|c| server::decode_config(c).map(|b| (c.path.clone(), b))).collect() } else { vec![] };
-            (s.server, manifest.mods, configs, adopted)
-        }
-        None => {
-            let m = server::fetch_manifest(&ctx.client, &link).await?;
-            let configs = if with_configs {
-                let bytes = server::fetch_bytes(&ctx.client, &format!("{}/api/profile.r2z", server::normalize_url(&link.url)?)).await?;
-                share::read_r2z(&bytes)?.configs
-            } else {
-                vec![]
-            };
-            let adopted = server::adopted_stamp(&m.hash, &m.configs);
-            (m.server, m.mods, configs, adopted)
-        }
-    };
+    let ServerState { info, mods, configs, adopted } = fetch_server_state(&ctx, &link, with_configs).await?;
     let guard = ctx.sync.lock.lock().await;
     let target = match into_new {
         Some(name) => {
@@ -923,12 +1150,7 @@ pub async fn adopt_server(
         s.last_adopted = Some(adopted);
     }
     profiles::save(&ctx.paths, &p)?;
-    let dir = ctx.paths.config_dir(&target);
-    for (rel, bytes) in configs {
-        let Ok(dest) = crate::util::safe_join(&dir, &rel) else { continue };
-        std::fs::create_dir_all(dest.parent().unwrap())?;
-        std::fs::write(dest, bytes)?;
-    }
+    write_configs(&ctx, &target, configs)?;
     drop(guard);
     if install.unwrap_or(true) {
         request_sync(&app, &target, false);

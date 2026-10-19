@@ -8,6 +8,7 @@
 	import { formatBytes, formatDate, formatNumber, relativeTime } from "#lib/format.js";
 	import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 	import Maximize2 from "@lucide/svelte/icons/maximize-2";
+	import Lock from "@lucide/svelte/icons/lock";
 	import { describeIssue } from "#lib/health.js";
 	import { t } from "#lib/i18n/index.svelte.js";
 	import { cn } from "@vmm/ui/utils.js";
@@ -51,6 +52,8 @@
 	const status = $derived(id ? store.modStatus(id) : "none");
 	const mod = $derived(id ? store.modsMap.get(id) : undefined);
 	const update = $derived(id ? store.state.updates[id] : undefined);
+	/** Server-managed while the profile's Override is off: no remove, no other version from here. */
+	const locked = $derived(!!id && store.isLocked(id));
 	const latest = $derived(pkg?.versions[0]);
 	const docTabs = $derived<SegmentOption[]>([
 		{ value: "readme", label: t("detail.tabReadme") },
@@ -109,7 +112,14 @@
 			{/each}
 			<!-- one store link, or two when both stores list the package -->
 			<div class={cn("grid grid-cols-1 gap-2", pkg.url && pkg.hx_url ? "@sm:grid-cols-[minmax(0,1fr)_auto_auto]" : "@sm:grid-cols-[minmax(0,1fr)_auto]")}>
-				<Button class="min-w-0" variant={mod && status !== "update" ? "outline" : "default"} onclick={primary}>
+				<Button
+					class="min-w-0"
+					variant={mod && status !== "update" ? "outline" : "default"}
+					disabled={locked}
+					title={locked ? t("detail.locked") : undefined}
+					onclick={primary}
+				>
+					{#if locked}<Lock class="size-3.5" />{/if}
 					{status === "update" ? t("detail.updateTo", { v: update ?? "" }) : mod ? t("detail.remove") : t("detail.add")}
 				</Button>
 				{#if pkg.url}<Button variant="outline" onclick={() => store.openExternal(pkg!.url)}>{t("detail.thunderstore")}</Button>{/if}
@@ -128,10 +138,15 @@
 			<ModDocs {pkg} tab={activeTab} {wiki} />
 		{:else}
 			<div class="grid grid-cols-2 gap-x-3 gap-y-3 border-b px-5 py-3 @sm:grid-cols-4">
-				<Stat label={t("detail.downloads")} value={formatNumber(pkg.dl)} />
-				<Stat label={t("detail.rating")} value={`★ ${formatNumber(pkg.rating)}`} />
+				<!-- A local mod has no store numbers: only its file size is a fact. -->
+				{#if pkg.ns !== "local"}
+					<Stat label={t("detail.downloads")} value={formatNumber(pkg.dl)} />
+					<Stat label={t("detail.rating")} value={`★ ${formatNumber(pkg.rating)}`} />
+				{/if}
 				<Stat label={t("detail.size")} value={latest ? formatBytes(latest.size) : "—"} />
-				<Stat label={t("detail.usedBy")} value={formatNumber(store.byId.get(id)?.ndependants ?? 0)} />
+				{#if pkg.ns !== "local"}
+					<Stat label={t("detail.usedBy")} value={formatNumber(store.byId.get(id)?.ndependants ?? 0)} />
+				{/if}
 			</div>
 
 			{#if pkg.cats.length}
@@ -169,7 +184,7 @@
 						<span class="text-muted-foreground min-w-0 flex-1 truncate" title={formatDate(v.date)}>{relativeTime(v.date)}</span>
 						{#if mod?.version === v.v}<span class="text-success text-meta shrink-0">{t("detail.installed")}</span>
 						{:else if i === 0}<span class="text-primary text-meta shrink-0">{t("detail.latest")}</span>{/if}
-						{#if mod?.version !== v.v}
+						{#if mod?.version !== v.v && !locked}
 							<Button size="sm" variant="ghost" class="invisible h-6 shrink-0 group-hover:visible" onclick={() => store.toggleMod(id!, v.v)}
 								>{t("detail.pick")}</Button
 							>

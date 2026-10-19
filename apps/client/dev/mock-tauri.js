@@ -149,28 +149,57 @@
 	resolved[JOT].requiredBy = [inProfile[5]];
 	const SERVER_LIB = slim[60].id;
 	resolved[SERVER_LIB] = { version: slim[60].ver, requiredBy: [] };
+	const LOCAL_PKG = {
+		id: "local-BetterMouseTweaks",
+		ns: "local",
+		name: "BetterMouseTweaks",
+		desc: "Minecraft-style inventory mouse handling: Ctrl-sweep stacks, scroll-wheel transfer to chests. Client only.",
+		icon:
+			"data:image/svg+xml;utf8," +
+			encodeURIComponent(
+				'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#2b3a4a"/><rect x="22" y="10" width="20" height="44" rx="10" fill="#d8dee9"/><rect x="30" y="16" width="4" height="10" rx="2" fill="#2b3a4a"/></svg>',
+			),
+		cats: [],
+		rating: 0,
+		dl: 0,
+		upd: NOW - 2 * DAY,
+		created: NOW - 2 * DAY,
+		dep: false,
+		nsfw: false,
+		pinned: false,
+		url: "",
+		web: "https://github.com/drloloto/BetterMouseTweaksValheim",
+		stores: [],
+		versions: [{ v: "1.0.0", deps: [`${BEP}-5.4.2351`], size: 26461, date: NOW - 2 * DAY, src: "thunderstore", dl: "" }],
+	};
+	resolved[LOCAL_PKG.id] = { version: "1.0.0", requiredBy: [] };
 	const state = {
 		profiles: ["Hardcore", "Vanilla+", "Bauen"],
 		active: "Hardcore",
 		server: { url: "http://10.10.10.123:9002", name: "PetersWelte", hasToken: true, gist: false, hasGistToken: false },
-		mods: inProfile.map((id, i) => ({
-			namespace: byId.get(id).ns,
-			name: byId.get(id).name,
-			version: byId.get(id).ver,
-			enabled: i % 9 !== 0,
-			source: "thunderstore",
-			pinned: i === 7,
-			// every fourth mod is listed by the linked server (Installed shows "Server" as its source)
-			managed: i % 4 === 1,
-		})),
+		mods: inProfile
+			.map((id, i) => ({
+				namespace: byId.get(id).ns,
+				name: byId.get(id).name,
+				version: byId.get(id).ver,
+				enabled: i % 9 !== 0,
+				source: "thunderstore",
+				pinned: i === 7,
+				// every fourth mod is listed by the linked server (Installed shows "Server" as its source)
+				managed: i % 4 === 1,
+			}))
+			.concat([{ namespace: "local", name: LOCAL_PKG.name, version: "1.0.0", enabled: true, source: "local" }]),
 		// Jotunn is resolved as a dependency but not installed: shows the readiness banner and the Play gate.
-		installed: Object.fromEntries([BEP, SERVER_LIB, ...inProfile].map((id) => [id, byId.get(id).ver])),
+		installed: { ...Object.fromEntries([BEP, SERVER_LIB, ...inProfile].map((id) => [id, byId.get(id).ver])), [LOCAL_PKG.id]: "1.0.0" },
 		plan: { resolved, toInstall: [{ id: JOT, to: byId.get(JOT).ver }], toRemove: [], errors: [] },
 		updates,
 		indexAge: 240000,
 		sync: { running: false, queued: false },
 		game: { valheimDir: "C:\\Steam\\steamapps\\common\\Valheim", found: true, lastUpdated: NOW - 30 * DAY, buildId: "25730771" },
 		implicitMods: [SERVER_LIB],
+		// a mod imported from a zip: icon, description and docs come from the file (localmod.rs)
+		localMods: [LOCAL_PKG],
+		overrides: [],
 		profileMods: { Hardcore: inProfile, "Vanilla+": slim.slice(30, 60).map((p) => p.id), Bauen: slim.slice(100, 110).map((p) => p.id) },
 		health: [
 			{ kind: "duplicate", ids: [inProfile[0], inProfile[1]], detail: "Shared.dll" },
@@ -196,6 +225,7 @@
 		get_index: () => new TextEncoder().encode(JSON.stringify({ fetchedAt: NOW - 240000, packages: slim })).buffer,
 		refresh_index: () => NOW,
 		get_package: ({ id }) => {
+			if (id === LOCAL_PKG.id) return LOCAL_PKG;
 			const p = byId.get(id);
 			if (!p) throw { message: `Package not found: ${id}`, kind: "notFound" };
 			return {
@@ -210,6 +240,8 @@
 			};
 		},
 		get_package_doc: ({ id, kind }) => {
+			if (id === LOCAL_PKG.id)
+				return kind === "changelog" ? "## 1.0.0\n\n- first release" : `# ${LOCAL_PKG.name}\n\n${LOCAL_PKG.desc}\n\nRead from the zip's README.md.`;
 			const p = byId.get(id);
 			if (!p) throw { message: `Package not found: ${id}`, kind: "notFound" };
 			if (kind === "changelog")
@@ -320,6 +352,68 @@
 			},
 		}),
 		adopt_server: ({ intoNew }) => (intoNew ? { ...state, profiles: [...state.profiles, intoNew], active: intoNew } : state),
+		// The transfer assistant. Server kind: the mock server's lock vs the profile (one version change, one new
+		// mod, one dropped, the player's own and the local mod as extras). Profile kind: an additive copy.
+		transfer_plan: ({ kind, source, target }) => {
+			const item = (id, c, extra = {}) => {
+				const p = byId.get(id) ?? LOCAL_PKG;
+				return {
+					id,
+					ns: p.ns,
+					name: p.name,
+					case: c,
+					from: null,
+					to: null,
+					local: false,
+					locked: false,
+					managed: kind === "server",
+					side: null,
+					decision: "take",
+					choices: ["take"],
+					...extra,
+				};
+			};
+			if (kind === "server") {
+				const mods = target ? state.mods : [];
+				const items = [];
+				for (const m of mods) {
+					const id = `${m.namespace}-${m.name}`;
+					if (m.source === "local")
+						items.push(item(id, "extra", { from: m.version, local: true, managed: false, decision: "keep", choices: ["keep", "remove"] }));
+					else if (id === inProfile[0]) items.push(item(id, "version", { from: m.version, to: "9.9.9" }));
+					else if (id === inProfile[1]) items.push(item(id, "dropped", { from: m.version, managed: false, choices: ["take", "keep"] }));
+					else if (m.managed) items.push(item(id, "same", { from: m.version, to: m.version }));
+					else
+						items.push(
+							item(id, "extra", {
+								from: m.version,
+								managed: false,
+								side: id.length % 3 === 0 ? "server" : id.length % 3 === 1 ? "client" : null,
+								decision: "keep",
+								choices: ["keep", "remove"],
+							}),
+						);
+				}
+				const adds = target ? [slim[50]] : slim.slice(2, 12);
+				for (const p of adds) items.push(item(p.id, "add", { to: p.ver }));
+				return { sourceName: "PetersWelte", targetExists: !!target, items };
+			}
+			const have = new Set(target ? (state.profileMods[target] ?? []) : []);
+			const items = (state.profileMods[source] ?? []).map((id) => {
+				const p = byId.get(id);
+				if (!have.has(id)) return item(id, "add", { to: p.ver, decision: "take", choices: ["take", "keep"] });
+				return id === inProfile[5]
+					? item(id, "version", { from: "0.9.0", to: p.ver, choices: ["take", "keep"] })
+					: item(id, "same", { from: p.ver, to: p.ver, decision: "keep", choices: ["keep"] });
+			});
+			return { sourceName: source, targetExists: !!target, items };
+		},
+		transfer_run: ({ target, newName }) => {
+			const name = target ?? newName ?? "PetersWelte";
+			return target ? { ...state, active: target } : { ...state, profiles: [...state.profiles, name], active: name };
+		},
+		set_profile_override: ({ profile, on }) => ({ ...state, overrides: on ? [...state.overrides, profile] : state.overrides.filter((p) => p !== profile) }),
+		restore_snapshot: () => state,
 		check_all_servers: () => [{ profile: "Vanilla+", check: handlers.check_server() }],
 		discover_server: ({ url }) => {
 			const code = /vmm1\.[0-9a-f]{20,40}\.[A-Za-z0-9_-]{43}/.exec(url)?.[0];

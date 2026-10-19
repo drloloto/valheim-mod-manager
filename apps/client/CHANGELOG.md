@@ -18,6 +18,21 @@ All notable changes to this project are documented here. The format follows
   applied, in the server chip's tooltip, the server dialog and the profile manager's Server & Sync tab. The
   companion records it in the lock when a release is applied; older locks show "no release recorded yet".
 
+- The transfer assistant: linking a server, "Copy mods…" and "Compare with server…" in the profile manager,
+  and "Add server…" into an existing profile all show every mod in its case before anything changes:
+  installed, version change, becomes server-managed, removed by the server (remove or keep as yours), only
+  in your profile (keep as a client-side mod or remove, with a warning for server-side mods). The target is
+  an existing profile or a new one; an existing profile is backed up first and "Restore last backup" in the
+  profile manager brings it back.
+
+- Server-managed mods are locked: no remove, no other version, no disable, no pin change, in the table, the
+  selection bar, the context menu and the detail pane, and the Rust side refuses such edits too. The new
+  "Override" switch in a profile's general settings lifts the lock for that profile, with the risk spelled
+  out.
+
+- Local mods (imported zips) carry their icon, description, website, readme and changelog, read from the
+  zip; mods imported earlier get their metadata on the next start.
+
 ### Fixed
 
 - A mod the server dropped was never uninstalled: the comparison counted it as the player's own extra and

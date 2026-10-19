@@ -131,7 +131,11 @@ pub fn extract_zip(zip_path: &Path, profile_dir: &Path, id: &str) -> Result<Vec<
 /// Local mod: if `src_dir` contains a zip it is extracted, otherwise all files are
 /// copied to `BepInEx/plugins/<id>/`.
 pub fn install_local(src_dir: &Path, profile_dir: &Path, id: &str) -> Result<Vec<String>> {
-    let files: Vec<PathBuf> = std::fs::read_dir(src_dir)?.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_file()).collect();
+    let files: Vec<PathBuf> = std::fs::read_dir(src_dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.file_name().is_some_and(|n| n != "meta.json"))
+        .collect();
     if let Some(zip) = files.iter().find(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("zip"))) {
         return extract_zip(zip, profile_dir, id);
     }

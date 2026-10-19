@@ -18,6 +18,7 @@ mod settings;
 mod share;
 mod sync;
 mod thunderstore;
+mod transfer;
 mod util;
 
 use commands::AppCtx;
@@ -120,6 +121,10 @@ pub fn run() {
             commands::check_all_servers,
             commands::discover_server,
             commands::adopt_server,
+            commands::transfer_plan,
+            commands::transfer_run,
+            commands::set_profile_override,
+            commands::restore_snapshot,
             commands::publish_profile,
             commands::publish_gist,
             commands::invite_link,

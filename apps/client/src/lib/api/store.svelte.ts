@@ -53,7 +53,22 @@ import type {
 	WikiIndex,
 } from "./types";
 import { formatDateTime } from "#lib/format.js";
-import type { AppState, ExportResult, FolderKind, ImportResult, Pkg, ProfileMod, Settings, SlimPkg, SyncDone, SyncProgress } from "./types";
+import type {
+	AppState,
+	ExportResult,
+	FolderKind,
+	ImportResult,
+	Pkg,
+	ProfileMod,
+	Settings,
+	SlimPkg,
+	SyncDone,
+	SyncProgress,
+	TransferChoice,
+	TransferKind,
+	TransferPlan,
+} from "./types";
+import { lockedIds } from "#lib/transfer-view.js";
 
 export type ToastKind = "ok" | "err" | "info";
 
@@ -63,6 +78,33 @@ export function modId(m: { namespace: string; name: string }): string {
 
 function errorMessage(e: unknown, fallback: string): string {
 	return e instanceof Error && e.message ? e.message : fallback;
+}
+
+/** A local mod's package as an index row, so the table and the detail pane read it like any other. */
+function slimOf(p: Pkg): SlimPkg {
+	const v = p.versions[0];
+	return {
+		id: p.id,
+		ns: p.ns,
+		name: p.name,
+		desc: p.desc,
+		icon: p.icon,
+		ver: v?.v ?? "0.0.0",
+		cats: p.cats,
+		rating: p.rating,
+		dl: p.dl,
+		upd: p.upd,
+		dep: p.dep,
+		nsfw: p.nsfw,
+		pinned: p.pinned,
+		ndeps: v?.deps.length ?? 0,
+		size: v?.size ?? 0,
+		created: p.created,
+		nver: p.versions.length,
+		deps: (v?.deps ?? []).map((d) => d.split("-").slice(0, -1).join("-")),
+		ndependants: 0,
+		stores: p.stores,
+	};
 }
 
 const EMPTY_STATE: AppState = {
@@ -78,6 +120,8 @@ const EMPTY_STATE: AppState = {
 	game: { valheimDir: null, found: true, lastUpdated: null, buildId: null },
 	profileMods: {},
 	implicitMods: [],
+	localMods: [],
+	overrides: [],
 	health: [],
 	app: { version: "", portable: false, dev: false, dataDir: "" },
 };
@@ -201,7 +245,14 @@ class ModManagerStore {
 	state = $state<AppState>(EMPTY_STATE);
 	loaded = $state(false);
 	packages = $state.raw<SlimPkg[]>([]);
-	byId = $state.raw<Map<string, SlimPkg>>(new Map());
+	indexById = $state.raw<Map<string, SlimPkg>>(new Map());
+	/** Every package the UI may name: the index plus the active profile's local mods (icon, description from their zip). */
+	byId = $derived.by((): Map<string, SlimPkg> => {
+		if (!this.state.localMods.length) return this.indexById;
+		const m = new Map(this.indexById);
+		for (const p of this.state.localMods) m.set(p.id, slimOf(p));
+		return m;
+	});
 	indexFetchedAt = $state<number | null>(null);
 	indexLoading = $state(false);
 	indexError = $state<string | null>(null);
@@ -218,6 +269,25 @@ class ModManagerStore {
 	};
 
 	modsMap = $derived(new Map(this.state.mods.map((m) => [modId(m), m])));
+	/** The active profile's Override: the server's mods may be edited. */
+	overrideOn = $derived(!!this.state.active && this.state.overrides.includes(this.state.active));
+	/** Server-managed mods that cannot be removed, re-versioned, disabled or unpinned right now. */
+	locked = $derived(lockedIds(this.state.mods, this.overrideOn));
+	isLocked(id: string): boolean {
+		return this.locked.has(id);
+	}
+	/** Drops locked ids from an edit and says so once; the Rust side refuses them anyway. */
+	private unlocked(ids: string[]): string[] {
+		const free = ids.filter((id) => !this.locked.has(id));
+		const n = ids.length - free.length;
+		if (n) this.toast(t("toast.locked", { n }), "info");
+		return free;
+	}
+	/** The transfer assistant: a server link or a profile copy being reviewed. */
+	transfer = $state<{ kind: TransferKind; source: string; target: string | null } | null>(null);
+	openTransfer(kind: TransferKind, source: string, target: string | null) {
+		this.transfer = { kind, source, target };
+	}
 	syncing = $derived(this.state.sync.running || this.syncProgress !== null);
 	/** Missing installations and resolver errors of the active profile; Play asks before starting an incomplete profile. */
 	readiness = $derived(computeReadiness(this.state, this.syncing));
@@ -436,9 +506,63 @@ class ModManagerStore {
 			c?.reachable ? t("toast.serverLinked", { name: c.name || url }) : t("server.unreachable", { error: c?.error ?? "" }),
 			c?.reachable ? "ok" : "err",
 		);
-		// A profile that differs from the server is shown the comparison now, with "adopt" in reach.
-		if (c?.reachable && !c.inSync) this.showServer("diff");
+		// A freshly linked profile walks through the assistant: what the server adds, changes, locks, and what
+		// stays the player's own. A re-saved link on an adopted, in-sync profile has nothing to review.
+		const adopted = this.state.mods.some((m) => m.managed);
+		if (c?.reachable && (!c.inSync || !adopted)) this.openTransfer("server", active, active);
 		return true;
+	}
+
+	/** "Add server…" into an existing profile: link it, make it active, then review in the assistant. */
+	async linkExisting(d: ServerDiscovery, profile: string): Promise<boolean> {
+		const fail = t("toast.serverLinkFailed");
+		if (profile !== this.state.active && !(await this.applyState(() => api.activateProfile(profile), fail))) return false;
+		const link: ServerLink = d.syncCode ? { url: "", name: d.name, syncCode: d.syncCode } : { url: d.url, name: d.name };
+		if (!(await this.applyState(() => api.setServerLink(profile, link), fail))) return false;
+		void this.refreshServerStatus();
+		this.openTransfer("server", profile, profile);
+		return true;
+	}
+
+	async planTransfer(kind: TransferKind, source: string, target: string | null): Promise<TransferPlan | null> {
+		try {
+			return await api.transferPlan(kind, source, target);
+		} catch (e) {
+			this.toast(errorMessage(e, t("toast.transferFailed")), "err");
+			return null;
+		}
+	}
+
+	/** The assistant's last step; the target becomes the active profile. */
+	async runTransfer(
+		kind: TransferKind,
+		source: string,
+		target: string | null,
+		newName: string | null,
+		choices: TransferChoice[],
+		withConfigs: boolean,
+		install: boolean,
+	): Promise<boolean> {
+		const before = this.state.active;
+		const ok = await this.applyState(() => api.transferRun(kind, source, target, newName, choices, withConfigs, install), t("toast.transferFailed"));
+		if (ok) {
+			const name = this.state.active ?? target ?? "";
+			this.toast(t(install ? "toast.transferDone" : "toast.transferSaved", { name }), "ok");
+			if (before) delete this.serverUpdates[before];
+			void this.refreshServerStatus();
+		}
+		return ok;
+	}
+
+	async setOverride(profile: string, on: boolean): Promise<boolean> {
+		return this.applyState(() => api.setProfileOverride(profile, on), t("toast.saveFailed"));
+	}
+
+	/** Puts the profile's newest backup (.snapshots) back and repairs the installation. */
+	async restoreSnapshot(profile: string): Promise<boolean> {
+		const ok = await this.applyState(() => api.restoreSnapshot(profile), t("toast.restoreFailed"));
+		if (ok) this.toast(t("toast.restored", { name: profile }), "ok");
+		return ok;
 	}
 
 	async unlinkServer() {
@@ -623,7 +747,7 @@ class ModManagerStore {
 			const data = await api.index(this.indexFetchedAt);
 			if (data) {
 				this.packages = data.packages;
-				this.byId = new Map(data.packages.map((p) => [p.id, p]));
+				this.indexById = new Map(data.packages.map((p) => [p.id, p]));
 				this.indexFetchedAt = data.fetchedAt;
 			}
 		} catch (e) {
@@ -705,6 +829,7 @@ class ModManagerStore {
 
 	/** Plus button / detail panel: add, remove or set a version. */
 	async toggleMod(id: string, version?: string) {
+		if (this.locked.has(id) && !this.unlocked([id]).length) return;
 		const { p, m, update } = this.status(id);
 		if (m && !update && !version) return this.removeMod(id);
 		if (m) {
@@ -718,7 +843,7 @@ class ModManagerStore {
 	}
 
 	removeMod(id: string) {
-		return this.setMods(this.state.mods.filter((x) => modId(x) !== id));
+		return this.removeMods([id]);
 	}
 
 	/** Every update goes through the "what changed" dialog first. */
@@ -742,6 +867,7 @@ class ModManagerStore {
 	}
 
 	togglePin(id: string) {
+		if (!this.unlocked([id]).length) return Promise.resolve(false);
 		return this.setMods(this.state.mods.map((x) => (modId(x) === id ? { ...x, pinned: !x.pinned } : x)));
 	}
 
@@ -758,7 +884,7 @@ class ModManagerStore {
 	}
 
 	async removeMods(ids: string[]) {
-		const drop = new Set(ids);
+		const drop = new Set(this.unlocked(ids));
 		const next = this.state.mods.filter((m) => !drop.has(modId(m)));
 		if (next.length === this.state.mods.length) return;
 		await this.setMods(next);
@@ -775,13 +901,13 @@ class ModManagerStore {
 
 	async setEnabled(id: string, enabled: boolean) {
 		const active = this.state.active;
-		if (!active) return;
+		if (!active || !this.unlocked([id]).length) return;
 		await this.applyState(() => api.setModEnabled(active, id, enabled), t("toast.toggleFailed"));
 	}
 
 	/** Multi-select: enable or disable mods in one step. */
 	async setEnabledMany(ids: string[], enabled: boolean) {
-		const pick = new Set(ids);
+		const pick = new Set(this.unlocked(ids));
 		const next = this.state.mods.map((m) => (pick.has(modId(m)) ? { ...m, enabled } : m));
 		if (!next.some((m, i) => m.enabled !== this.state.mods[i].enabled)) return;
 		await this.setMods(next);

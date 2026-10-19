@@ -265,6 +265,10 @@ export interface AppState {
 	profileMods: Record<string, string[]>;
 	/** Adopted from the server as its dependencies: pinned, shown as dependencies even when nothing local needs them. */
 	implicitMods: string[];
+	/** The active profile's local (imported) mods as packages: icon, description, website from the zip. */
+	localMods: Pkg[];
+	/** Profiles whose Override is on: the server's mods are editable there. */
+	overrides: string[];
 	health: HealthIssue[];
 	app: AppInfo;
 }
@@ -390,3 +394,44 @@ export interface ConfigChange {
 }
 
 export type FolderKind = "profile" | "game" | "config" | "data";
+
+// ---- Transfer assistant (server link or profile copy) ----
+
+export type TransferKind = "server" | "profile";
+/** add: in the source only · same: same version · version: other version · dropped: server-managed, no longer on the server · extra: in the target only */
+export type TransferCase = "add" | "same" | "version" | "dropped" | "extra";
+/** take: apply the source (install, set version, or remove a dropped one) · keep: leave the target entry · remove: drop an extra */
+export type TransferDecision = "take" | "keep" | "remove";
+export type ModSide = "server" | "client";
+
+export interface TransferItem {
+	id: string;
+	ns: string;
+	name: string;
+	case: TransferCase;
+	/** The target's version before; null for `add`. */
+	from: string | null;
+	/** The source's version; null for `dropped` and `extra`. */
+	to: string | null;
+	/** A local (imported) mod: never on a server, copied with its files between profiles. */
+	local: boolean;
+	/** Server-managed in the target while its Override is off: cannot change. */
+	locked: boolean;
+	/** Server-managed after the transfer. */
+	managed: boolean;
+	side: ModSide | null;
+	decision: TransferDecision;
+	choices: TransferDecision[];
+}
+
+export interface TransferPlan {
+	/** The server's name, or the source profile. */
+	sourceName: string;
+	targetExists: boolean;
+	items: TransferItem[];
+}
+
+export interface TransferChoice {
+	id: string;
+	decision: TransferDecision;
+}

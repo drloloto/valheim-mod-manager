@@ -141,6 +141,10 @@ pub struct Profile {
     pub mods: Vec<ProfileMod>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server: Option<ServerLink>,
+    /// "Override": the player may change the server's mods (remove, other version, disable) in this profile.
+    /// Off by default; the UI and `set_mods` lock managed entries while it is off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub override_locks: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
