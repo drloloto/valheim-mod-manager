@@ -5,7 +5,8 @@
 #
 #   valheim-mod-manager/apps/companion/install.sh              check only: what would happen (changes nothing)
 #   valheim-mod-manager/apps/companion/install.sh install      add the companion; the game keeps running, players stay connected
-#   valheim-mod-manager/apps/companion/install.sh update       rebuild and restart only the companion (after a git pull)
+#   valheim-mod-manager/apps/companion/install.sh update       rebuild and restart only the companion (after a git pull);
+#                                                              an install from the old companion repository is moved to this checkout
 #   valheim-mod-manager/apps/companion/install.sh status       check the running companion against the game
 #   valheim-mod-manager/apps/companion/install.sh uninstall    remove the companion; its data (config/modmanager, backups/) stays
 #
@@ -270,10 +271,38 @@ do_install() {
 	echo "  Remove: bash $0 uninstall"
 }
 
+# ---- 3. update: an older install builds from the old companion repository ----
+# The install.sh of the old repository wrote `build: "./companion"` (its checkout next to the compose file). The
+# image now builds from this repository's root, so only that block is rewritten; every other line of the file
+# (an admin's own environment entries, ports, comments) stays as it is. A `build:` block is left alone.
+migrate_compose_file() {
+	OLD_CHECKOUT=""
+	local old repo before after
+	old=$(sed -n 's/^    build: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "$FILE" | head -n1)
+	[ -n "$old" ] || return 0
+	repo=${COMPANION_REL%/apps/companion}
+	step "Moving $FILE to this checkout"
+	before=$(docker compose config "$SERVICE" 2>/dev/null)
+	cp -p "$FILE" "$FILE.before-update"
+	awk -v repo="$repo" '
+		/^    build: / && !done { print "    build:"; print "      context: \"" repo "\""; print "      dockerfile: \"apps/companion/Dockerfile\""; done = 1; next }
+		{ print }' "$FILE.before-update" >"$FILE.tmp" && mv "$FILE.tmp" "$FILE"
+	after=$(docker compose config "$SERVICE" 2>/dev/null)
+	if ! docker compose config -q >/dev/null 2>&1 || [ "$before" != "$after" ]; then
+		cat "$FILE.before-update" >"$FILE"
+		rm -f "$FILE.before-update"
+		fail "the rewritten $FILE did not parse or changed the game service; the file is as before"
+	fi
+	ok "$FILE now builds the image from $repo (was: $old; the previous file is $FILE.before-update)"
+	if [ -d "$old" ] && [ "$(cd "$old" && pwd)" != "$SCRIPT_DIR" ] && [ "$(cd "$old" && pwd)" != "$(cd "$repo" && pwd)" ]; then OLD_CHECKOUT=$old; fi
+	return 0
+}
+
 do_update() {
 	preflight
 	[ "$INSTALLED" = 1 ] || fail "the companion is not installed here; run 'install'"
 	SERVICE=$(sed -n 's/.*VALHEIM_SERVICE=\([^"]*\)".*/\1/p' "$FILE")
+	migrate_compose_file
 	build_image
 	game_state
 	step "Restarting only the companion"
@@ -282,6 +311,9 @@ do_update() {
 	game_unchanged
 	step "Checking that the companion sees the same server as the game"
 	companion_verify || fail "see above"
+	if [ -n "$OLD_CHECKOUT" ]; then
+		echo "  Note:   $OLD_CHECKOUT is the old companion repository; nothing builds from it any more, remove it when you like"
+	fi
 }
 
 do_status() {
@@ -302,7 +334,7 @@ do_uninstall() {
 	confirm "Remove the companion?"
 	docker compose rm -sf companion >/dev/null
 	remove_block
-	rm -f "$FILE"
+	rm -f "$FILE" "$FILE.before-update"
 	ok "companion removed; 'docker image rm $IMAGE' frees its image"
 }
 

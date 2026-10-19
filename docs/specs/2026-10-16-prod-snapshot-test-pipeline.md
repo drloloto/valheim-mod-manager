@@ -48,10 +48,21 @@ tested on that data before the commit, without touching the real server or the i
 - The real server's `plugins/` holds the companion's bare-layout installs (`EpicLoot.dll`, `Jotunn.*`,
   `MapShare.dll`, `Newtonsoft.Json.dll`, …) next to package folders; the takeover scan lists them as
   unidentified by shape, reparse maps them through installed.json and reports the lock in sync.
-- The deployed companion is the old `companion` repository; `install.sh update` from the monorepo expects
-  the checkout at `<compose dir>/valheim-mod-manager/apps/companion`. The migration on the real server
-  needs a new clone next to the old one (or `--dir`), then `install.sh update`; the old `companion/` folder
-  can go afterwards. Not done here.
+- The deployed companion is the old `companion` repository (commit `551ea79`, `compose.companion.yaml` says
+  `build: "./companion"`); `install.sh update` from the monorepo expects the checkout at
+  `<compose dir>/valheim-mod-manager/apps/companion`. The migration on the real server needs a new clone next
+  to the old one (or `--dir`), then `install.sh update`. Since 2026-10-19 `update` rewrites the `build:` block
+  of `compose.companion.yaml` to the monorepo (context `./valheim-mod-manager`, dockerfile
+  `apps/companion/Dockerfile`), keeps every other line, checks that the game service's configuration is
+  unchanged, keeps the previous file as `compose.companion.yaml.before-update` and names the old `companion/`
+  folder as no longer used. Without that, a later `docker compose build` would have rebuilt the old companion
+  from the dead folder.
+- Rehearsal of that update, 2026-10-19, in a scratch folder built like the server: the snapshot's compose
+  file, the old `compose.companion.yaml` and the old `.env` block, the old checkout built and running
+  (reports 0.3.0, 11 mods, game running on the test stack's data), the monorepo as `valheim-mod-manager/`
+  next to the compose file. `install.sh update` from there: file rewritten, image built, companion healthy,
+  game container untouched, verify ok (world, 11 configs, 11 mods); afterwards version 0.3.1, lock hash
+  unchanged, `install.sh status` ok, a second `update` leaves the file alone.
 
 ## Result
 
