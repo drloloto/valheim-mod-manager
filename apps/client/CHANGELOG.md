@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-19
+
 ### Added
 
 - Hexium as a second mod store. The index merges Hexium's package list with Thunderstore's by package id:
@@ -53,6 +55,9 @@ All notable changes to this project are documented here. The format follows
   the toolbar instead of carrying their own.
 - `bun run mock` starts the DEV app together with the browser preview on one dev server; the preview now
   wears the DEV colors and badge like the DEV app. `bun run mock:web` is the browser preview alone.
+- The companion lives in this repository (`apps/companion`). `install.sh update` moves an installation made
+  from the old companion repository to this checkout: only the `build:` block of `compose.companion.yaml`
+  changes, the previous file is kept, the game container is not touched.
 
 ## [0.3.1] - 2026-10-14
 
