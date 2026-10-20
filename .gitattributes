@@ -1,0 +1,17 @@
+# One line ending everywhere: the formatter (Oxfmt through `vp check`) expects LF, and a Windows checkout with
+# core.autocrlf=true (the GitHub runner's default) would otherwise turn every file into a formatting issue.
+* text=auto eol=lf
+
+# Binaries stay bytes.
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.webp binary
+*.gif binary
+*.zip binary
+*.gz binary
+*.dll binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
