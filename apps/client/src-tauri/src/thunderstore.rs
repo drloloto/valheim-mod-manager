@@ -302,7 +302,15 @@ pub fn merge(parts: &Parts) -> Vec<Pkg> {
             p.created = h.created;
         }
         p.nsfw |= h.nsfw;
-        let newer = h.versions.first().zip(p.versions.first()).is_some_and(|(hv, pv)| cmp_version(&hv.v, &pv.v) == Ordering::Greater);
+        let order = h.versions.first().zip(p.versions.first()).map(|(hv, pv)| cmp_version(&hv.v, &pv.v));
+        let newer = order == Some(Ordering::Greater);
+        // Deprecation follows the store with the newer release: a maintainer who moved to Hexium deprecates
+        // the Thunderstore listing and keeps publishing. On a tie, both stores have to say so.
+        p.dep = match order {
+            Some(Ordering::Greater) => h.dep,
+            Some(Ordering::Less) => p.dep,
+            _ => p.dep && h.dep,
+        };
         let mut added = false;
         for v in &h.versions {
             if !p.versions.iter().any(|x| x.v == v.v) {
@@ -812,6 +820,27 @@ mod tests {
         assert_eq!(by["x-Only"], &serde_json::json!(["hexium"]));
         assert_eq!(by["denikson-BepInExPack_Valheim"], &serde_json::json!(["thunderstore", "hexium"]));
         assert_eq!(normalize_category(Store::Thunderstore, "Client-only"), vec!["Client-only"], "Thunderstore's names pass through");
+    }
+
+    #[test]
+    fn deprecation_follows_the_store_with_the_newer_release() {
+        let id = "denikson-BepInExPack_Valheim";
+        let dep_of = |ts: &[Pkg], hx: &[Pkg]| merge(&Parts { thunderstore: ts.to_vec(), hexium: hx.to_vec() }).iter().find(|p| p.id == id).unwrap().dep;
+        let mut ts = parse_raw(RAW.as_bytes()).unwrap();
+        let mut hx = parse_raw_from(HX.as_bytes(), Store::Hexium).unwrap();
+        // The maintainer moved to Hexium: deprecated on Thunderstore, newer and alive on Hexium.
+        ts[0].dep = true;
+        assert!(!dep_of(&ts, &hx));
+        // The same newest release on both: deprecated only when both stores say so.
+        hx[0].versions.retain(|v| v.v != "5.4.2400");
+        assert_eq!((hx[0].versions[0].v.as_str(), ts[0].versions[0].v.as_str()), ("5.4.2351", "5.4.2351"));
+        assert!(!dep_of(&ts, &hx));
+        hx[0].dep = true;
+        assert!(dep_of(&ts, &hx));
+        // Thunderstore has the newer release: Hexium's older mirror cannot revive a deprecated listing.
+        hx[0].dep = false;
+        hx[0].versions[0].v = "5.4.2300".into();
+        assert!(dep_of(&ts, &hx));
     }
 
     /// Network: `cargo test listing_index -- --ignored`. Downloads the real Valheim index both ways.

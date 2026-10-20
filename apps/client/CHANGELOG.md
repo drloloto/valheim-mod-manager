@@ -43,6 +43,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- A mod whose maintainer moved to Hexium (deprecated on Thunderstore, newer releases on Hexium) no longer
+  shows as deprecated and no longer falls under the default "hide deprecated" filter: deprecation follows
+  the store with the newer release, and on a tie both stores have to say so.
 - A mod the server dropped was never uninstalled: the comparison counted it as the player's own extra and
   reported "in sync". It is now its own kind of difference ("the server removed it, adopting uninstalls
   it"), for players and admins alike, on both transports.
