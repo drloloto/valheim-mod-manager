@@ -155,6 +155,8 @@ export interface ServerDiff {
 	/** the server's mods it no longer lists: adoption uninstalls them, a publish would put them back */
 	dropped: ManifestMod[];
 	changed: { id: string; local: string; server: string }[];
+	/** still the server's here, only recommended by the server now: adoption hands them back to the player */
+	optional: ManifestMod[];
 }
 
 /** The release the server's lock came from: id, the name the admin gave it (the profile), when, transport. */

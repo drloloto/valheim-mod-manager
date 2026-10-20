@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-20
+
+### Fixed
+
+- Adding or changing any mod in a profile linked to a server failed with "Managed by the server: …" as soon
+  as the server had dependencies of its own (the lock rule looked at the list before the server's
+  dependencies were carried back in, so they counted as removed).
+- A mod the server turns from required into optional stayed locked in the players' profiles: the comparison
+  did not report the change, so no adoption converted it. It is now listed ("the server only recommends it
+  now") and the adoption hands it back to the player, unlocked and removable.
+- Optional mods arrive switched off: the first adoption of a link adds them disabled, and the transfer
+  assistant's "Add, switched off" does the same, so a player opts in by enabling.
+
 ## [0.4.1] - 2026-10-20
 
 ### Fixed

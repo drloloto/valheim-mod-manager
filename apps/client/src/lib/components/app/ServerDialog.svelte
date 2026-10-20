@@ -132,6 +132,7 @@
 										{t("server.willInstall", { id: nameOf(m.id), version: m.version })}
 									</li>{/each}
 								{#each check.diff.onlyServer as m (m.id)}<li>{t("server.willRemove", { id: nameOf(m.id), version: m.version })}</li>{/each}
+								{#each check.diff.optional as m (m.id)}<li>{t("server.nowOptional", { id: nameOf(m.id), version: m.version })}</li>{/each}
 							</ul>
 						{/if}
 					{:else if check}
@@ -255,6 +256,7 @@
 										{t("server.willInstall", { id: nameOf(m.id), version: m.version })}
 									</li>{/each}
 								{#each check.diff.onlyServer as m (m.id)}<li>{t("server.willRemove", { id: nameOf(m.id), version: m.version })}</li>{/each}
+								{#each check.diff.optional as m (m.id)}<li>{t("server.nowOptional", { id: nameOf(m.id), version: m.version })}</li>{/each}
 							</ul>
 						{/if}
 					{:else if check}
@@ -302,6 +304,7 @@
 					</li>
 				{/each}
 				{#each check.diff.dropped as m (m.id)}<li>{t("server.dropped", { id: nameOf(m.id), version: m.version })}</li>{/each}
+				{#each check.diff.optional as m (m.id)}<li>{t("server.nowOptional", { id: nameOf(m.id), version: m.version })}</li>{/each}
 				{#each check.diff.onlyLocal as m (m.id)}
 					<li class={side(m.id) === "server" ? "text-primary" : ""}>
 						{t("server.onlyLocal", { id: nameOf(m.id), version: m.version })}

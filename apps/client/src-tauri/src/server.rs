@@ -109,6 +109,9 @@ pub struct ServerDiff {
     /// The server's mods (`managed`) it no longer lists: adoption uninstalls them.
     pub dropped: Vec<ManifestMod>,
     pub changed: Vec<Changed>,
+    /// Still the server's here, but only recommended by the server now: adoption hands them back to the
+    /// player (unmanaged, unlocked, flagged optional).
+    pub optional: Vec<ManifestMod>,
 }
 
 /// Ids the server claims in this profile: every `managed` entry, or, in a profile adopted before `managed`
@@ -165,9 +168,15 @@ pub fn diff(profile: &Profile, local: &BTreeMap<String, Resolved>, manifest: &[M
             });
         }
     }
-    for (id, m) in server {
-        if !local.contains_key(id) && !m.optional {
+    for (id, m) in &server {
+        if !local.contains_key(*id) && !m.optional {
             d.only_server.push((*m).clone());
+        }
+    }
+    // Required before, optional now: the entry is still the server's (locked) until an adoption hands it back.
+    for m in profile.mods.iter().filter(|m| servers.contains(&m.id())) {
+        if let Some(s) = server.get(m.id().as_str()).filter(|s| s.optional) {
+            d.optional.push((*s).clone());
         }
     }
     d
@@ -241,7 +250,8 @@ pub fn adopt(profile: &mut Profile, manifest: &[ManifestMod], add_optional: bool
                 let pinned = !old.managed && old.pinned;
                 mods.push(ProfileMod { managed: false, pinned, implicit: false, optional: true, ..old.clone() });
             } else if add_optional {
-                mods.push(ProfileMod { optional: true, ..ProfileMod::thunderstore(ns, name, &m.version) });
+                // Recommended only: it arrives switched off, the player enables what they want.
+                mods.push(ProfileMod { optional: true, enabled: false, ..ProfileMod::thunderstore(ns, name, &m.version) });
             }
             continue;
         }
@@ -261,7 +271,7 @@ pub fn is_admin(link: &ServerLink) -> bool {
 /// dropped is still installed; mods only they have are theirs to keep. An admin's profile is the server
 /// list, so a mod only they have is unpublished work.
 pub fn in_sync(d: &ServerDiff, admin: bool) -> bool {
-    d.only_server.is_empty() && d.changed.is_empty() && d.dropped.is_empty() && (!admin || d.only_local.is_empty())
+    d.only_server.is_empty() && d.changed.is_empty() && d.dropped.is_empty() && d.optional.is_empty() && (!admin || d.only_local.is_empty())
 }
 
 pub fn normalize_url(url: &str) -> Result<String> {
@@ -600,16 +610,23 @@ mod tests {
         assert_eq!(get(&p, "a-A").map(|m| (m.managed, m.optional)), Some((true, false)));
         // theirs stays theirs, in their version, flagged
         assert_eq!(get(&p, "b-B").map(|m| (m.version, m.managed, m.optional, m.pinned)), Some(("1.0.0".into(), false, true, false)));
-        // the missing one came with the first adoption, unmanaged
-        assert_eq!(get(&p, "c-C").map(|m| (m.version, m.managed, m.optional)), Some(("1.0.0".into(), false, true)));
+        // the missing one came with the first adoption, unmanaged and switched off
+        assert_eq!(get(&p, "c-C").map(|m| (m.version, m.managed, m.optional, m.enabled)), Some(("1.0.0".into(), false, true, false)));
         // the player removes c-C; a later adoption does not bring it back
         p.mods.retain(|m| m.id() != "c-C");
         adopt(&mut p, &lock, false);
         assert!(get(&p, "c-C").is_none());
-        // required → optional: the managed entry stays, unmanaged and unpinned, in its version
+        // required → optional: the diff reports it (the entry is still locked), adoption hands it back to the
+        // player, unmanaged and unpinned, in its version; afterwards the profile is in sync again
         let mut q = Profile { mods: vec![ProfileMod { managed: true, pinned: true, ..ProfileMod::thunderstore("a", "A", "1.0.0") }], ..Default::default() };
+        let mut running = BTreeMap::new();
+        running.insert("a-A".to_string(), res("1.0.0", &[]));
+        let before = diff(&q, &running, &[opt("a-A", "1.1.0")]);
+        assert_eq!(before.optional.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["a-A"]);
+        assert!(!in_sync(&before, false));
         adopt(&mut q, &[opt("a-A", "1.1.0")], false);
         assert_eq!(get(&q, "a-A").map(|m| (m.version, m.managed, m.optional, m.pinned)), Some(("1.0.0".into(), false, true, false)));
+        assert!(in_sync(&diff(&q, &running, &[opt("a-A", "1.1.0")]), false));
         // the diff ignores optional entries: neither "only on the server" nor a version difference
         let mut local = BTreeMap::new();
         local.insert("a-A".to_string(), res("1.0.0", &[]));

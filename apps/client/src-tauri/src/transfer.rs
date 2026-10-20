@@ -250,8 +250,9 @@ pub fn apply(kind: Kind, target: &mut Profile, items: &[Item], choices: &[Choice
                                     t.version = s.version.clone();
                                 }
                             }
+                            // Added switched off: recommended, not required; the player enables what they want.
                             None if d == Decision::Take => {
-                                target.mods.push(ProfileMod { optional: true, ..ProfileMod::thunderstore(&s.ns, &s.name, &s.version) })
+                                target.mods.push(ProfileMod { optional: true, enabled: false, ..ProfileMod::thunderstore(&s.ns, &s.name, &s.version) })
                             }
                             None => {}
                         }
@@ -369,7 +370,7 @@ mod tests {
         let mut target = fresh.clone();
         let manifest: Vec<ManifestMod> = source.iter().map(|s| ManifestMod { optional: s.optional, ..mm(&s.id(), &s.version) }).collect();
         apply(Kind::Server, &mut target, &items, &[], &manifest, &source);
-        assert_eq!(find(&target, "b-Nice").map(|m| (m.version, m.managed, m.optional)), Some(("1.0.0".into(), false, true)));
+        assert_eq!(find(&target, "b-Nice").map(|m| (m.version, m.managed, m.optional, m.enabled)), Some(("1.0.0".into(), false, true, false)));
         assert_eq!(find(&target, "d-Older").map(|m| (m.version, m.optional)), Some(("1.0.0".into(), true)));
         assert!(find(&target, "a-Req").is_some_and(|m| m.managed && !m.optional));
         // Skipping b and taking the server's d: b stays out, d moves to 2.0.0 and stays unmanaged.

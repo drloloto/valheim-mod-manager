@@ -1,6 +1,6 @@
 [package]
 name = "valheim-mod-manager"
-version = "0.4.1"
+version = "0.4.2"
 description = "Local mod manager for Valheim (r2modman alternative)"
 license = "MIT"
 repository = "https://github.com/drloloto/valheim-mod-manager"

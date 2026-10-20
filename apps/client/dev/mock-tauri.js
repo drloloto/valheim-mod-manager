@@ -352,6 +352,7 @@
 				// a server mod (managed, see the profile above) the server no longer lists
 				dropped: [{ id: inProfile[1], version: byId.get(inProfile[1]).ver, explicit: true, requiredBy: [] }],
 				changed: [{ id: inProfile[0], local: byId.get(inProfile[0]).ver, server: "9.9.9" }],
+				optional: [],
 			},
 		}),
 		adopt_server: ({ intoNew }) => (intoNew ? { ...state, profiles: [...state.profiles, intoNew], active: intoNew } : state),

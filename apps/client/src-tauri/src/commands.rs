@@ -489,15 +489,17 @@ pub async fn clone_profile(ctx: State<'_, AppCtx>, from: String, to: String) -> 
 #[tauri::command]
 pub fn set_mods(app: AppHandle, ctx: State<'_, AppCtx>, profile: String, mods: Vec<ProfileMod>) -> Result<AppState> {
     let mut p = profiles::load(&ctx.paths, &profile)?;
+    // The UI never shows implicit entries (the server's dependencies), so they come back in first; only then
+    // can the lock rule tell a removed server mod from one the UI simply did not list.
+    let mut mods = merge_implicit(&p.mods, mods);
     // While Override is off, the server's entries are read-only here, whatever the UI sent.
     transfer::check_locks(&p, &mods)?;
     // The UI edits the list but never the server's claim on an entry: `managed` survives any round trip.
     let managed: HashSet<String> = p.mods.iter().filter(|m| m.managed).map(ProfileMod::id).collect();
-    let mut mods = mods;
     for m in &mut mods {
         m.managed |= managed.contains(&m.id());
     }
-    p.mods = merge_implicit(&p.mods, mods);
+    p.mods = mods;
     profiles::save(&ctx.paths, &p)?;
     prune_local_copies(&ctx.paths, &profile, &p.mods);
     request_sync(&app, &profile, false);
@@ -1443,6 +1445,15 @@ mod tests {
         // The player picks b-B themselves: their explicit entry replaces the implicit one.
         let picked = merge_implicit(&old, vec![ProfileMod::thunderstore("b", "B", "2.0.0")]);
         assert_eq!(ids(&picked), vec![("b-B".into(), "2.0.0".into(), false), ("c-C".into(), "3.0.0".into(), true)]);
+        // The lock rule sees the list after the carry-over: a server dependency the UI never showed is not
+        // "removed" when the player adds a mod of their own (0.4.1 checked the raw list and refused every edit).
+        let server = Profile {
+            mods: vec![ProfileMod { managed: true, ..ProfileMod::thunderstore("a", "A", "1.0.0") }, ProfileMod { managed: true, ..dep("b-B", "1.0.0") }],
+            ..Default::default()
+        };
+        let ui_list = vec![ProfileMod::thunderstore("a", "A", "1.0.0"), ProfileMod::thunderstore("n", "New", "1.0.0")];
+        assert!(transfer::check_locks(&server, &ui_list).is_err(), "the raw list lacks the dependency");
+        assert!(transfer::check_locks(&server, &merge_implicit(&server.mods, ui_list)).is_ok());
     }
 
     const CODE: &str = "vmm1.5f2964a03b693a8655578dfdcbd4b6b6.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";

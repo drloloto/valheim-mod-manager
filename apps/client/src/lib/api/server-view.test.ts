@@ -9,7 +9,7 @@ const base: ServerCheck = {
 	name: "S",
 	world: "W",
 	inSync: true,
-	diff: { onlyServer: [], onlyLocal: [], dropped: [], changed: [] },
+	diff: { onlyServer: [], onlyLocal: [], dropped: [], changed: [], optional: [] },
 	serverMods: 1,
 	serverConfigs: 0,
 	hash: "h",
@@ -24,7 +24,7 @@ const base: ServerCheck = {
 const differs: ServerCheck = {
 	...base,
 	inSync: false,
-	diff: { onlyServer: [{ id: "a-A", version: "1", explicit: true, requiredBy: [] }], onlyLocal: [], dropped: [], changed: [] },
+	diff: { onlyServer: [{ id: "a-A", version: "1", explicit: true, requiredBy: [] }], onlyLocal: [], dropped: [], changed: [], optional: [] },
 	configsChanged: ["x.cfg", "y.cfg"],
 };
 const droppedOne: ServerCheck = {
@@ -35,6 +35,7 @@ const droppedOne: ServerCheck = {
 		onlyLocal: [{ id: "me-Mine", version: "1", explicit: true, requiredBy: [] }],
 		dropped: [{ id: "a-A", version: "1", explicit: true, requiredBy: [] }],
 		changed: [],
+		optional: [],
 	},
 };
 const staged: ServerCheck = {
