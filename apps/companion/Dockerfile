@@ -4,7 +4,7 @@
 
 # Stage 1: the workspace toolchain. Node for Vite+ (vp runs on Node), Bun as the package manager. Builds the
 # SvelteKit UI to static files; none of it reaches the runtime image.
-FROM node:24-alpine AS workspace
+FROM node:26-alpine AS workspace
 COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /repo
 # Every workspace package.json: the frozen lockfile covers the whole workspace.
