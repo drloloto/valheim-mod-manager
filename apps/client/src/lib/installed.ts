@@ -4,9 +4,10 @@ import type { Plan, ProfileMod } from "#lib/api/types.js";
 import type { SortState } from "#lib/components/kit/types.js";
 import { collator } from "#lib/format.js";
 
-/** Who put the mod in the profile: the linked server, the player, a local file, or the resolver. */
-export type Source = "server" | "own" | "local" | "dependency";
-export const SOURCES: readonly Source[] = ["server", "own", "local", "dependency"];
+/** Who put the mod in the profile: the linked server (required), the server's recommendation (optional), the
+ *  player, a local file, or the resolver. */
+export type Source = "server" | "optional" | "own" | "local" | "dependency";
+export const SOURCES: readonly Source[] = ["server", "optional", "own", "local", "dependency"];
 
 /** One state per row, worst first: what the status column says. */
 export type InstallState = "installing" | "missing" | "update" | "disabled" | "ok";
@@ -59,7 +60,7 @@ export function buildRows(i: RowsInput): InstalledRow[] {
 			name: m.name,
 			author: m.namespace,
 			version: m.version,
-			source: m.managed ? "server" : m.source === "local" ? "local" : "own",
+			source: m.managed ? "server" : m.optional ? "optional" : m.source === "local" ? "local" : "own",
 			state: stateOf(id, i, m),
 			mod: m,
 			requiredBy: [],
@@ -97,7 +98,7 @@ export const LOADER_ID = "denikson-BepInExPack_Valheim";
 const loaderFirst = (a: InstalledRow, b: InstalledRow) => Number(b.id === LOADER_ID) - Number(a.id === LOADER_ID);
 
 /**
- * The same order on every machine: the loader, then by source (server, own, local, dependencies), then
+ * The same order on every machine: the loader, then by source (server, optional, own, local, dependencies), then
  * by name. A column sort replaces the source key; the loader stays on top and ties fall back to the name.
  */
 export function sortRows(rows: readonly InstalledRow[], sort: SortState | null): InstalledRow[] {
@@ -110,7 +111,7 @@ export function sortRows(rows: readonly InstalledRow[], sort: SortState | null):
 }
 
 export function countSources(rows: readonly InstalledRow[]): Record<Source, number> {
-	const out: Record<Source, number> = { server: 0, own: 0, local: 0, dependency: 0 };
+	const out: Record<Source, number> = { server: 0, optional: 0, own: 0, local: 0, dependency: 0 };
 	for (const r of rows) out[r.source]++;
 	return out;
 }

@@ -30,6 +30,8 @@ pub enum Case {
     Dropped,
     /// In the target, unknown to the source (the player's own, or a local mod).
     Extra,
+    /// Optional in the server's lock (recommended, not required): offered, never managed.
+    Optional,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,6 +85,8 @@ pub struct SourceMod {
     pub local: bool,
     pub deps: Vec<String>,
     pub pinned: bool,
+    /// Recommended, not required (a lock's `optional`, or the flag on a profile's entry).
+    pub optional: bool,
 }
 
 impl SourceMod {
@@ -97,11 +101,12 @@ impl SourceMod {
             local: m.source == Source::Local,
             deps: m.deps.clone(),
             pinned: m.pinned,
+            optional: m.optional,
         }
     }
     pub fn from_manifest(m: &ManifestMod) -> Option<Self> {
         let (ns, name) = m.split()?;
-        Some(SourceMod { ns: ns.into(), name: name.into(), version: m.version.clone(), local: false, deps: vec![], pinned: true })
+        Some(SourceMod { ns: ns.into(), name: name.into(), version: m.version.clone(), local: false, deps: vec![], pinned: true, optional: m.optional })
     }
 }
 
@@ -126,6 +131,31 @@ pub fn plan(kind: Kind, target: &Profile, source: &[SourceMod], side_of: &dyn Fn
             continue;
         }
         let t = by_id.get(&id);
+        if kind == Kind::Server && s.optional {
+            // Recommended by the server: install it (the default for a target that never adopted) or skip
+            // it; an entry the target has stays the player's, in their version unless they take the server's.
+            let never_adopted = target.server.as_ref().is_none_or(|l| l.last_adopted.is_none());
+            let (decision, choices) = match t {
+                None => (if never_adopted { Decision::Take } else { Decision::Keep }, vec![Decision::Take, Decision::Keep]),
+                Some(t) if t.version == s.version => (Decision::Keep, vec![Decision::Keep]),
+                Some(_) => (Decision::Keep, vec![Decision::Keep, Decision::Take]),
+            };
+            items.push(Item {
+                id: id.clone(),
+                ns: s.ns.clone(),
+                name: s.name.clone(),
+                case: Case::Optional,
+                from: t.map(|t| t.version.clone()),
+                to: Some(s.version.clone()),
+                local: false,
+                locked: false,
+                managed: false,
+                side: side_of(&id),
+                decision,
+                choices,
+            });
+            continue;
+        }
         let (case, from) = match t {
             None => (Case::Add, None),
             Some(t) if t.version == s.version => (Case::Same, Some(t.version.clone())),
@@ -192,10 +222,12 @@ fn decision_of(item: &Item, choices: &[Choice]) -> Decision {
 /// change. Returns the ids of local mods whose files the caller has to copy from the source profile.
 pub fn apply(kind: Kind, target: &mut Profile, items: &[Item], choices: &[Choice], manifest: &[ManifestMod], source: &[SourceMod]) -> Vec<String> {
     let mut copy_local = vec![];
+    let src: HashMap<String, &SourceMod> = source.iter().map(|s| (s.id(), s)).collect();
     match kind {
         Kind::Server => {
             let before: HashMap<String, ProfileMod> = target.mods.iter().map(|m| (m.id(), m.clone())).collect();
-            server::adopt(target, manifest);
+            // The assistant decides per optional item; adopt itself adds none of them here.
+            server::adopt(target, manifest, false);
             let mut remove = HashSet::new();
             for item in items {
                 match (item.case, decision_of(item, choices)) {
@@ -209,13 +241,27 @@ pub fn apply(kind: Kind, target: &mut Profile, items: &[Item], choices: &[Choice
                     (Case::Extra, Decision::Remove) => {
                         remove.insert(item.id.clone());
                     }
+                    (Case::Optional, d) => {
+                        let Some(s) = src.get(&item.id) else { continue };
+                        match target.mods.iter_mut().find(|m| m.id() == item.id) {
+                            Some(t) => {
+                                t.optional = true;
+                                if d == Decision::Take {
+                                    t.version = s.version.clone();
+                                }
+                            }
+                            None if d == Decision::Take => {
+                                target.mods.push(ProfileMod { optional: true, ..ProfileMod::thunderstore(&s.ns, &s.name, &s.version) })
+                            }
+                            None => {}
+                        }
+                    }
                     _ => {}
                 }
             }
             target.mods.retain(|m| !remove.contains(&m.id()));
         }
         Kind::Profile => {
-            let src: HashMap<String, &SourceMod> = source.iter().map(|s| (s.id(), s)).collect();
             for item in items {
                 if item.locked || decision_of(item, choices) != Decision::Take || !matches!(item.case, Case::Add | Case::Version) {
                     continue;
@@ -231,6 +277,7 @@ pub fn apply(kind: Kind, target: &mut Profile, items: &[Item], choices: &[Choice
                     deps: s.deps.clone(),
                     implicit: false,
                     managed: false,
+                    optional: s.optional,
                 };
                 match target.mods.iter_mut().find(|m| m.id() == item.id) {
                     // A server-managed entry stays the server's, in the source's version (Override is on here).
@@ -279,6 +326,7 @@ mod tests {
             ns: String::new(),
             name: String::new(),
             source: Store::Thunderstore,
+            optional: false,
         }
     }
     fn managed(ns: &str, name: &str, v: &str) -> ProfileMod {
@@ -295,6 +343,43 @@ mod tests {
     }
     fn case_of<'a>(items: &'a [Item], id: &str) -> &'a Item {
         items.iter().find(|i| i.id == id).unwrap()
+    }
+
+    #[test]
+    fn optional_server_mods_are_offered_not_imposed() {
+        let opt = |ns: &str, name: &str, v: &str| SourceMod { optional: true, ..SourceMod::from_profile(&ProfileMod::thunderstore(ns, name, v)) };
+        let source =
+            vec![SourceMod::from_profile(&managed("a", "Req", "1.0.0")), opt("b", "Nice", "1.0.0"), opt("c", "Have", "1.0.0"), opt("d", "Older", "2.0.0")];
+        // A target that never adopted: the missing optional mod is taken by default, the others stay as they are.
+        let fresh =
+            Profile { mods: vec![ProfileMod::thunderstore("c", "Have", "1.0.0"), ProfileMod::thunderstore("d", "Older", "1.0.0")], ..Default::default() };
+        let items = plan(Kind::Server, &fresh, &source, &no_side);
+        let nice = case_of(&items, "b-Nice");
+        assert_eq!(
+            (nice.case, nice.decision, nice.managed, nice.choices.clone()),
+            (Case::Optional, Decision::Take, false, vec![Decision::Take, Decision::Keep])
+        );
+        assert_eq!((case_of(&items, "c-Have").case, case_of(&items, "c-Have").choices.clone()), (Case::Optional, vec![Decision::Keep]));
+        assert_eq!((case_of(&items, "d-Older").decision, case_of(&items, "d-Older").choices.clone()), (Decision::Keep, vec![Decision::Keep, Decision::Take]));
+        assert!(case_of(&items, "a-Req").managed);
+        // A target that adopted before: skip is the default.
+        let seasoned = Profile { server: Some(ServerLink { last_adopted: Some("x".into()), ..Default::default() }), ..fresh.clone() };
+        assert_eq!(case_of(&plan(Kind::Server, &seasoned, &source, &no_side), "b-Nice").decision, Decision::Keep);
+        // Apply with the defaults: b installed as optional, d keeps the player's version, nothing optional is managed.
+        let mut target = fresh.clone();
+        let manifest: Vec<ManifestMod> = source.iter().map(|s| ManifestMod { optional: s.optional, ..mm(&s.id(), &s.version) }).collect();
+        apply(Kind::Server, &mut target, &items, &[], &manifest, &source);
+        assert_eq!(find(&target, "b-Nice").map(|m| (m.version, m.managed, m.optional)), Some(("1.0.0".into(), false, true)));
+        assert_eq!(find(&target, "d-Older").map(|m| (m.version, m.optional)), Some(("1.0.0".into(), true)));
+        assert!(find(&target, "a-Req").is_some_and(|m| m.managed && !m.optional));
+        // Skipping b and taking the server's d: b stays out, d moves to 2.0.0 and stays unmanaged.
+        let mut target = fresh.clone();
+        let choices = [Choice { id: "b-Nice".into(), decision: Decision::Keep }, Choice { id: "d-Older".into(), decision: Decision::Take }];
+        apply(Kind::Server, &mut target, &items, &choices, &manifest, &source);
+        assert!(find(&target, "b-Nice").is_none());
+        assert_eq!(find(&target, "d-Older").map(|m| (m.version, m.managed, m.optional)), Some(("2.0.0".into(), false, true)));
+        // Locks never hold an optional entry.
+        assert!(check_locks(&target, &[]).is_ok() || !target.mods.iter().any(|m| m.optional && m.managed));
     }
 
     #[test]

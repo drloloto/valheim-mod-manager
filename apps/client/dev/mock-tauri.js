@@ -187,6 +187,8 @@
 				pinned: i === 7,
 				// every fourth mod is listed by the linked server (Installed shows "Server" as its source)
 				managed: i % 4 === 1,
+				// a few of the player's own are marked optional (recommended, not required)
+				optional: i % 4 !== 1 && i % 7 === 3,
 			}))
 			.concat([{ namespace: "local", name: LOCAL_PKG.name, version: "1.0.0", enabled: true, source: "local" }]),
 		// Jotunn is resolved as a dependency but not installed: shows the readiness banner and the Play gate.
@@ -383,6 +385,7 @@
 					else if (id === inProfile[0]) items.push(item(id, "version", { from: m.version, to: "9.9.9" }));
 					else if (id === inProfile[1]) items.push(item(id, "dropped", { from: m.version, managed: false, choices: ["take", "keep"] }));
 					else if (m.managed) items.push(item(id, "same", { from: m.version, to: m.version }));
+					else if (m.optional) items.push(item(id, "optional", { from: m.version, to: m.version, managed: false, decision: "keep", choices: ["keep"] }));
 					else
 						items.push(
 							item(id, "extra", {
@@ -396,6 +399,8 @@
 				}
 				const adds = target ? [slim[50]] : slim.slice(2, 12);
 				for (const p of adds) items.push(item(p.id, "add", { to: p.ver }));
+				// one recommended mod the target lacks: installed by default into a fresh profile, skipped otherwise
+				items.push(item(slim[51].id, "optional", { to: slim[51].ver, managed: false, decision: target ? "keep" : "take", choices: ["take", "keep"] }));
 				return { sourceName: "PetersWelte", targetExists: !!target, items };
 			}
 			const have = new Set(target ? (state.profileMods[target] ?? []) : []);

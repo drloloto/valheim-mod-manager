@@ -26,10 +26,12 @@ describe("transfer review", () => {
 		item("d-D", "dropped"),
 		item("e-E", "extra", { side: "server" }),
 		item("local-F", "extra", { local: true }),
+		// recommended by the server, not in the target: install by default, never managed
+		item("g-G", "optional", { from: null, to: "1.0.0", managed: false, choices: ["take", "keep"] }),
 	];
 
 	it("groups in review order and skips empty groups", () => {
-		expect(groupItems(items).map((g) => g.case)).toEqual(["version", "add", "dropped", "extra", "same"]);
+		expect(groupItems(items).map((g) => g.case)).toEqual(["version", "add", "optional", "dropped", "extra", "same"]);
 		expect(groupItems([item("a-A", "add")]).map((g) => g.case)).toEqual(["add"]);
 	});
 
@@ -40,16 +42,23 @@ describe("transfer review", () => {
 	});
 
 	it("summarizes what a run does", () => {
-		expect(summarize(items, new Map())).toEqual({ install: 1, change: 1, remove: 1, lock: 3, keep: 2, serverSideKept: 1 });
+		expect(summarize(items, new Map())).toEqual({ install: 2, change: 1, remove: 1, lock: 3, keep: 2, serverSideKept: 1 });
 		const chosen = new Map<string, "keep" | "remove">([
 			["d-D", "keep"],
 			["e-E", "remove"],
+			["g-G", "keep"],
 		]);
+		// skipping the recommended mod is no change at all
 		expect(summarize(items, chosen)).toEqual({ install: 1, change: 1, remove: 1, lock: 3, keep: 2, serverSideKept: 0 });
 		expect(toChoices(chosen)).toEqual([
 			{ id: "d-D", decision: "keep" },
 			{ id: "e-E", decision: "remove" },
+			{ id: "g-G", decision: "keep" },
 		]);
+		// a recommended mod the target has in another version: taking the server's is a version change
+		const have = item("h-H", "optional", { from: "1.0.0", to: "2.0.0", managed: false, decision: "keep", choices: ["keep", "take"] });
+		expect(summarize([have], new Map()).change).toBe(0);
+		expect(summarize([have], new Map([["h-H", "take"]])).change).toBe(1);
 	});
 });
 

@@ -9,11 +9,13 @@
 
 	const STYLE: Record<Source, string> = {
 		server: "border-info-line bg-info-soft text-info",
+		// recommended, not required: the server's colour without its weight
+		optional: "border-info-line text-info",
 		own: "border-line-subtle text-foreground-soft",
 		local: "border-line-subtle text-foreground-soft border-dashed",
 		dependency: "border-transparent text-muted-foreground",
 	};
-	const ICON: Record<Source, string> = { server: "↓", own: "", local: "", dependency: "↳" };
+	const ICON: Record<Source, string> = { server: "↓", optional: "○", own: "", local: "", dependency: "↳" };
 </script>
 
 <span

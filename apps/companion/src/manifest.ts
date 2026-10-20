@@ -22,6 +22,9 @@ export interface ManifestMod {
 	name?: string;
 	/** The store the release is downloaded from; missing means Thunderstore. */
 	source?: "thunderstore" | "hexium";
+	/** Recommended, not required: the admin marked it optional. The server installs it like any other;
+	 *  clients treat it as the player's own. Missing means required. */
+	optional?: true;
 }
 
 export interface ServerInfo {
@@ -117,6 +120,7 @@ function cleanMod(raw: unknown): ManifestMod | null {
 		requiredBy: Array.isArray(r.requiredBy) ? r.requiredBy.filter((x): x is string => typeof x === "string") : [],
 		...(ns && name && `${ns}-${name}` === id ? { ns, name } : {}),
 		...(r.source === "hexium" ? { source: "hexium" as const } : {}),
+		...(r.optional === true ? { optional: true as const } : {}),
 	};
 }
 

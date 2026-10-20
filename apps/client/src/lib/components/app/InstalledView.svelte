@@ -76,12 +76,16 @@
 	const sources = $derived(countSources(all));
 	/** Width of the table pane: below ~900px the filter segments drop their counts so the toolbar keeps one line. */
 	let paneWidth = $state(0);
+	/** Optional mods get their own segment on a wide pane; on a narrow one they file under "Yours" (they are the
+	 *  player's own in every rule) so the toolbar keeps one line, the badge in the table still says "Optional". */
+	const optionalSegment = $derived((paneWidth >= 900 && sources.optional > 0) || show === "optional");
 	const showOptions = $derived.by(() => {
 		const n = (v: number) => (paneWidth >= 900 && v ? v : undefined);
 		return [
 			{ value: "all", label: t("installed.all") },
 			...(sources.server || show === "server" ? [{ value: "server", label: t("source.server"), badge: n(sources.server) }] : []),
-			{ value: "own", label: t("installed.own"), badge: n(sources.own + sources.local) },
+			...(optionalSegment ? [{ value: "optional", label: t("source.optional"), badge: n(sources.optional) }] : []),
+			{ value: "own", label: t("installed.own"), badge: n(sources.own + sources.local + (optionalSegment ? 0 : sources.optional)) },
 			{ value: "dependency", label: t("installed.deps"), badge: n(sources.dependency) },
 			{ value: "updates", label: t("installed.updates"), badge: updateCount || undefined, tone: "primary" as const },
 		];
@@ -90,7 +94,12 @@
 		const q = normalize(query);
 		const hit = (r: InstalledRow) => !q || normalize(`${r.name} ${r.author}`).includes(q);
 		const keep = (r: InstalledRow) =>
-			show === "all" || (show === "updates" ? r.state === "update" : show === "own" ? r.source === "own" || r.source === "local" : r.source === show);
+			show === "all" ||
+			(show === "updates"
+				? r.state === "update"
+				: show === "own"
+					? r.source === "own" || r.source === "local" || (!optionalSegment && r.source === "optional")
+					: r.source === show);
 		return sortRows(
 			all.filter((r) => hit(r) && keep(r)),
 			sortPref.value,
@@ -366,6 +375,7 @@
 					{#snippet menu(ids)}
 						{@const all = ids.filter((id) => store.modsMap.has(id))}
 						{@const mods = all.filter((id) => !store.isLocked(id))}
+						{@const allOptional = mods.length > 0 && mods.every((id) => store.modsMap.get(id)?.optional)}
 						<ContextMenu.Label>{ids.length > 1 ? t("installed.entriesSelected", { n: ids.length }) : nameOf(ids[0])}</ContextMenu.Label>
 						{#if all.length && !mods.length}
 							<!-- Only server-managed mods selected: the menu says why its actions are off. -->
@@ -380,6 +390,10 @@
 						>
 						<ContextMenu.Item disabled={mods.length !== 1} onSelect={() => store.togglePin(mods[0])}
 							>{store.modsMap.get(mods[0])?.pinned ? t("installed.unpin") : t("installed.pin")}</ContextMenu.Item
+						>
+						<!-- The per-mod "optional" mark: the server's entries cannot take it, the server decides them. -->
+						<ContextMenu.CheckboxItem disabled={!mods.length} checked={allOptional} onCheckedChange={(v) => store.setOptional(mods, v)}
+							>{t("installed.optional")}</ContextMenu.CheckboxItem
 						>
 						<ContextMenu.Separator />
 						<ContextMenu.Item disabled={ids.length > 1 || !store.indexById.has(ids[0])} onSelect={() => thunderstore(ids[0])}

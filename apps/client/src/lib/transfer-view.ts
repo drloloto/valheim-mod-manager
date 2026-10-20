@@ -3,7 +3,7 @@
 import type { ProfileMod, TransferCase, TransferChoice, TransferDecision, TransferItem } from "#lib/api/types.js";
 
 /** Review order: what changes first, what stays last. */
-export const CASES: readonly TransferCase[] = ["version", "add", "dropped", "extra", "same"];
+export const CASES: readonly TransferCase[] = ["version", "add", "optional", "dropped", "extra", "same"];
 
 export function groupItems(items: readonly TransferItem[]): { case: TransferCase; items: TransferItem[] }[] {
 	return CASES.map((c) => ({ case: c, items: items.filter((i) => i.case === c) })).filter((g) => g.items.length);
@@ -51,6 +51,13 @@ export function summarize(items: readonly TransferItem[], choices: ReadonlyMap<s
 				else {
 					s.keep++;
 					if (i.side === "server") s.serverSideKept++;
+				}
+				break;
+			// Recommended by the server: taking one is an install (or a version change); skipping is no change.
+			case "optional":
+				if (d === "take") {
+					if (i.from === null) s.install++;
+					else if (i.from !== i.to) s.change++;
 				}
 				break;
 			case "same":

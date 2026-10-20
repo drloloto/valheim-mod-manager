@@ -12,7 +12,13 @@ const mod = (namespace: string, name: string, o: Partial<ProfileMod> = {}): Prof
 });
 
 const input = (o: Partial<RowsInput> = {}): RowsInput => ({
-	mods: [mod("b", "Zeta"), mod("a", "Alpha", { managed: true }), mod("c", "Local", { source: "local" }), mod("d", "Off", { enabled: false })],
+	mods: [
+		mod("b", "Zeta"),
+		mod("a", "Alpha", { managed: true }),
+		mod("c", "Local", { source: "local" }),
+		mod("d", "Off", { enabled: false }),
+		mod("e", "Opt", { optional: true }),
+	],
 	plan: {
 		resolved: {
 			"b-Zeta": { version: "1.0.0", requiredBy: [] },
@@ -40,6 +46,7 @@ describe("installed rows", () => {
 			"a-Alpha": "server/ok",
 			"c-Local": "local/ok",
 			"d-Off": "own/disabled",
+			"e-Opt": "optional/ok",
 			"x-Lib": "dependency/ok",
 			"y-ServerLib": "server/ok",
 			[LOADER_ID]: "dependency/ok",
@@ -57,7 +64,7 @@ describe("installed rows", () => {
 		const a = sortRows(buildRows(input()), null).map((r) => r.name);
 		const shuffled = input();
 		const b = sortRows(buildRows({ ...shuffled, mods: [...shuffled.mods].reverse() }), null).map((r) => r.name);
-		expect(a).toEqual(["BepInExPack_Valheim", "Alpha", "ServerLib", "Off", "Zeta", "Local", "Lib"]);
+		expect(a).toEqual(["BepInExPack_Valheim", "Alpha", "ServerLib", "Opt", "Off", "Zeta", "Local", "Lib"]);
 		expect(b).toEqual(a);
 	});
 
@@ -69,6 +76,7 @@ describe("installed rows", () => {
 			"Alpha",
 			"Lib",
 			"Local",
+			"Opt",
 			"ServerLib",
 		]);
 		const byNameDesc = sortRows(buildRows(input()), { key: "mod", dir: "desc" }).map((r) => r.name);
@@ -76,6 +84,6 @@ describe("installed rows", () => {
 	});
 
 	it("counts sources", () => {
-		expect(countSources(buildRows(input()))).toEqual({ server: 2, own: 2, local: 1, dependency: 2 });
+		expect(countSources(buildRows(input()))).toEqual({ server: 2, optional: 1, own: 2, local: 1, dependency: 2 });
 	});
 });

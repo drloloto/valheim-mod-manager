@@ -55,19 +55,23 @@
 	const changes = $derived(sum ? sum.install + sum.change + sum.remove + sum.lock : 0);
 
 	function hintOf(c: TransferItem["case"]): string {
-		if (c === "dropped" || c === "extra") return t(`transfer.hint.${c}`);
+		if (c === "dropped" || c === "extra" || c === "optional") return t(`transfer.hint.${c}`);
 		return t(`transfer.hint.${c}.${kind}`);
 	}
 	/** What a choice means for this item: "remove" for a dropped mod's take, "copy" for a profile add … */
 	function label(i: TransferItem, d: TransferDecision): string {
 		if (i.case === "dropped") return d === "take" ? t("transfer.d.remove") : t("transfer.d.keepMine");
+		if (i.case === "optional") {
+			if (i.from === null) return d === "take" ? t("transfer.d.install") : t("transfer.d.skip");
+			return d === "take" ? `${t("transfer.d.take")} ${i.to}` : `${t("transfer.d.keep")} ${i.from}`;
+		}
 		if (i.case === "add" && kind === "profile") return d === "take" ? t("transfer.d.copy") : t("transfer.d.skip");
 		if (i.case === "version" && kind === "profile") return d === "take" ? `${t("transfer.d.take")} ${i.to}` : `${t("transfer.d.keep")} ${i.from}`;
 		return t(`transfer.d.${d}`);
 	}
 	const options = (i: TransferItem): SegmentOption[] => i.choices.map((d) => ({ value: d, label: label(i, d) }));
 	function versionText(i: TransferItem): string {
-		if (i.case === "version") return `${i.from} → ${i.to}`;
+		if (i.case === "version" || (i.case === "optional" && i.from && i.from !== i.to)) return `${i.from} → ${i.to}`;
 		return i.to ?? i.from ?? "";
 	}
 
@@ -223,6 +227,8 @@
 									/>
 								{:else if i.managed}
 									<span class="text-muted-foreground w-[96px] shrink-0 text-right text-xs">{t("transfer.managed")}</span>
+								{:else if i.case === "optional"}
+									<span class="text-muted-foreground w-[96px] shrink-0 text-right text-xs">{t("source.optional")}</span>
 								{:else}
 									<span class="w-[96px] shrink-0"></span>
 								{/if}

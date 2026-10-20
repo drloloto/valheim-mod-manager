@@ -124,6 +124,7 @@ fn entry(meta: &LocalMeta) -> ProfileMod {
         deps: meta.deps.clone(),
         implicit: false,
         managed: false,
+        optional: false,
     }
 }
 

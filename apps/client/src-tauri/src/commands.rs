@@ -1142,7 +1142,9 @@ pub async fn adopt_server(
     // Undo path: the previous mod list and configs survive in <profile>/.snapshots/.
     profiles::snapshot(&ctx.paths, &target, "adopt-server")?;
     let mut p = profiles::load(&ctx.paths, &target)?;
-    server::adopt(&mut p, &mods);
+    // The first adoption of a link brings the server's optional mods along; later ones respect a removal.
+    let first = p.server.as_ref().is_none_or(|s| s.last_adopted.is_none());
+    server::adopt(&mut p, &mods, first);
     if let Some(s) = p.server.as_mut() {
         if !info.name.is_empty() {
             s.name = info.name.clone();

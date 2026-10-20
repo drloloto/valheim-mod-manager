@@ -64,7 +64,8 @@ describe("normalizeManifest", () => {
 					{ id: "LVH-IT-UseEquipmentInWater", version: "0.2.4", ns: "LVH-IT", name: "UseEquipmentInWater" },
 					{ id: "Wubarrk-BetterContinents", version: "0.10.6-rc.1", ns: "other", name: "pair" },
 					{ id: "x-Only", version: "1.0.0", source: "hexium" },
-					{ id: "x-Ts", version: "1.0.0", source: "thunderstore" },
+					{ id: "x-Ts", version: "1.0.0", source: "thunderstore", optional: true },
+					{ id: "x-Req", version: "1.0.0", optional: "yes" },
 				],
 			},
 			server,
@@ -73,6 +74,9 @@ describe("normalizeManifest", () => {
 		expect(m.mods[0]).toMatchObject({ ns: "LVH-IT", name: "UseEquipmentInWater" });
 		expect(m.mods.find((x) => x.id === "x-Only")?.source).toBe("hexium");
 		expect(m.mods.find((x) => x.id === "x-Ts")).not.toHaveProperty("source");
+		// the admin's "optional" passes through as a boolean true only
+		expect(m.mods.find((x) => x.id === "x-Ts")?.optional).toBe(true);
+		expect(m.mods.find((x) => x.id === "x-Req")).not.toHaveProperty("optional");
 		// a pair that does not spell the id is dropped, the entry stays
 		expect(m.mods[1]).toEqual({ id: "Wubarrk-BetterContinents", version: "0.10.6-rc.1", explicit: true, requiredBy: [] });
 	});

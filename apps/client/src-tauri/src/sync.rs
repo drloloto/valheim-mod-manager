@@ -358,6 +358,7 @@ mod tests {
                 pinned: false,
                 implicit: false,
                 managed: false,
+                optional: false,
                 deps: vec![],
             }],
         );

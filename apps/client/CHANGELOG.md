@@ -35,6 +35,12 @@ All notable changes to this project are documented here. The format follows
 - Local mods (imported zips) carry their icon, description, website, readme and changelog, read from the
   zip; mods imported earlier get their metadata on the next start.
 
+- Optional mods: a per-mod mark in a profile ("Optional" in the context menu and the detail pane) for mods
+  that are not required to play on the server. An admin's marks travel in the published lock; on a player's
+  side such mods show as "Optional" (recommended by the server), stay theirs to keep, change or remove,
+  arrive with the first adoption of a link and are offered again by the transfer assistant ("Recommended by
+  the server": install or skip). The companion passes the mark through and installs them as before.
+
 ### Fixed
 
 - A mod the server dropped was never uninstalled: the comparison counted it as the player's own extra and

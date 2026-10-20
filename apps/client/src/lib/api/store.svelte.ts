@@ -871,6 +871,13 @@ class ModManagerStore {
 		return this.setMods(this.state.mods.map((x) => (modId(x) === id ? { ...x, pinned: !x.pinned } : x)));
 	}
 
+	/** The "optional" mark (not required to play on the server); server-managed entries cannot take it. */
+	setOptional(ids: string[], on: boolean) {
+		const pick = new Set(this.unlocked(ids));
+		if (!pick.size) return Promise.resolve(false);
+		return this.setMods(this.state.mods.map((x) => (pick.has(modId(x)) ? { ...x, optional: on } : x)));
+	}
+
 	/** Multi-select: add missing packages in their latest version. */
 	async addMods(ids: string[]) {
 		const add = ids

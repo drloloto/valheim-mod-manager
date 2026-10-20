@@ -92,6 +92,11 @@ pub struct ProfileMod {
     /// this set (server versions win, what the server dropped goes); the player's own mods are left alone.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub managed: bool,
+    /// Optional: not required to play on the server. In an admin's profile it is their statement and goes
+    /// into the lock; in a player's profile it marks a mod the server recommends. Behaves like the player's
+    /// own mod in every rule (never managed, never locked).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub optional: bool,
 }
 
 impl ProfileMod {
@@ -110,6 +115,7 @@ impl ProfileMod {
             deps: vec![],
             implicit: false,
             managed: false,
+            optional: false,
         }
     }
 }

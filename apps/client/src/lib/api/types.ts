@@ -89,6 +89,9 @@ export interface ProfileMod {
 	deps?: string[];
 	/** Listed by the linked server: adoption sets its version and removes it when the server drops it. */
 	managed?: boolean;
+	/** Optional: not required to play on the server (an admin's mark that travels in the lock; on a
+	 *  player's side a mod the server recommends). Behaves like the player's own mod. */
+	optional?: boolean;
 }
 
 export interface Plan {
@@ -141,6 +144,8 @@ export interface ManifestMod {
 	requiredBy: string[];
 	/** The store the companion downloads from; missing means Thunderstore */
 	source?: Store;
+	/** Recommended, not required; missing means required */
+	optional?: boolean;
 }
 
 export interface ServerDiff {
@@ -398,9 +403,9 @@ export type FolderKind = "profile" | "game" | "config" | "data";
 // ---- Transfer assistant (server link or profile copy) ----
 
 export type TransferKind = "server" | "profile";
-/** add: in the source only · same: same version · version: other version · dropped: server-managed, no longer on the server · extra: in the target only */
-export type TransferCase = "add" | "same" | "version" | "dropped" | "extra";
-/** take: apply the source (install, set version, or remove a dropped one) · keep: leave the target entry · remove: drop an extra */
+/** add: in the source only · same: same version · version: other version · dropped: server-managed, no longer on the server · extra: in the target only · optional: recommended by the server, never managed */
+export type TransferCase = "add" | "same" | "version" | "dropped" | "extra" | "optional";
+/** take: apply the source (install, set version, or remove a dropped one) · keep: leave the target entry (for `optional` without one: skip it) · remove: drop an extra */
 export type TransferDecision = "take" | "keep" | "remove";
 export type ModSide = "server" | "client";
 

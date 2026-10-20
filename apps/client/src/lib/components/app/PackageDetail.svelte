@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
-	import { Button, Chip, Dialog, EmptyState, ModAvatar, PanelSection, Segmented, Stat } from "#lib/components/kit/index.js";
+	import { Button, Chip, Dialog, EmptyState, ModAvatar, PanelSection, Segmented, Stat, Switch } from "#lib/components/kit/index.js";
 	import type { SegmentOption } from "#lib/components/kit/index.js";
 	import { store } from "#lib/api/store.svelte.js";
 	import type { DocTab, Pkg, WikiIndex } from "#lib/api/types.js";
@@ -125,6 +125,13 @@
 				{#if pkg.url}<Button variant="outline" onclick={() => store.openExternal(pkg!.url)}>{t("detail.thunderstore")}</Button>{/if}
 				{#if pkg.hx_url}<Button variant="outline" onclick={() => store.openExternal(pkg!.hx_url!)}>{t("detail.hexium")}</Button>{/if}
 			</div>
+			<!-- The "optional" mark of a profile entry; a server-managed entry is the server's to decide. -->
+			{#if mod && !locked}
+				<label class="text-foreground-soft flex items-center justify-between gap-3 text-[12.5px]" title={t("detail.optionalHint")}>
+					<span>{t("detail.optional")}</span>
+					<Switch checked={!!mod.optional} onCheckedChange={(v) => store.setOptional([id!], v)} />
+				</label>
+			{/if}
 		</div>
 
 		<div class="flex items-center gap-2 border-b px-5 py-2.5">
