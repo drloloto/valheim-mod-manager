@@ -40,8 +40,13 @@ fn asset_url(id: u64) -> Url {
     format!("https://api.github.com/repos/{REPO}/releases/assets/{id}").parse().expect("a well-formed asset URL")
 }
 
-/// The API URL of the release asset the updater's download URL names (its last path segment).
+/// The API URL of the release asset the updater's download URL names. A manifest the release workflow
+/// built while the repository was private already carries API asset URLs (tauri-action does that); those
+/// pass through. A `releases/download/<tag>/<file>` link is mapped by its file name.
 pub fn asset_api_url(download_url: &Url, assets: &[Asset]) -> Option<Url> {
+    if download_url.host_str() == Some("api.github.com") && download_url.path().contains("/releases/assets/") {
+        return Some(download_url.clone());
+    }
     let name = download_url.path_segments()?.rfind(|s| !s.is_empty())?;
     assets.iter().find(|a| a.name == name).map(|a| asset_url(a.id))
 }
@@ -115,5 +120,8 @@ mod tests {
         assert_eq!(asset_api_url(&url, &assets).unwrap().as_str(), "https://api.github.com/repos/drloloto/valheim-mod-manager/releases/assets/12");
         let other: Url = "https://github.com/x/y/releases/download/v1/other.msi".parse().unwrap();
         assert!(asset_api_url(&other, &assets).is_none());
+        // What the release workflow writes for a private repository: already an API asset URL, kept as is.
+        let api: Url = "https://api.github.com/repos/drloloto/valheim-mod-manager/releases/assets/659106569".parse().unwrap();
+        assert_eq!(asset_api_url(&api, &assets).as_ref(), Some(&api));
     }
 }

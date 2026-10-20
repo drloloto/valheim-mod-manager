@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-20
+
+### Fixed
+
+- Updates from the private repository: the release workflow already writes API asset URLs into
+  `latest.json` for a private repository, and the update check in 0.4.0 did not recognise them, so a check
+  with a token found the update but could not download it. Such URLs now pass through unchanged.
+
 ## [0.4.0] - 2026-10-19
 
 ### Added
