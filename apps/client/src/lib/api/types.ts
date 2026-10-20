@@ -334,6 +334,14 @@ export interface Settings {
 	thunderstoreToken: string | null;
 	/** Merge Hexium's package list into the index. */
 	hexium: boolean;
+	/** GitHub token with read access to the app's releases, for updates from a private repository (local only). */
+	githubToken: string | null;
+}
+
+/** A pending app update, as the core's check found it. */
+export interface UpdateInfo {
+	version: string;
+	body: string | null;
 }
 
 export interface PublishCategory {

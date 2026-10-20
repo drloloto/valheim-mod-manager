@@ -251,6 +251,17 @@
 							disabled={store.state.app.portable}
 						/>
 					</SettingRow>
+					<!-- A private repository hands its releases out only to a token: the check and the download use it. -->
+					<SettingRow label={t("settings.ghToken")} hint={t("settings.ghTokenHint")} for="gh-token">
+						<Input
+							id="gh-token"
+							type="password"
+							autocomplete="off"
+							placeholder="github_pat_…"
+							value={form.githubToken ?? ""}
+							oninput={(e) => (form!.githubToken = e.currentTarget.value || null)}
+						/>
+					</SettingRow>
 				</section>
 
 				<section id="settings-storage">

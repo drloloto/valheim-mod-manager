@@ -41,6 +41,11 @@ All notable changes to this project are documented here. The format follows
   arrive with the first adoption of a link and are offered again by the transfer assistant ("Recommended by
   the server": install or skip). The companion passes the mark through and installs them as before.
 
+- Updates from a private repository: Settings → Updates has a field for a GitHub access token with read
+  access to the app's releases. With it, the update check and the download go through the GitHub API
+  (the public download links of a private repository do not work); without it, nothing changes. The token
+  stays in the local settings file.
+
 ### Fixed
 
 - A mod whose maintainer moved to Hexium (deprecated on Thunderstore, newer releases on Hexium) no longer

@@ -15,6 +15,9 @@ pub struct Settings {
     pub thunderstore_token: Option<String>,
     /// Merge Hexium's package list into the index (second store, same API). Off: Thunderstore only.
     pub hexium: bool,
+    /// GitHub token with read access to the app's releases: lets the update check and download reach a
+    /// private repository (appupdate.rs). Stored locally only.
+    pub github_token: Option<String>,
 }
 
 impl Default for Settings {
@@ -27,6 +30,7 @@ impl Default for Settings {
             show_nsfw: false,
             thunderstore_token: None,
             hexium: true,
+            github_token: None,
         }
     }
 }
@@ -46,6 +50,7 @@ pub fn save(paths: &Paths, s: &Settings) -> Result<Settings> {
         show_nsfw: s.show_nsfw,
         thunderstore_token: blank(&s.thunderstore_token),
         hexium: s.hexium,
+        github_token: blank(&s.github_token),
     };
     write_json(&paths.settings_file(), &clean)?;
     Ok(clean)

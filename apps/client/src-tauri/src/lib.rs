@@ -1,3 +1,4 @@
+mod appupdate;
 mod commands;
 mod config;
 mod error;
@@ -71,6 +72,7 @@ pub fn run() {
                 client,
                 log_tail: Mutex::new(None),
                 gist_cache: Default::default(),
+                pending_update: Mutex::new(None),
                 portable: portable.is_some(),
                 dev,
                 paths,
@@ -137,6 +139,8 @@ pub fn run() {
             commands::launch_game,
             commands::get_settings,
             commands::save_settings,
+            commands::check_app_update,
+            commands::install_app_update,
             commands::detect_game,
             commands::clear_download_cache,
             commands::open_folder,

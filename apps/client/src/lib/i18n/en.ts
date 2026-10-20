@@ -489,6 +489,9 @@ export const en = {
 	"settings.tsToken": "Service-account token",
 	"settings.tsTokenHint": "Needed only to publish modpacks. Created in your team settings on Thunderstore; stored in settings.json on this machine.",
 	"settings.tsTokenWhere": "Open team settings on Thunderstore ↗",
+	"settings.ghToken": "GitHub access token",
+	"settings.ghTokenHint":
+		"Only while the app's repository is private: a token with read access to its releases lets the update check and the download work. The maintainer hands it out; it stays on this machine.",
 	"settings.appearance": "Interface",
 	"settings.about": "About",
 	"settings.saving": "Saving…",

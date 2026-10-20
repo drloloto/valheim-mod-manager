@@ -32,7 +32,6 @@ import { Persisted } from "#lib/desktop/persisted.svelte.js";
 import { emptySelection, type Selection } from "#lib/desktop/selection.js";
 import { isRecord } from "#lib/desktop/storage.js";
 import { t } from "#lib/i18n/t.js";
-import { check as checkForUpdate, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { api, ApiError } from "./client";
 import type { ForeignProfile, HealthIssue } from "./types";
@@ -62,6 +61,7 @@ import type {
 	ProfileMod,
 	Settings,
 	SlimPkg,
+	UpdateInfo,
 	SyncDone,
 	SyncProgress,
 	TransferChoice,
@@ -379,7 +379,7 @@ class ModManagerStore {
 
 	/** Updater: one silent check at startup when enabled, manual checks from Settings. */
 	autoUpdate = new Persisted<boolean>("werkbank.autoUpdate", true, (v) => (typeof v === "boolean" ? v : null));
-	update = $state.raw<Update | null>(null);
+	update = $state.raw<UpdateInfo | null>(null);
 	updateStatus = $state<"idle" | "checking" | "none" | "available" | "installing" | "error">("idle");
 	updateError = $state<string | null>(null);
 	/** Health issues grouped by mod id. */
@@ -1014,7 +1014,8 @@ class ModManagerStore {
 		this.updateStatus = "checking";
 		this.updateError = null;
 		try {
-			const u = await checkForUpdate();
+			// The core checks (with the GitHub token from the settings when the repository is private).
+			const u = await api.checkAppUpdate();
 			this.update = u;
 			this.updateStatus = u ? "available" : "none";
 		} catch (e) {
@@ -1029,7 +1030,7 @@ class ModManagerStore {
 		if (!u || this.updateStatus === "installing") return;
 		this.updateStatus = "installing";
 		try {
-			await u.downloadAndInstall();
+			await api.installAppUpdate();
 			await relaunch();
 		} catch (e) {
 			this.updateError = errorMessage(e, String(e));

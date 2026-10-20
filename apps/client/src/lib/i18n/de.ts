@@ -492,6 +492,9 @@ export const de: Record<MessageKey, string> = {
 	"settings.tsTokenHint":
 		"Nur zum Veröffentlichen von Modpacks nötig. Wird in den Team-Einstellungen auf Thunderstore erstellt und hier in settings.json gespeichert.",
 	"settings.tsTokenWhere": "Team-Einstellungen auf Thunderstore öffnen ↗",
+	"settings.ghToken": "GitHub-Zugriffstoken",
+	"settings.ghTokenHint":
+		"Nur solange das Repository der App privat ist: ein Token mit Lesezugriff auf die Releases lässt Update-Prüfung und Download durch. Der Betreiber gibt es aus; es bleibt auf diesem Rechner.",
 	"settings.appearance": "Oberfläche",
 	"settings.about": "Über",
 	"settings.saving": "Speichert…",

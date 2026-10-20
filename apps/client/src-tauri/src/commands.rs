@@ -39,6 +39,8 @@ pub struct AppCtx {
     /// Built with `tauri.dev.conf.json`: own data dir, marked window, test hooks in the frontend.
     pub dev: bool,
     pub gist_cache: gistsync::EtagCache,
+    /// The update the last check found, waiting for `install_app_update`.
+    pub pending_update: Mutex<Option<tauri_plugin_updater::Update>>,
 }
 
 impl AppCtx {
@@ -1112,6 +1114,27 @@ pub async fn restore_snapshot(app: AppHandle, ctx: State<'_, AppCtx>, profile: S
     drop(guard);
     request_sync(&app, &profile, true);
     build_state(&ctx)
+}
+
+/// The app's own update check (see appupdate.rs): with a GitHub token in the settings it reaches the releases
+/// of the private repository. The found update waits in `pending_update`.
+#[tauri::command]
+pub async fn check_app_update(app: AppHandle, ctx: State<'_, AppCtx>) -> Result<Option<crate::appupdate::UpdateInfo>> {
+    let token = ctx.settings.read().unwrap().github_token.clone();
+    let update = crate::appupdate::check(&app, &ctx.client, token.as_deref()).await?;
+    let info = update.as_ref().map(crate::appupdate::info);
+    *ctx.pending_update.lock().unwrap() = update;
+    Ok(info)
+}
+
+/// Downloads and installs the pending update (signature verified by the updater); the UI restarts the app.
+#[tauri::command]
+pub async fn install_app_update(ctx: State<'_, AppCtx>) -> Result<()> {
+    let update = ctx.pending_update.lock().unwrap().take();
+    let Some(update) = update else {
+        return Err(AppError::Invalid("No update is pending; check for updates first.".into()));
+    };
+    update.download_and_install(|_, _| {}, || {}).await.map_err(|e| AppError::Network(e.to_string()))
 }
 
 /// Rewrites the profile (or a fresh clone named `into_new`) to the server manifest, every entry explicit and

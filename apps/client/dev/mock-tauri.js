@@ -218,6 +218,7 @@
 		indexTtlMinutes: 30,
 		showNsfw: false,
 		thunderstoreToken: "tss_mock",
+		githubToken: null,
 		hexium: true,
 	};
 
@@ -522,6 +523,8 @@
 		convertFileSrc: (p) => p,
 		invoke: async (cmd, args) => {
 			if (cmd === "plugin:updater|check") return null;
+			if (cmd === "check_app_update") return null;
+			if (cmd === "install_app_update") return undefined;
 			if (cmd.startsWith("plugin:")) return cmd.includes("|listen") ? 1 : cmd.includes("is_") ? false : undefined;
 			const h = handlers[cmd];
 			if (!h) throw { message: `Mock: unknown command ${cmd}`, kind: "unknown" };
