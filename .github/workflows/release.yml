@@ -1,6 +1,6 @@
 name: Release
 
-# Tag a commit on main as vX.Y.Z (matching package.json, Cargo.toml and tauri.conf.json) to build the
+# Tag a commit on main as vX.Y.Z (matching apps/client/package.json, Cargo.toml and tauri.conf.json) to build the
 # Windows installers, the updater manifest (latest.json) and a portable zip. The release is assembled as a
 # draft and published in the last step, once every asset is attached, with the CHANGELOG.md section of
 # that version as its body.
@@ -20,17 +20,20 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
-          node-version: 22
-          cache: npm
+          node-version-file: .node-version
+          cache: true
+      - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
-      - run: npm ci
+          workspaces: apps/client/src-tauri
       - name: Check that the tag matches the app version
         shell: bash
+        working-directory: apps/client
         run: |
           tag="${GITHUB_REF_NAME#v}"
           pkg=$(node -p "require('./package.json').version")
@@ -38,12 +41,16 @@ jobs:
           cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
           echo "tag=$tag package.json=$pkg tauri.conf.json=$conf Cargo.toml=$cargo"
           [ "$tag" = "$pkg" ] && [ "$tag" = "$conf" ] && [ "$tag" = "$cargo" ]
+      # A release is built from a fully checked tree, never from a cache.
+      - run: vp run --no-cache ci
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          projectPath: apps/client
+          tauriScript: bun run tauri
           tagName: ${{ github.ref_name }}
           releaseName: "Valheim Mod Manager ${{ github.ref_name }}"
           releaseBody: "Assembling…"
@@ -51,6 +58,7 @@ jobs:
           prerelease: false
           uploadUpdaterJson: true
       - name: Build the portable zip and the release notes
+        working-directory: apps/client
         run: |
           node scripts/portable.mjs
           node scripts/release-notes.mjs
@@ -59,7 +67,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: "Valheim Mod Manager ${{ github.ref_name }}"
-          body_path: dist/release-notes.md
+          body_path: apps/client/dist/release-notes.md
           draft: false
           prerelease: false
-          files: dist/valheim-mod-manager-*-portable-win64.zip
+          files: apps/client/dist/valheim-mod-manager-*-portable-win64.zip

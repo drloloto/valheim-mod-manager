@@ -1,0 +1,10 @@
+# Test only: keeps this copy of the prod server off the internet. Not part of the prod setup.
+services:
+  playit:
+    profiles: ["never"] # the real tunnel secret is in .env; a second agent would take over the prod tunnel
+  valheim:
+    environment:
+      - SERVER_PUBLIC=false # no second "PetersWelte" in the public server list
+
+  frpc:
+    profiles: ["never"]

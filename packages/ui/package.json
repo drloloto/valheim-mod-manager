@@ -1,0 +1,39 @@
+{
+	"name": "@vmm/ui",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"description": "The Valheim Mod Manager design system: tokens, the shadcn-svelte vega style, primitives and small kit components.",
+	"imports": {
+		"#lib/*": "./src/*"
+	},
+	"exports": {
+		"./*": {
+			"types": "./src/*",
+			"svelte": "./src/*",
+			"style": "./src/*",
+			"default": "./src/*"
+		}
+	},
+	"peerDependencies": {
+		"svelte": "catalog:"
+	},
+	"dependencies": {
+		"@lucide/svelte": "catalog:",
+		"bits-ui": "catalog:",
+		"clsx": "catalog:",
+		"paneforge": "^1.0.2",
+		"svelte-sonner": "catalog:",
+		"tailwind-merge": "catalog:",
+		"tailwind-variants": "catalog:"
+	},
+	"devDependencies": {
+		"@internationalized/date": "catalog:",
+		"@sveltejs/vite-plugin-svelte": "catalog:",
+		"svelte": "catalog:",
+		"svelte-check": "catalog:",
+		"tailwindcss": "catalog:",
+		"typescript": "catalog:",
+		"vite-plus": "catalog:"
+	}
+}

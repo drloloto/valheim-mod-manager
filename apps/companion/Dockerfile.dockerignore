@@ -1,0 +1,12 @@
+# The build context is the repository root (see Dockerfile); only the companion and the workspace files go in.
+*
+!package.json
+!bun.lock
+!apps/client/package.json
+!apps/companion/**
+!packages/**
+**/node_modules
+**/*.log
+apps/companion/dev
+apps/companion/ui/.svelte-kit
+apps/companion/ui/build

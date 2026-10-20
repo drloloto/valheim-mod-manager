@@ -54,15 +54,22 @@ profile, so switching profiles does not move files. Doorstop v3 and v4 argument 
 
 ## Core flows
 
-**Index.** `index_worker` loads `cache/index.json` at startup and refreshes from Thunderstore when older
-than the configured TTL (default 30 minutes), with a 5-minute backoff after failures. The source is the
-`package-listing-index`: a redirect to a gzip blob of chunk URLs on the CDN, chunks fetched four at a time
-with one retry, the same package shape as the deprecated `/api/v1/package/`, which stays as the fallback.
-The blob URL carries the content hash and is saved with the cache, so a refresh that lands on the same
-blob skips the download. `build()` also counts dependants per package for "Used by". `build()` keeps
-the full packages in a `HashMap` for lookups and pre-serializes a slim JSON (one entry per package: latest
-version, counts, dependency ids) that `get_index` hands to the UI unchanged. The UI sends `since` and gets an
-empty body when nothing changed.
+**Index.** `index_worker` loads `cache/index.json` at startup and refreshes from the stores when older
+than the configured TTL (default 30 minutes), with a 5-minute backoff after failures. Two stores speak the
+same API: Thunderstore (`thunderstore.io/c/valheim`) and, unless turned off in the settings, Hexium
+(`valheim.hexium.gg`). Each is fetched through its `package-listing-index`: a gzip blob of chunk URLs on the
+CDN (Thunderstore reaches it through a redirect), chunks fetched four at a time with one retry, the same
+package shape as the deprecated `/api/v1/package/`, which stays as the fallback. The blob URL carries the
+content hash and is saved with the cache per store, so a refresh that lands on the same blob reuses that
+store's list; Hexium failing keeps its last list and never costs the Thunderstore refresh. `merge()` joins
+the two lists by package id (`owner-name`): versions are the union, newest first, a release on both stores
+is downloaded from Thunderstore (`Version::src`, `dl`), Hexium's category names are mapped onto
+Thunderstore's, and `Pkg::stores` says which stores list the package. `build()` also counts dependants per
+package for "Used by", keeps the full packages in a `HashMap` for lookups and pre-serializes a slim JSON
+(one entry per package: latest version, counts, dependency ids, stores) that `get_index` hands to the UI
+unchanged. The UI sends `since` and gets an empty body when nothing changed. A profile does not record the
+store: it names id and version, the resolver takes the version's store into the plan, and the lock
+published to a companion carries it as `source` so the companion downloads from the same place.
 
 **Sync.** Any profile change (`set_mods`, import, repair, local mods) enqueues a sync. One worker processes
 the queue; per profile, requests are merged. `run_sync` resolves the plan, downloads missing zips in
@@ -82,7 +89,7 @@ launches pass `--doorstop-enabled false`.
 (`get_package_doc`, `get_package_wiki`, `get_wiki_page`). Readme and changelog are immutable per version
 and cached under `cache/docs/`; the wiki is fetched per request. The UI renders with `marked`, sanitizes
 with DOMPurify (`lib/markdown.ts`) and routes every link through `openExternal`. Spec:
-`docs/superpowers/specs/2026-10-11-mod-docs-and-import-install.md`.
+`docs/specs/2026-10-11-mod-docs-and-import-install.md`.
 
 **Publish as modpack.** `publish.rs` turns a profile into a Thunderstore package: `manifest.json` with every
 resolved package as a versioned dependency, the README the author edited in the dialog, a 256×256 icon (the
@@ -99,7 +106,7 @@ anyway". `publish_profile` stages a release on the companion (`POST /api/release
 checks the local plan plus config files, nothing changes live); `apply_release` then applies it now, when
 nobody is online, or at a time, and `discard_release` drops it. `valheim-mod-manager://import?url=…&name=…&link=…` (deep-link + single-instance
 plugins) downloads the companion's `.r2z`, imports it like any other and stores the link. Spec:
-`docs/superpowers/specs/2026-10-10-server-companion-design.md`.
+`docs/specs/2026-10-10-server-companion-design.md`.
 
 **Gist transport.** The same link can point at a sealed GitHub gist instead of a companion URL
 (`sync_code` + optional `gist_token`, gistsync.rs): the companion writes `server.json` (lock, configs,
@@ -109,7 +116,7 @@ and the pre-play gate are shared; `publish_gist` seals and PATCHes one release a
 back through `server.json`. A sync code is recognised wherever it is pasted (`find_sync_code`), the server
 only sees enabled mods (`server_mods`), and the toolbar chip (`shell/server-chip.svelte`) shows transport,
 state and role (admin = a token is stored). Spec:
-`docs/superpowers/specs/2026-10-12-gist-sync-integration.md`.
+`docs/specs/2026-10-12-gist-sync-integration.md`.
 
 ## Frontend
 
@@ -155,4 +162,6 @@ template reactive to language changes. Formatters in `format.ts` are cached per 
 - **Signed updates.** `tauri-plugin-updater` checks `releases/latest/download/latest.json` once at startup
   (opt-out in Settings); packages are verified against the public key in `tauri.conf.json`.
 - **Mock backend for the browser.** `dev/mock-tauri.js` fakes `window.__TAURI_INTERNALS__` so the whole UI
-  runs in a normal browser with sample data (dev server only, `VITE_MOCK_TAURI=1`).
+  runs in a normal browser with sample data (dev server only, `VITE_MOCK_TAURI=1`). It steps aside when the
+  real internals exist, so `bun run mock` serves the DEV app window and the browser from one dev server, and
+  it reports a dev build so the preview wears the DEV colors too.

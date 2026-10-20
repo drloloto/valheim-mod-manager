@@ -1,0 +1,42 @@
+{
+	"name": "@vmm/companion-ui",
+	"private": true,
+	"version": "0.4.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vp dev"
+	},
+	"devDependencies": {
+		"@fontsource-variable/archivo": "catalog:",
+		"@fontsource-variable/jetbrains-mono": "catalog:",
+		"@lucide/svelte": "catalog:",
+		"@sveltejs/adapter-static": "catalog:",
+		"@sveltejs/kit": "catalog:",
+		"@sveltejs/vite-plugin-svelte": "catalog:",
+		"@tailwindcss/vite": "catalog:",
+		"@types/bun": "^1.4.3",
+		"bits-ui": "catalog:",
+		"clsx": "catalog:",
+		"shadcn-svelte": "catalog:",
+		"svelte": "catalog:",
+		"svelte-check": "catalog:",
+		"svelte-sonner": "catalog:",
+		"tailwind-merge": "catalog:",
+		"tailwind-variants": "catalog:",
+		"tailwindcss": "catalog:",
+		"tw-animate-css": "catalog:",
+		"typescript": "catalog:",
+		"vite": "catalog:",
+		"vite-plus": "catalog:"
+	},
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	},
+	"dependencies": {
+		"@git-diff-view/file": "^0.1.7",
+		"@git-diff-view/svelte": "^0.1.7",
+		"zod": "^4.6.7",
+		"@vmm/ui": "workspace:*"
+	}
+}

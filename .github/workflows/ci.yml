@@ -10,42 +10,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  frontend:
-    name: Frontend (lint, check, test, build)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run check
-      - run: npm test
-      - run: npm run build
-
-  core:
-    name: Rust core (fmt, clippy, test)
+  gate:
+    # The same gate as on a developer machine: `vp run ci` (format, lint, type checks, svelte-check, tests,
+    # both web builds, the Rust core). Windows, because the client is a Windows app and Tauri builds there.
+    name: vp run ci
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
-          node-version: 22
-          cache: npm
+          node-version-file: .node-version
+          cache: true
+      # the companion's tests use bun:test
+      - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
-      # tauri::generate_context! embeds the frontend build, so it has to exist before cargo runs
-      - run: npm ci
-      - run: npm run build
-      - run: cargo fmt --check
-        working-directory: src-tauri
-      - run: cargo clippy --all-targets -- -D warnings
-        working-directory: src-tauri
-      - run: cargo test
-        working-directory: src-tauri
+          workspaces: apps/client/src-tauri
+      # Vite Task results: an unchanged package replays instead of running again
+      - uses: actions/cache@v6
+        with:
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ github.sha }}
+          restore-keys: vite-task-${{ runner.os }}-
+      - run: vp run ci
+
+  companion:
+    # The companion runs in a Linux image: its tar scenarios only run on Linux, and the image must build.
+    name: Companion on Linux (tests, image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          node-version-file: .node-version
+          cache: true
+      - run: vp run --filter @vmm/companion test
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/companion/Dockerfile
+          push: false
+          tags: valheim-companion:ci

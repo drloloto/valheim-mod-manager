@@ -1,19 +1,27 @@
 # Claude Code notes
 
-Read `../CLAUDE.md` (the workspace: start folder, test stack, the one-sync rule) and [AGENTS.md](AGENTS.md)
-first; AGENTS.md has the commands, the repository map and the rules.
+@AGENTS.md
+
+The repository rules come from `AGENTS.md` (imported above, nothing to read first). Working in `apps/client`
+adds `apps/client/AGENTS.md` through `apps/client/CLAUDE.md` the same way. Start sessions in this folder:
+memory, `.claude/settings.json` and the hooks are per start folder.
 
 Claude-specific additions:
 
 - When the Svelte MCP server is available, run its `svelte-autofixer` on every `.svelte` and `.svelte.ts`
   file you create or change until it reports no issues.
-- Bigger changes follow spec → plan → implement with tests: a short design in `docs/superpowers/specs/`,
-  a task list in `docs/superpowers/plans/`, then code. No plugin is needed for this; the folder name is
-  historical. The owner prefers decisions to be made and stated, not asked, unless the direction itself
-  changes.
-- Verification before claiming completion: run the gates listed in AGENTS.md and, for UI changes, look at
-  the result in the mock preview (`dev/` has a CDP screenshot approach; headless Edge works).
-- Never modify the production game server (10.10.10.123). Server-side work lives in the sibling repo
-  `../companion`; its contract with this client is the manifest and the `.r2z` profile zip.
+- Bigger changes follow spec → plan → implement with tests: a short design in `docs/specs/`, a task list in
+  `docs/plans/`, then code. The owner prefers decisions to be made and stated, not asked, unless the direction
+  itself changes.
+- Verification before claiming completion: `vp run ci` and, for UI changes, `bun run mock:audit` (every page
+  in the mock preview, German, 1100 × 680) with a look at the screenshots. `/ux-review` writes a heuristic
+  UX review from those screenshots, on request only.
 - Use Windows paths and PowerShell or the file tools; no Git-Bash `/c/...` detours.
+- The PostToolUse hook in `.claude/settings.json` runs `vp check --fix` on every edited source file; do not
+  run formatting by hand.
 - Commit messages end with a `Co-Authored-By` line for the model that wrote the change.
+- Token discipline (measured 2026-10-17: a 62-minute session peaked at 365k context, mostly self-inflicted):
+  read files with `offset`/`limit` or grep, never whole files; create new files with Write, not heredocs;
+  take mock screenshots with `AUDIT=0` unless the layout audit itself is the question, and filter audit
+  output to the element under test (a dialog over a page reports every overlap with the background);
+  print `git status` once; `/compact` after every commit and before a new feature.

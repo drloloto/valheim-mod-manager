@@ -1,0 +1,48 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Valheim Mod Manager",
+	"version": "0.4.0",
+	"identifier": "io.github.drloloto.valheim-mod-manager",
+	"build": {
+		"beforeDevCommand": "vp dev",
+		"beforeBuildCommand": "vp run build",
+		"devUrl": "http://localhost:1420",
+		"frontendDist": "../build"
+	},
+	"app": {
+		"windows": [
+			{
+				"label": "main",
+				"title": "Valheim Mod Manager",
+				"width": 1440,
+				"height": 900,
+				"minWidth": 1100,
+				"minHeight": 680,
+				"center": true,
+				"decorations": false,
+				"shadow": true
+			}
+		],
+		"security": {
+			"csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'",
+			"devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'"
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": ["msi", "nsis"],
+		"icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+		"createUpdaterArtifacts": true
+	},
+	"plugins": {
+		"deep-link": {
+			"desktop": {
+				"schemes": ["valheim-mod-manager"]
+			}
+		},
+		"updater": {
+			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwODY3RDgyMzYxOTI2N0YKUldSL0poazJnbjJHZ0cxa0NnQ1NXTmhpZWNveW5HSTRBb28wTkgzQ1UyMzlXWUpWN09oMjZqS0cK",
+			"endpoints": ["https://github.com/drloloto/valheim-mod-manager/releases/latest/download/latest.json"]
+		}
+	}
+}

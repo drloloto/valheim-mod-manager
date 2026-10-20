@@ -1,6 +1,7 @@
 version: 2
 updates:
-  - package-ecosystem: npm
+  # The Bun workspace: one lockfile (bun.lock) and one catalog (package.json) at the root for every package.
+  - package-ecosystem: bun
     directory: /
     schedule:
       interval: weekly
@@ -8,16 +9,20 @@ updates:
       npm-minor:
         update-types: [minor, patch]
     ignore:
-      # SvelteKit 3 declares typescript ^6 as its peer range; a major bump fails npm ci until it moves.
+      # SvelteKit 3 declares typescript ^6 as its peer range; a major bump fails the install until it moves.
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
   - package-ecosystem: cargo
-    directory: /src-tauri
+    directory: /apps/client/src-tauri
     schedule:
       interval: weekly
     groups:
       cargo-minor:
         update-types: [minor, patch]
+  - package-ecosystem: docker
+    directory: /apps/companion
+    schedule:
+      interval: monthly
   - package-ecosystem: github-actions
     directory: /
     schedule:

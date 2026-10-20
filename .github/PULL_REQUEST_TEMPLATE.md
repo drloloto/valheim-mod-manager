@@ -4,9 +4,8 @@
 
 ## How it was verified
 
-- [ ] `npm run lint && npm run check && npm test && npm run build`
-- [ ] `cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test` (in `src-tauri`)
-- [ ] Tried in the app (`npm run tauri dev`) or in the browser preview (`VITE_MOCK_TAURI=1 npm run dev`)
+- [ ] `vp run ci` (format, lint, type checks, svelte-check, tests, builds, the Rust core)
+- [ ] Tried in the app (`bun run --cwd apps/client tauri dev`) or in the browser preview (`bun run mock`)
 - [ ] Tested with the real game, if the change touches sync, install or launch
 
 ## Notes for the reviewer

@@ -1,0 +1,30 @@
+services:
+  valheim:
+    image: ghcr.io/community-valheim-tools/valheim-server
+    cap_add:
+      - sys_nice
+    volumes:
+      - ./config:/config
+      - ./data:/opt/valheim
+    env_file:
+      - ./valheim.env
+    ports:
+      - "127.0.0.1:2456-2457:2456-2457/udp"
+      - "127.0.0.1:9001:9001/tcp"
+    restart: unless-stopped
+    stop_grace_period: 2m
+
+  frpc:
+    image: fatedier/frpc:v0.71.0 # vorher auf aktuelle Version prüfen
+    command: -c /etc/frp/frpc.toml
+    network_mode: "service:valheim"
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - FRP_TOKEN=${FRP_TOKEN:?FRP_TOKEN fehlt in .env}
+    volumes:
+      - ./frpc.toml:/etc/frp/frpc.toml:ro
+    restart: unless-stopped

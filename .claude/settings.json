@@ -1,0 +1,40 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(vp check:*)",
+			"Bash(vp run:*)",
+			"Bash(bunx vp:*)",
+			"Bash(bun run:*)",
+			"Bash(bun install:*)",
+			"Bash(bun test:*)",
+			"Bash(git status:*)",
+			"Bash(git diff:*)",
+			"Bash(git log:*)",
+			"Bash(git grep:*)",
+			"Bash(git show:*)",
+			"Bash(node dev/:*)",
+			"Bash(curl -s http://localhost:*)",
+			"PowerShell(vp check:*)",
+			"PowerShell(vp run:*)",
+			"PowerShell(bun run:*)",
+			"PowerShell(bun install:*)",
+			"PowerShell(git status:*)",
+			"PowerShell(git diff:*)",
+			"PowerShell(git log:*)"
+		]
+	},
+	"hooks": {
+		"PostToolUse": [
+			{
+				"matcher": "Edit|Write",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "node .claude/hooks/format-on-edit.mjs",
+						"timeout": 90
+					}
+				]
+			}
+		]
+	}
+}

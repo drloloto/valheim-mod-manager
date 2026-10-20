@@ -1,18 +1,23 @@
+# Dependencies and build output, at any depth (apps/*, packages/*)
+node_modules/
+.svelte-kit/
+**/src-tauri/target/
+**/src-tauri/gen/
+apps/*/build/
+apps/*/ui/build/
+packages/*/dist/
+dist/
+dist-ssr/
+*.local
+*.tsbuildinfo
+
 # Logs
-/logs
+logs/
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# Editors
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -23,19 +28,32 @@ dist-ssr
 *.sln
 *.sw?
 
-# Tauri
-src-tauri/target
-src-tauri/gen
+# Lockfiles of other package managers (Bun is the workspace's package manager)
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
 
-# SvelteKit
-.svelte-kit
-/build
+# The docker test stack: secrets and runtime state stay local
+test/.env
+test/config/
+test/data/
+test/backups/
 
-# Bun lockfiles (npm is the canonical package manager, see CI)
-bun.lock
-bun.lockb
+# Local experiments
+/spike/
 
-# Spike artifacts (semantic search PoC)
-spike/semantic-search/.model-cache
-spike/semantic-search/index*.json
-spike/semantic-search/dlls.json
+# Per-user Claude Code settings
+.claude/settings.local.json
+test/valheim.env
+test/frpc.toml
+test/e2e/out/
+# snapshots of a real server (test/seed.ps1) and the config/ a seed replaced
+test/snapshots/
+test/config.prev/
+apps/client/dev/out/
+
+# Vite+: generated hook shims (vp config) and Vitest's cache
+.vite-hooks/_/
+.vitest/
+
+competitor
