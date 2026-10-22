@@ -1,7 +1,7 @@
 //! Health hints for a profile: duplicate DLLs, deprecated mods, mods older than the last game update.
-use crate::models::{Installed, Pkg, ProfileMod, Resolved, Source};
+use crate::models::{Installed, PkgSource, ProfileMod, Resolved, Source};
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -32,7 +32,7 @@ pub fn ids_to_check(mods: &[ProfileMod], resolved: Option<&BTreeMap<String, Reso
     ids
 }
 
-pub fn check(ids: &[String], installed: &Installed, by_id: Option<&HashMap<String, Pkg>>, game_updated: Option<i64>) -> Vec<HealthIssue> {
+pub fn check(ids: &[String], installed: &Installed, by_id: Option<&dyn PkgSource>, game_updated: Option<i64>) -> Vec<HealthIssue> {
     let mut out = vec![];
 
     // Same DLL file name installed by more than one package (case-insensitive).
@@ -55,7 +55,7 @@ pub fn check(ids: &[String], installed: &Installed, by_id: Option<&HashMap<Strin
 
     if let Some(by_id) = by_id {
         for id in ids {
-            let Some(p) = by_id.get(id) else { continue };
+            let Some(p) = by_id.pkg(id) else { continue };
             if p.dep {
                 out.push(HealthIssue { kind: "deprecated", ids: vec![id.clone()], detail: String::new() });
             }
@@ -72,7 +72,8 @@ pub fn check(ids: &[String], installed: &Installed, by_id: Option<&HashMap<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{test_pkg, InstalledEntry};
+    use crate::models::{test_pkg, InstalledEntry, Pkg};
+    use std::collections::HashMap;
 
     fn entry(files: &[&str]) -> InstalledEntry {
         InstalledEntry { version: "1.0.0".into(), files: files.iter().map(|f| f.to_string()).collect() }

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 /// A package store the index is built from. Hexium speaks Thunderstore's API on its own hosts; the index
 /// merges both by package id (`owner-name`), so a profile and a manifest name mods the same way whichever
@@ -52,6 +53,17 @@ pub struct Pkg {
     pub stores: Vec<Store>,
     /// newest first
     pub versions: Vec<Version>,
+}
+
+/// Package lookups by id: the index on disk in the app, a map in tests.
+pub trait PkgSource: Sync {
+    fn pkg(&self, id: &str) -> Option<Arc<Pkg>>;
+}
+
+impl PkgSource for HashMap<String, Pkg> {
+    fn pkg(&self, id: &str) -> Option<Arc<Pkg>> {
+        self.get(id).cloned().map(Arc::new)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]

@@ -1,7 +1,7 @@
 //! Linked server (the companion container): fetch its manifest, compare it with the local plan,
 //! adopt its versions, publish the local plan. The manifest is the lock both sides agree on.
 use crate::error::{AppError, Result};
-use crate::models::{Pkg, Profile, ProfileMod, Resolved, ServerLink, Source, Store};
+use crate::models::{PkgSource, Profile, ProfileMod, Resolved, ServerLink, Source, Store};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -184,7 +184,7 @@ pub fn diff(profile: &Profile, local: &BTreeMap<String, Resolved>, manifest: &[M
 
 /// The lock to publish: every resolved package, `explicit` from the profile, namespace and name from the
 /// index. Local mods cannot be installed on the server and are returned separately.
-pub fn manifest_mods(profile: &Profile, resolved: &BTreeMap<String, Resolved>, by_id: &HashMap<String, Pkg>) -> (Vec<ManifestMod>, Vec<String>) {
+pub fn manifest_mods(profile: &Profile, resolved: &BTreeMap<String, Resolved>, by_id: &dyn PkgSource) -> (Vec<ManifestMod>, Vec<String>) {
     let explicit: Vec<String> = profile.mods.iter().filter(|m| m.source == Source::Thunderstore && m.enabled && !m.implicit).map(ProfileMod::id).collect();
     // The admin's "optional" marks travel with their explicit entries; a dependency is never optional.
     let optional: Vec<String> = profile.mods.iter().filter(|m| m.optional && explicit.contains(&m.id())).map(ProfileMod::id).collect();
@@ -193,7 +193,7 @@ pub fn manifest_mods(profile: &Profile, resolved: &BTreeMap<String, Resolved>, b
         .iter()
         .filter(|(id, _)| !local.contains(id))
         .map(|(id, r)| {
-            let (ns, name) = by_id.get(id).map(|p| (p.ns.clone(), p.name.clone())).unwrap_or_default();
+            let (ns, name) = by_id.pkg(id).map(|p| (p.ns.clone(), p.name.clone())).unwrap_or_default();
             ManifestMod {
                 id: id.clone(),
                 version: r.version.clone(),

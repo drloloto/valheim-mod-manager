@@ -1,7 +1,7 @@
-use crate::models::{Installed, Pkg, Plan, ProfileMod, Resolved, Source, Store, ToInstall};
+use crate::models::{Installed, PkgSource, Plan, ProfileMod, Resolved, Source, Store, ToInstall};
 use crate::util::{cmp_version, parse_full_name};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 pub const BEPINEX_PACK_ID: &str = "denikson-BepInExPack_Valheim";
 
@@ -15,7 +15,7 @@ pub fn canonical_id(ns: &str, name: &str) -> String {
 }
 
 struct Resolver<'a> {
-    by_id: &'a HashMap<String, Pkg>,
+    src: &'a dyn PkgSource,
     resolved: BTreeMap<String, Resolved>,
     errors: Vec<String>,
 }
@@ -25,7 +25,7 @@ impl Resolver<'_> {
     /// Returns the version that was pinned, or None when the package is not in the index.
     fn pin(&mut self, ns: &str, name: &str, version: &str) -> Option<String> {
         let id = canonical_id(ns, name);
-        let Some(pkg) = self.by_id.get(&id) else {
+        let Some(pkg) = self.src.pkg(&id) else {
             self.errors.push(format!("Package not found: {id}"));
             return None;
         };
@@ -48,7 +48,7 @@ impl Resolver<'_> {
     /// Packages that are already resolved (pinned or visited) keep their version.
     fn visit(&mut self, ns: &str, name: &str, parent: &str) {
         let id = canonical_id(ns, name);
-        let Some(pkg) = self.by_id.get(&id) else {
+        let Some(pkg) = self.src.pkg(&id) else {
             self.errors.push(format!("Package not found: {id} (required by {parent})"));
             return;
         };
@@ -64,7 +64,7 @@ impl Resolver<'_> {
     }
 
     fn walk(&mut self, id: &str, version: &str) {
-        let deps = self.by_id.get(id).and_then(|p| p.versions.iter().find(|v| v.v == version)).map(|v| v.deps.clone()).unwrap_or_default();
+        let deps = self.src.pkg(id).and_then(|p| p.versions.iter().find(|v| v.v == version).map(|v| v.deps.clone())).unwrap_or_default();
         for d in deps {
             if let Some(f) = parse_full_name(&d) {
                 self.visit(&f.ns, &f.name, id);
@@ -75,15 +75,15 @@ impl Resolver<'_> {
 
 /// Pure function: dependency closure of the profile plus the diff against installed.json.
 /// Explicit mods keep their version; dependencies resolve to the newest version in the index.
-pub fn plan(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>, installed: &Installed) -> Plan {
-    let mut r = Resolver { by_id, resolved: BTreeMap::new(), errors: vec![] };
+pub fn plan(mods: &[ProfileMod], src: &dyn PkgSource, installed: &Installed) -> Plan {
+    let mut r = Resolver { src, resolved: BTreeMap::new(), errors: vec![] };
     let mut walk: Vec<(String, Vec<String>)> = vec![];
     for m in mods {
         let id = m.id();
         match m.source {
             Source::Thunderstore => {
                 if let Some(v) = r.pin(&m.namespace, &m.name, &m.version) {
-                    let deps = by_id.get(&id).and_then(|p| p.versions.iter().find(|x| x.v == v)).map(|x| x.deps.clone()).unwrap_or_default();
+                    let deps = src.pkg(&id).and_then(|p| p.versions.iter().find(|x| x.v == v).map(|x| x.deps.clone())).unwrap_or_default();
                     walk.push((id, deps));
                 }
             }
@@ -101,7 +101,7 @@ pub fn plan(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>, installed: &Insta
         }
     }
     if !mods.is_empty() && !r.resolved.contains_key(BEPINEX_PACK_ID) {
-        match by_id.get(BEPINEX_PACK_ID).and_then(|p| p.versions.first().map(|v| (v.v.clone(), v.src))) {
+        match src.pkg(BEPINEX_PACK_ID).and_then(|p| p.versions.first().map(|v| (v.v.clone(), v.src))) {
             Some((v, store)) => {
                 r.resolved.insert(BEPINEX_PACK_ID.to_string(), Resolved { version: v, required_by: vec![], store });
             }
@@ -122,11 +122,12 @@ pub fn plan(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>, installed: &Insta
 
 /// Explicit, unpinned Thunderstore mods for which the index knows a newer version. A server's mods
 /// (`managed`) run the server's version; the server, not the player, updates them.
-pub fn updates(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>) -> BTreeMap<String, String> {
+pub fn updates(mods: &[ProfileMod], src: &dyn PkgSource) -> BTreeMap<String, String> {
     mods.iter()
         .filter(|m| m.source == Source::Thunderstore && !m.pinned && !m.implicit && !m.managed)
         .filter_map(|m| {
-            let latest = by_id.get(&m.id())?.versions.first()?;
+            let pkg = src.pkg(&m.id())?;
+            let latest = pkg.versions.first()?;
             (cmp_version(&m.version, &latest.v) == Ordering::Less).then(|| (m.id(), latest.v.clone()))
         })
         .collect()
@@ -135,7 +136,8 @@ pub fn updates(mods: &[ProfileMod], by_id: &HashMap<String, Pkg>) -> BTreeMap<St
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{test_pkg, InstalledEntry, ProfileMod, Source, ToInstall};
+    use crate::models::{test_pkg, InstalledEntry, Pkg, ProfileMod, Source, ToInstall};
+    use std::collections::HashMap;
 
     fn index(pkgs: Vec<Pkg>) -> HashMap<String, Pkg> {
         let mut all = pkgs;

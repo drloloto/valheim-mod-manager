@@ -23,8 +23,9 @@ impl Paths {
     pub fn active_file(&self) -> PathBuf {
         self.root.join("active.txt")
     }
-    pub fn index_cache(&self) -> PathBuf {
-        self.root.join("cache").join("index.json")
+    /// The package index: one generation of record files, slim list and meta (see `thunderstore`).
+    pub fn index_dir(&self) -> PathBuf {
+        self.root.join("cache").join("index")
     }
     pub fn downloads(&self) -> PathBuf {
         self.root.join("cache").join("downloads")

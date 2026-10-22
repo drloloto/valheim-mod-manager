@@ -200,6 +200,31 @@ pub fn sync_doorstop(src: &Path, game_dir: &Path) -> Result<usize> {
     Ok(copied)
 }
 
+/// The registry key conhost reads for a program that allocates its own console: the executable's path
+/// with `_` for every backslash under `HKCU\Console`.
+pub fn console_key_name(exe: &Path) -> String {
+    exe.display().to_string().replace('\\', "_")
+}
+
+/// Turns QuickEdit off for the console the game opens for BepInEx. In QuickEdit mode a click into the
+/// window starts a selection, which blocks the game's output until Enter releases it (the "stuck" console).
+/// The setting lives in the user's registry for this one executable; every other console keeps its mode.
+#[cfg(windows)]
+pub fn disable_console_quick_edit(game_exe: &Path) -> Result<()> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let (key, _) = RegKey::predef(HKEY_CURRENT_USER).create_subkey(format!("Console\\{}", console_key_name(game_exe)))?;
+    if key.get_value::<u32, _>("QuickEdit").ok() != Some(0) {
+        key.set_value("QuickEdit", &0u32)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn disable_console_quick_edit(_game_exe: &Path) -> Result<()> {
+    Ok(())
+}
+
 pub fn launch(steam_exe: &Path, args: &[String]) -> Result<()> {
     std::process::Command::new(steam_exe).arg("-applaunch").arg(APP_ID).args(args).spawn()?;
     Ok(())
@@ -240,6 +265,14 @@ mod tests {
         let acf = "\"AppState\"\n{\n\t\"appid\"\t\t\"892970\"\n\t\"LastUpdated\"\t\t\"1791308611\"\n\t\"buildid\"\t\t\"25730771\"\n\t\"InstalledDepots\"\n\t{\n\t}\n}";
         assert_eq!(parse_app_manifest(acf), Some((1_791_308_611_000, "25730771".to_string())));
         assert_eq!(parse_app_manifest("\"AppState\" { \"appid\" \"1\" }"), None);
+    }
+
+    #[test]
+    fn console_key_follows_conhost_naming() {
+        assert_eq!(
+            console_key_name(Path::new(r"C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim.exe")),
+            "C:_Program Files (x86)_Steam_steamapps_common_Valheim_valheim.exe"
+        );
     }
 
     #[test]

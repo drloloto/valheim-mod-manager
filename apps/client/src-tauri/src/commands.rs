@@ -8,7 +8,7 @@ use crate::install;
 use crate::localmod;
 use crate::logs;
 use crate::migrate::{self, ForeignProfile};
-use crate::models::{Pkg, Plan, Profile, ProfileMod, ServerLink, Source};
+use crate::models::{Pkg, PkgSource, Plan, Profile, ProfileMod, ServerLink, Source};
 use crate::paths::Paths;
 use crate::profiles;
 use crate::publish;
@@ -54,8 +54,8 @@ impl AppCtx {
 
     async fn ensure_index(&self) -> Result<Arc<Index>> {
         if self.index.get().is_none() {
-            let cache = self.paths.index_cache();
-            if let Ok(Some(idx)) = tokio::task::spawn_blocking(move || thunderstore::load_cache(&cache)).await {
+            let dir = self.paths.index_dir();
+            if let Ok(Some(idx)) = tokio::task::spawn_blocking(move || thunderstore::load(&dir)).await {
                 self.index.set(idx);
             }
         }
@@ -64,13 +64,13 @@ impl AppCtx {
             // An index from before the second store: merge Hexium in before answering, so a lock that names a
             // Hexium mod resolves on the first adoption after the update (the worker does the same in time).
             Some(i) if hexium && i.lacks_hexium() => {
-                if let Err(e) = thunderstore::refresh(&self.index, &self.client, &self.paths.index_cache(), false, true).await {
+                if let Err(e) = thunderstore::refresh(&self.index, &self.client, &self.paths.index_dir(), false, true).await {
                     eprintln!("Hexium could not be merged into the index: {e}");
                 }
             }
             Some(i) => return Ok(i),
             None => {
-                thunderstore::refresh(&self.index, &self.client, &self.paths.index_cache(), true, hexium).await?;
+                thunderstore::refresh(&self.index, &self.client, &self.paths.index_dir(), true, hexium).await?;
             }
         }
         self.index.get().ok_or_else(|| AppError::Network("The mod index is not available.".into()))
@@ -152,14 +152,14 @@ fn build_state(ctx: &AppCtx) -> Result<AppState> {
     };
     let installed = active.as_deref().map(|n| profiles::load_installed(&ctx.paths, n)).unwrap_or_default();
     let (plan, updates) = match (ctx.index.get(), &active) {
-        (Some(i), Some(_)) => (Some(resolver::plan(&mods, &i.by_id, &installed)), resolver::updates(&mods, &i.by_id)),
+        (Some(i), Some(_)) => (Some(resolver::plan(&mods, i.as_ref(), &installed)), resolver::updates(&mods, i.as_ref())),
         _ => (None, BTreeMap::new()),
     };
     let game = ctx.game();
     let found = game.valheim_dir.as_deref().is_some_and(|d| game::is_valheim_dir(Path::new(d)));
     let manifest = game.valheim_dir.as_deref().and_then(|d| game::app_manifest(Path::new(d)));
     let health_ids = health::ids_to_check(&mods, plan.as_ref().map(|p| &p.resolved));
-    let health = health::check(&health_ids, &installed, ctx.index.get().as_deref().map(|i| &i.by_id), manifest.as_ref().map(|m| m.0));
+    let health = health::check(&health_ids, &installed, ctx.index.get().as_deref().map(|i| i as &dyn PkgSource), manifest.as_ref().map(|m| m.0));
     let names = profiles::list(&ctx.paths);
     let loaded: Vec<(String, Profile)> = names.iter().filter_map(|n| profiles::load(&ctx.paths, n).ok().map(|p| (n.clone(), p))).collect();
     let profile_mods = loaded.iter().map(|(n, p)| (n.clone(), p.mods.iter().filter(|m| !m.implicit).map(ProfileMod::id).collect())).collect();
@@ -251,8 +251,8 @@ pub fn request_sync(app: &AppHandle, profile: &str, repair: bool) {
 pub async fn index_worker(app: AppHandle) {
     let ctx = app.state::<AppCtx>();
     if ctx.index.get().is_none() {
-        let cache = ctx.paths.index_cache();
-        if let Ok(Some(idx)) = tokio::task::spawn_blocking(move || thunderstore::load_cache(&cache)).await {
+        let dir = ctx.paths.index_dir();
+        if let Ok(Some(idx)) = tokio::task::spawn_blocking(move || thunderstore::load(&dir)).await {
             ctx.index.set(idx);
             emit_index_updated(&app, &ctx);
         }
@@ -266,7 +266,7 @@ pub async fn index_worker(app: AppHandle) {
         // Hexium on but never fetched (a cache from before the second store): refresh regardless of the age.
         let missing_store = hexium && ctx.index.get().is_some_and(|i| i.lacks_hexium());
         if stale || missing_store {
-            match thunderstore::refresh(&ctx.index, &ctx.client, &ctx.paths.index_cache(), false, hexium).await {
+            match thunderstore::refresh(&ctx.index, &ctx.client, &ctx.paths.index_dir(), false, hexium).await {
                 Ok(true) => emit_index_updated(&app, &ctx),
                 Ok(false) => {}
                 Err(e) => eprintln!("Index refresh failed: {e}"),
@@ -304,7 +304,7 @@ pub async fn get_index(ctx: State<'_, AppCtx>, since: Option<i64>) -> Result<tau
 #[tauri::command]
 pub async fn refresh_index(app: AppHandle, ctx: State<'_, AppCtx>) -> Result<Option<i64>> {
     let hexium = ctx.settings.read().unwrap().hexium;
-    thunderstore::refresh(&ctx.index, &ctx.client, &ctx.paths.index_cache(), true, hexium).await?;
+    thunderstore::refresh(&ctx.index, &ctx.client, &ctx.paths.index_dir(), true, hexium).await?;
     emit_index_updated(&app, &ctx);
     Ok(ctx.index.age_ms())
 }
@@ -315,7 +315,7 @@ pub async fn get_package(ctx: State<'_, AppCtx>, id: String) -> Result<Pkg> {
         return Ok(p);
     }
     let idx = ctx.ensure_index().await?;
-    idx.by_id.get(&id).cloned().ok_or_else(|| AppError::NotFound(format!("Package {id} not found.")))
+    idx.get(&id).map(|p| (*p).clone()).ok_or_else(|| AppError::NotFound(format!("Package {id} not found.")))
 }
 
 /// A `local-*` id as a package: the active profile's copy first, then any profile that has one.
@@ -379,7 +379,7 @@ pub struct ModpackPreview {
 pub async fn modpack_preview(ctx: State<'_, AppCtx>, profile: String, name: String, description: String) -> Result<ModpackPreview> {
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, &profile)?;
-    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    let plan = resolver::plan(&p.mods, index.as_ref(), &profiles::load_installed(&ctx.paths, &profile));
     if !plan.errors.is_empty() {
         return Err(AppError::Invalid(format!("The profile has unresolved mods: {}", plan.errors.join(", "))));
     }
@@ -387,8 +387,8 @@ pub async fn modpack_preview(ctx: State<'_, AppCtx>, profile: String, name: Stri
         .resolved
         .iter()
         .map(|(id, r)| {
-            let pkg = index.by_id.get(id);
-            (pkg.map(|p| p.ns.clone()).unwrap_or_default(), pkg.map(|p| p.name.clone()).unwrap_or_else(|| id.clone()), r.version.clone())
+            let pkg = index.get(id);
+            (pkg.as_ref().map(|p| p.ns.clone()).unwrap_or_default(), pkg.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| id.clone()), r.version.clone())
         })
         .collect();
     let title = if name.trim().is_empty() { p.name.clone() } else { name };
@@ -412,7 +412,7 @@ pub async fn publish_modpack(ctx: State<'_, AppCtx>, profile: String, meta: publ
         .ok_or_else(|| AppError::Invalid("Set a Thunderstore service-account token in the settings first.".into()))?;
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, &profile)?;
-    let plan = resolver::plan(&p.mods, &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    let plan = resolver::plan(&p.mods, index.as_ref(), &profiles::load_installed(&ctx.paths, &profile));
     if !plan.errors.is_empty() {
         return Err(AppError::Invalid(format!("The profile has unresolved mods: {}", plan.errors.join(", "))));
     }
@@ -717,7 +717,7 @@ async fn check_gist(ctx: &AppCtx, profile: &str, link: &ServerLink, m: &gistsync
         Ok(p) => (p, profiles::load_installed(&ctx.paths, profile)),
         Err(e) => return unreachable_check(link, e),
     };
-    let plan = resolver::plan(&server_mods(&p), &index.by_id, &installed);
+    let plan = resolver::plan(&server_mods(&p), index.as_ref(), &installed);
     let s = match gistsync::read_server(m, key).await {
         Ok(Some(s)) => s,
         Ok(None) => return unreachable_check(link, AppError::Network("The server has not written to the gist yet.".into())),
@@ -829,7 +829,7 @@ async fn check_link(ctx: &AppCtx, profile: &str) -> Result<ServerCheck> {
     }
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, profile)?;
-    let plan = resolver::plan(&server_mods(&p), &index.by_id, &profiles::load_installed(&ctx.paths, profile));
+    let plan = resolver::plan(&server_mods(&p), index.as_ref(), &profiles::load_installed(&ctx.paths, profile));
     let quick = thunderstore::http_client(Duration::from_secs(2), Duration::from_secs(4))?;
     match server::fetch_manifest(&quick, &link).await {
         Ok(m) => {
@@ -951,7 +951,8 @@ fn write_configs(ctx: &AppCtx, profile: &str, configs: Vec<(String, Vec<u8>)>) -
 
 /// Thunderstore's side categories of a package, for the assistant's hints.
 fn side_of(index: Option<&Index>, id: &str) -> Option<transfer::Side> {
-    let cats = &index?.by_id.get(id)?.cats;
+    let pkg = index?.get(id)?;
+    let cats = &pkg.cats;
     let (server, client) = (cats.iter().any(|c| c == "Server-side"), cats.iter().any(|c| c == "Client-side"));
     match (server, client) {
         (true, false) => Some(transfer::Side::Server),
@@ -1195,11 +1196,11 @@ pub async fn publish_profile(ctx: State<'_, AppCtx>, profile: String, with_confi
     }
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, &profile)?;
-    let plan = resolver::plan(&server_mods(&p), &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    let plan = resolver::plan(&server_mods(&p), index.as_ref(), &profiles::load_installed(&ctx.paths, &profile));
     if !plan.errors.is_empty() {
         return Err(AppError::Invalid(format!("The profile cannot be resolved: {}", plan.errors.join("; "))));
     }
-    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved, &index.by_id);
+    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved, index.as_ref());
     let mut configs = vec![];
     if with_configs {
         let dir = ctx.paths.config_dir(&profile);
@@ -1224,11 +1225,11 @@ pub async fn publish_gist(ctx: State<'_, AppCtx>, profile: String, with_configs:
     }
     let index = ctx.ensure_index().await?;
     let p = profiles::load(&ctx.paths, &profile)?;
-    let plan = resolver::plan(&server_mods(&p), &index.by_id, &profiles::load_installed(&ctx.paths, &profile));
+    let plan = resolver::plan(&server_mods(&p), index.as_ref(), &profiles::load_installed(&ctx.paths, &profile));
     if !plan.errors.is_empty() {
         return Err(AppError::Invalid(format!("The profile cannot be resolved: {}", plan.errors.join("; "))));
     }
-    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved, &index.by_id);
+    let (mods, skipped_local) = server::manifest_mods(&p, &plan.resolved, index.as_ref());
     let mut configs = vec![];
     if with_configs {
         let dir = ctx.paths.config_dir(&profile);
@@ -1285,7 +1286,7 @@ pub fn import_foreign_profile(
 #[tauri::command]
 pub async fn export_profile_code(ctx: State<'_, AppCtx>, profile: String) -> Result<ExportResult> {
     let p = profiles::load(&ctx.paths, &profile)?;
-    let (bytes, skipped_local) = share::build_r2z(&p, &ctx.paths.config_dir(&profile), ctx.index.get().as_deref().map(|i| &i.by_id))?;
+    let (bytes, skipped_local) = share::build_r2z(&p, &ctx.paths.config_dir(&profile), ctx.index.get().as_deref().map(|i| i as &dyn PkgSource))?;
     let code = share::upload_code(&ctx.client, bytes).await?;
     Ok(ExportResult { code: Some(code), skipped_local })
 }
@@ -1293,7 +1294,7 @@ pub async fn export_profile_code(ctx: State<'_, AppCtx>, profile: String) -> Res
 #[tauri::command]
 pub fn export_profile_file(ctx: State<'_, AppCtx>, profile: String, path: String) -> Result<ExportResult> {
     let p = profiles::load(&ctx.paths, &profile)?;
-    let (bytes, skipped_local) = share::build_r2z(&p, &ctx.paths.config_dir(&profile), ctx.index.get().as_deref().map(|i| &i.by_id))?;
+    let (bytes, skipped_local) = share::build_r2z(&p, &ctx.paths.config_dir(&profile), ctx.index.get().as_deref().map(|i| i as &dyn PkgSource))?;
     std::fs::write(&path, bytes)?;
     Ok(ExportResult { code: None, skipped_local })
 }
@@ -1316,6 +1317,9 @@ pub async fn launch_game(ctx: State<'_, AppCtx>, modded: bool) -> Result<()> {
         let ini = std::fs::read_to_string(doorstop.join("doorstop_config.ini"))
             .map_err(|_| AppError::Invalid("BepInEx is not installed in this profile yet. Add a mod and wait for the installation to finish.".into()))?;
         game::sync_doorstop(&doorstop, &dir)?;
+        if let Err(e) = game::disable_console_quick_edit(&dir.join("valheim.exe")) {
+            eprintln!("console QuickEdit could not be switched off: {e}");
+        }
         let profile_dir = ctx.paths.profile_dir(&name);
         let has_corlib = profile_dir.join("unstripped_corlib").is_dir();
         game::launch_args(game::doorstop_version(&ini), Some(&profile_dir), has_corlib)

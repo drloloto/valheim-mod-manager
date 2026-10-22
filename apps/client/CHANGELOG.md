@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The package index lives on disk per store, one package per line, with the slim list and an offset table
+  in memory; lookups read one record. The core process idles at a few tens of MB instead of ~800 MB, starts
+  without parsing a 130 MB cache and refreshes as a stream (the old `cache/index.json` is converted once).
+
+### Fixed
+
+- BepInEx's console no longer freezes the game when clicked: on a modded launch the app turns the console's
+  QuickEdit mode off for `valheim.exe` only (a per-program setting in the user's registry).
+
 ## [0.4.2] - 2026-10-20
 
 ### Fixed

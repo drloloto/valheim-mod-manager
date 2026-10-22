@@ -37,7 +37,8 @@ SvelteKit single-page app rendered by WebView2 that owns the interaction. They t
 %APPDATA%\io.github.drloloto.valheim-mod-manager\
   settings.json              paths, concurrency, index TTL, NSFW default
   active.txt                 name of the active profile
-  cache/index.json           compacted Thunderstore index with fetch timestamp
+  cache/index/               the package index, one generation: <gen>.thunderstore.jsonl and <gen>.hexium.jsonl
+                             (one package per line), <gen>.slim.json (what the UI gets), <gen>.meta.json (offsets)
   cache/downloads/           <id>-<version>.zip, shared across profiles
   profiles/<name>/
     profile.json             explicit mods: namespace, name, version, enabled, source, deps (local only); optional server link
@@ -54,20 +55,29 @@ profile, so switching profiles does not move files. Doorstop v3 and v4 argument 
 
 ## Core flows
 
-**Index.** `index_worker` loads `cache/index.json` at startup and refreshes from the stores when older
+**Index.** `index_worker` opens the newest generation in `cache/index/` at startup (a single-file
+`cache/index.json` from older versions is converted once) and refreshes from the stores when older
 than the configured TTL (default 30 minutes), with a 5-minute backoff after failures. Two stores speak the
 same API: Thunderstore (`thunderstore.io/c/valheim`) and, unless turned off in the settings, Hexium
 (`valheim.hexium.gg`). Each is fetched through its `package-listing-index`: a gzip blob of chunk URLs on the
 CDN (Thunderstore reaches it through a redirect), chunks fetched four at a time with one retry, the same
 package shape as the deprecated `/api/v1/package/`, which stays as the fallback. The blob URL carries the
-content hash and is saved with the cache per store, so a refresh that lands on the same blob reuses that
-store's list; Hexium failing keeps its last list and never costs the Thunderstore refresh. `merge()` joins
-the two lists by package id (`owner-name`): versions are the union, newest first, a release on both stores
-is downloaded from Thunderstore (`Version::src`, `dl`), Hexium's category names are mapped onto
-Thunderstore's, and `Pkg::stores` says which stores list the package. `build()` also counts dependants per
-package for "Used by", keeps the full packages in a `HashMap` for lookups and pre-serializes a slim JSON
-(one entry per package: latest version, counts, dependency ids, stores) that `get_index` hands to the UI
-unchanged. The UI sends `since` and gets an empty body when nothing changed. A profile does not record the
+content hash and is saved with the generation per store, so a refresh that lands on the same blob
+re-streams that store's records from the current generation instead of downloading; Hexium failing keeps
+its last list and never costs the Thunderstore refresh. A refresh is a stream: Thunderstore's chunks go
+through a small channel into a blocking builder that writes the new generation's record files and the slim
+list, so only a few chunks are in memory at once; Hexium (two thousand packages) is held during the build.
+`merge_into()` joins the two stores' records of one package (`owner-name`): versions are the union, newest
+first, a release on both stores is downloaded from Thunderstore (`Version::src`, `dl`), Hexium's category
+names are mapped onto Thunderstore's, and `Pkg::stores` says which stores list the package. The builder
+also counts dependants per package for "Used by" and pre-serializes the slim JSON (one entry per package:
+latest version, counts, dependency ids, stores) that `get_index` hands to the UI unchanged. The UI sends
+`since` and gets an empty body when nothing changed. In memory stay the slim JSON and an offset table
+(package id → byte range per store); `Index::get` reads a package's records with one positional read per
+store, merges them and caches the result for the generation (the `PkgSource` trait the resolver, health,
+share and the companion manifest look packages up through). Nothing holds the 100k versions and 3.4
+million dependency entries of the full listing in memory any more (that was ~800 MB; see
+`docs/research/2026-10-22-launcher-memory-and-index-storage.md`). A profile does not record the
 store: it names id and version, the resolver takes the version's store into the plan, and the lock
 published to a companion carries it as `source` so the companion downloads from the same place.
 

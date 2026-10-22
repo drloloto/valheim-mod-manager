@@ -3,13 +3,12 @@
 use crate::config::list_files_with_ext;
 use crate::error::{AppError, Result};
 use crate::install::zip_entry_parts;
-use crate::models::{Pkg, Profile, ProfileMod, Source, Store};
+use crate::models::{PkgSource, Profile, ProfileMod, Source, Store};
 use crate::paths::Paths;
 use crate::profiles;
 use crate::util::safe_join;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 use std::path::Path;
 
@@ -57,7 +56,7 @@ struct R2xVersion {
 }
 
 /// `by_id`: the index, to mark releases only Hexium has; None writes every entry as Thunderstore's.
-pub fn to_r2x(profile: &Profile, by_id: Option<&HashMap<String, Pkg>>) -> Result<(String, Vec<String>)> {
+pub fn to_r2x(profile: &Profile, by_id: Option<&dyn PkgSource>) -> Result<(String, Vec<String>)> {
     let mut skipped = vec![];
     let mut mods = vec![];
     for m in &profile.mods {
@@ -66,7 +65,7 @@ pub fn to_r2x(profile: &Profile, by_id: Option<&HashMap<String, Pkg>>) -> Result
             continue;
         }
         let n: Vec<u32> = m.version.split('.').map(|x| x.parse().unwrap_or(0)).collect();
-        let source = by_id.and_then(|i| i.get(&m.id())).and_then(|p| p.versions.iter().find(|v| v.v == m.version)).map(|v| v.src).unwrap_or_default();
+        let source = by_id.and_then(|i| i.pkg(&m.id())).and_then(|p| p.versions.iter().find(|v| v.v == m.version).map(|v| v.src)).unwrap_or_default();
         mods.push(R2xMod {
             name: m.id(),
             version: R2xVersion { major: n.first().copied().unwrap_or(0), minor: n.get(1).copied().unwrap_or(0), patch: n.get(2).copied().unwrap_or(0) },
@@ -99,7 +98,7 @@ pub fn parse_r2x(text: &str) -> Result<(String, Vec<ProfileMod>, Vec<String>)> {
     Ok((r.profile_name, mods, skipped))
 }
 
-pub fn build_r2z(profile: &Profile, config_dir: &Path, by_id: Option<&HashMap<String, Pkg>>) -> Result<(Vec<u8>, Vec<String>)> {
+pub fn build_r2z(profile: &Profile, config_dir: &Path, by_id: Option<&dyn PkgSource>) -> Result<(Vec<u8>, Vec<String>)> {
     let (yaml, skipped) = to_r2x(profile, by_id)?;
     let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
     let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -222,6 +221,7 @@ pub async fn upload_code(client: &reqwest::Client, r2z: Vec<u8>) -> Result<Strin
 mod tests {
     use super::*;
     use crate::models::Source;
+    use std::collections::HashMap;
 
     const R2MODMAN_YAML: &str = "profileName: Friends\nmods:\n  - name: denikson-BepInExPack_Valheim\n    version:\n      major: 5\n      minor: 4\n      patch: 2351\n    enabled: true\n  - name: ValheimModding-Jotunn\n    version: {major: 2, minor: 20, patch: 1}\n    enabled: false\n    icon: whatever\n";
 

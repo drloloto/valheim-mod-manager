@@ -78,7 +78,7 @@ pub async fn run_sync(job: SyncJob, progress: ProgressFn) -> Result<SyncResult> 
     let index = job.index.clone().ok_or_else(|| AppError::Invalid("The mod index is not loaded yet. Wait a moment and try again.".into()))?;
     let profile = profiles::load(&job.paths, &job.profile)?;
     let installed = profiles::load_installed(&job.paths, &job.profile);
-    let plan = resolver::plan(&profile.mods, &index.by_id, &installed);
+    let plan = resolver::plan(&profile.mods, index.as_ref(), &installed);
 
     // Never uninstall explicit mods that are not (yet) in the index.
     let explicit: HashSet<String> = profile.mods.iter().map(|m| m.id()).collect();
@@ -98,7 +98,7 @@ pub async fn run_sync(job: SyncJob, progress: ProgressFn) -> Result<SyncResult> 
     let total = downloads.len();
     let mut stream = futures::stream::iter(downloads.into_iter().map(|(id, version)| {
         let client = job.client.clone();
-        let pkg = index.by_id.get(&id).cloned();
+        let pkg = index.get(&id);
         let dest = job.paths.zip_cache(&id, &version);
         async move {
             let r = match pkg {
@@ -240,7 +240,7 @@ mod tests {
     use crate::install::tests::make_zip;
     use crate::models::{test_pkg, ProfileMod, Source};
     use crate::resolver::BEPINEX_PACK_ID;
-    use crate::thunderstore::{build, Parts};
+    use crate::thunderstore::{build_from_parts, IndexSource, Parts};
 
     fn fixture() -> (tempfile::TempDir, Paths, Arc<Index>) {
         let d = tempfile::tempdir().unwrap();
@@ -257,7 +257,13 @@ mod tests {
         );
         make_zip(&paths.downloads(), "a-A-1.0.0.zip", &[("A.dll", "1.0.0")]);
         make_zip(&paths.downloads(), "a-A-2.0.0.zip", &[("A.dll", "2.0.0")]);
-        let idx = build(0, Parts::thunderstore(vec![test_pkg(BEPINEX_PACK_ID, &[("5.4.2351", &[])]), test_pkg("a-A", &[("2.0.0", &[]), ("1.0.0", &[])])]));
+        let idx = build_from_parts(
+            &paths.index_dir(),
+            0,
+            &IndexSource::default(),
+            Parts::thunderstore(vec![test_pkg(BEPINEX_PACK_ID, &[("5.4.2351", &[])]), test_pkg("a-A", &[("2.0.0", &[]), ("1.0.0", &[])])]),
+        )
+        .unwrap();
         crate::profiles::create(&paths, "p").unwrap();
         (d, paths, Arc::new(idx))
     }
@@ -322,7 +328,10 @@ mod tests {
         let (_d, paths, idx) = fixture();
         set_mods(&paths, vec![a("1.0.0", true)]);
         run_sync(job(&paths, Some(idx), false), noop()).await.unwrap();
-        let without_a = Arc::new(build(0, Parts::thunderstore(vec![test_pkg(BEPINEX_PACK_ID, &[("5.4.2351", &[])])])));
+        let without_a = Arc::new(
+            build_from_parts(&paths.index_dir(), 1, &IndexSource::default(), Parts::thunderstore(vec![test_pkg(BEPINEX_PACK_ID, &[("5.4.2351", &[])])]))
+                .unwrap(),
+        );
         let r = run_sync(job(&paths, Some(without_a), false), noop()).await.unwrap();
         assert!(r.removed.is_empty());
         assert!(r.errors.iter().any(|e| e.contains("a-A")));
