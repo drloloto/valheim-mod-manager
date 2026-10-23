@@ -1,6 +1,10 @@
 # One repository on Vite+, and the companion becomes an install agent
 
 Date: 2026-10-15. Status: phase 1 done (branch `feat/monorepo-viteplus`, see section 8), phases 2–5 open.
+**2026-10-22:** phases 2–5 continue under `2026-10-22-companion-0.5-identity-and-public-endpoint.md`, which
+changes three things: the gist is removed (players reach the companion over HTTPS), the runtime stays Bun
+(the Node move of phase 4 is dropped, `bun:sqlite` is the store), and players sign in with Discord. Pairing,
+device tokens, the state volume, the socket proxy and `/api/v2` with `packages/companion-api` stand as written.
 Replaces Part A of
 `2026-10-14-admin-ui-in-client-and-monorepo-design.md` and changes its Part B: the companion no longer keeps
 the server-side logic; the Mod Manager takes over server management, the companion shrinks to an agent that

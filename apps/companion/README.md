@@ -211,7 +211,9 @@ secret (webhook URLs, API keys).
   every file for the search), `GET /api/configs/<file>` (the working copy's settings with type/default/
   acceptable values/`multiple`/`synced`, the `live` values it changes, `info`); `PUT /api/configs/<file>`
   (token) stages value changes in the working state and answers with the release summary and the effect.
-- `GET/PUT /api/env` (token), `POST /api/server/restart|stop|start` (token).
+- `GET/PUT /api/env` (`PUT` needs the token; in 0.4.x `GET` is readable without one while
+  `COMPANION_PUBLIC_READ` is on, and it includes the server password — keep the port on the LAN; closed in 0.5),
+  `POST /api/server/restart|stop|start` (token).
 - `GET /api/logs?tail=N`, `GET /api/logs/stream` (SSE) — token.
 - `GET /api/players` (token): lists, online players and recent sessions; `PUT /api/players/admin|permitted|banned`.
 - `GET /api/worlds`; `GET/POST /api/backups`, `POST /api/backups/import` (upload, returns the mod diff

@@ -26,6 +26,16 @@ the server, can act on it, and never gets in the way when you do things by hand.
   escape hatch, default and "on the server" per value. Per-mod sync detection from the plugin DLLs
   (ServerSync / Jötunn / client-side, live reload).
 
+## 0.5 (decided 2026-10-22, not started)
+
+0.4.x stays as it is. 0.5 is a cut: the companion becomes reachable over HTTPS (Caddy sidecar, a hostname
+from the admin), players and admins sign in with Discord (the Steam id comes from the Discord connection,
+the whitelist follows the Discord role), the gist is removed, state moves into SQLite in its own volume, and
+Play joins the server with `+connect`. Research with the critique of the proposal:
+`docs/research/2026-10-22-companion-direction-critique.md`; spec:
+`docs/specs/2026-10-22-companion-0.5-identity-and-public-endpoint.md`; phases:
+`docs/plans/2026-10-22-companion-0.5-plan.md`. Items 6 and 7 below move there (0.5.x).
+
 ## Next (in order of value for a small friends' server)
 
 - The admin UI moves into the Mod Manager and both apps into one repository; this web UI shrinks to the
@@ -48,8 +58,9 @@ the server, can act on it, and never gets in the way when you do things by hand.
    (adminlist) and the launch flags. The companion can offer a flag editor (`-crossplay`, `-public`,
    `-saveinterval`, `-backups`, world modifiers like `-modifier combat hard`, `-preset`) that writes
    `valheim.env` / `SERVER_ARGS`, and a "send to all players" message via a small BepInEx helper mod later.
-6. **Notifications** — Discord / webhook on player join/leave, server up/down, backup done, publish done.
-7. **Player profile** — click a player: first seen, last seen, total time, actions (admin, ban, kick via
+6. **Notifications** (→ 0.5.x) — webhook on server up/down, backup done, publish done; in-game events
+   (join/leave/death) are DiscordConnector's job, not rebuilt here.
+7. **Player profile** (→ 0.5.x, from the `player_sessions` table) — click a player: first seen, last seen, total time, actions (admin, ban, kick via
    restart-less `kick` is not possible without a helper mod).
 8. **Multiple worlds** — switch the active world (`WORLD_NAME`), one backup set per world, world seed
    display and map preview (world file header carries the seed).

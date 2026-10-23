@@ -2,7 +2,10 @@
 
 Date: 2026-10-14. Status: Part A superseded, Part B changed by
 `2026-10-15-monorepo-viteplus-companion-agent-design.md` (Vite+ monorepo; the companion becomes an install
-agent, server management moves into the client). Read that one first. Owner's decisions so far: the gist stays the players'
+agent, server management moves into the client). Read that one first. **2026-10-22:** the role table in Part B
+and the two decisions below about the gist and "no separate login" are superseded from 0.5 on by
+`2026-10-22-companion-0.5-identity-and-public-endpoint.md` (Discord sign-in, device tokens, no gist); the
+Server area itself is still built as described. Owner's decisions as of 2026-10-14: the gist stays the players'
 transport (a self-hosted mailbox behind the game tunnel is the only alternative worth having and can be
 added later behind the same sync code); HTTP is the admin surface and stays on the LAN/VPN; the companion
 keeps all server-side logic; the client keeps its design, and everything imported from the companion must
