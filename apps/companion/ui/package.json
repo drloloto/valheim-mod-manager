@@ -34,8 +34,8 @@
 		"#lib/*": "./src/lib/*"
 	},
 	"dependencies": {
-		"@git-diff-view/file": "^0.1.7",
-		"@git-diff-view/svelte": "^0.1.7",
+		"@git-diff-view/file": "^0.1.8",
+		"@git-diff-view/svelte": "^0.1.8",
 		"zod": "^4.6.7",
 		"@vmm/ui": "workspace:*"
 	}
